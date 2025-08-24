@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ninja Village Defense</title>
+  <style>
+    body {
+      margin: 0;
+      background: #222;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    #gameCanvas {
+      background: #333;
+      display: block;
+      margin: 0 auto;
+      touch-action: none; /* prevent scrolling on mobile */
+    }
+    /* Touch controls overlay */
+    .controls {
+      position: fixed;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      z-index: 10;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+    }
+    .btn {
+      width: 60px;
+      height: 60px;
+      background: rgba(255,255,255,0.2);
+      border: 2px solid white;
+      border-radius: 10px;
+      color: white;
+      font-size: 22px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+    }
+    .action-btn {
+      background: rgba(0,200,0,0.6);
+      width: 100px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+  <!-- Touch Controls -->
+  <div class="controls">
+    <div class="row">
+      <div class="btn" data-dir="up">⬆️</div>
+    </div>
+    <div class="row">
+      <div class="btn" data-dir="left">⬅️</div>
+      <div class="btn" data-dir="down">⬇️</div>
+      <div class="btn" data-dir="right">➡️</div>
+    </div>
+    <div class="row">
+      <div class="btn action-btn" id="actionBtn">⚔️</div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
