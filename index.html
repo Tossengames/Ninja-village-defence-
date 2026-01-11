@@ -139,21 +139,35 @@ canvas.addEventListener("click",e=>{
   if(target) movePlayerTo(target.x,target.y);
 });
 
-function movePlayerTo(tx,ty){
-  playerTurn=false; showMessage("Moving...");
-  const dx=tx-player.x,dy=ty-player.y;
-  const steps=Math.max(Math.abs(dx),Math.abs(dy));
-  const path=[];
-  for(let i=1;i<=steps;i++) path.push({x:player.x + Math.round(dx*i/steps),y:player.y + Math.round(dy*i/steps)});
-  animateMovement(path,postPlayerMove);
+function movePlayerTo(tx, ty){
+    playerTurn=false; 
+    showMessage("Moving...");
+    
+    const path = [];
+    let cx = player.x;
+    let cy = player.y;
+    
+    // move horizontally first
+    while(cx !== tx){
+        cx += (tx > cx ? 1 : -1);
+        path.push({x: cx, y: cy});
+    }
+    // then move vertically
+    while(cy !== ty){
+        cy += (ty > cy ? 1 : -1);
+        path.push({x: cx, y: cy});
+    }
+    
+    animateMovement(path, postPlayerMove);
 }
 
-function animateMovement(path,callback){
-  if(path.length===0){ callback(); return; }
-  const p=path.shift();
-  player.x=p.x; player.y=p.y;
-  draw();
-  setTimeout(()=>animateMovement(path,callback),150);
+function animateMovement(path, callback){
+    if(path.length === 0){ callback(); return; }
+    const p = path.shift();
+    player.x = p.x;
+    player.y = p.y;
+    draw();
+    setTimeout(() => animateMovement(path, callback), 150);
 }
 
 function playerWait(){if(!playerTurn||gameOver)return; showMessage("Waiting...");playerTurn=false; setTimeout(enemyTurn,300);}
