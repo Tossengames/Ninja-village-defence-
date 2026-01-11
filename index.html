@@ -5,32 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
 <title>Silent House: Tactical Stealth</title>
 <style>
-    body { margin: 0; background: #0a0a0a; color: #eee; font-family: 'Courier New', monospace; text-align: center; touch-action: none; overflow: hidden; }
-    canvas { display: block; margin: 0 auto; background: #111; }
-    button { padding: 12px 20px; margin: 5px; background: #222; color: #0af; border: 1px solid #444; border-radius: 4px; font-size: 16px; pointer-events: auto; }
+    body { margin: 0; background: #111; color: #eee; font-family: monospace; text-align: center; touch-action: none; overflow: hidden; }
+    canvas { display: block; margin: 0 auto; background: #222; }
+    #menu { padding: 20px; }
+    input { background: #333; color: #0af; border: 1px solid #555; padding: 5px; width: 50px; text-align: center; margin: 5px; }
+    button { padding: 10px 20px; margin: 10px; background: #333; color: #eee; border: 1px solid #666; cursor: pointer; }
+    button:active { background: #0af; color: #000; }
     .hidden { display: none; }
     #ui-layer { position: fixed; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; }
-    #info { margin-top: 20px; align-self: center; width: 80%; }
-    #controls { margin-bottom: 30px; align-self: center; }
-    .message { background: rgba(0,0,0,0.8); padding: 8px; border-left: 4px solid #f00; margin-bottom: 5px; animation: slideIn 0.3s; }
-    @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+    #info { margin-top: 10px; align-self: center; width: 90%; }
+    #controls { margin-bottom: 20px; align-self: center; pointer-events: auto; }
+    .message { background: rgba(0,0,0,0.8); padding: 5px 10px; border: 1px solid #444; margin-bottom: 2px; font-size: 14px; }
 </style>
 </head>
 <body>
 
 <div id="menu">
-    <h1 style="color:#f00; letter-spacing: 5px;">SILENT HOUSE</h1>
+    <h2 style="color:#0af; letter-spacing: 2px;">SILENT HOUSE</h2>
     <p>Level: <span id="levelText">1</span></p>
-    <button onclick="changeLevel(-1)">-</button>
-    <button onclick="changeLevel(1)">+</button><br><br>
-    <button onclick="startGame()" style="font-size: 24px; padding: 20px 40px;">INFILTRATE</button>
+    
+    <label>Map Size:</label><br>
+    <input type="number" id="inpW" value="10"> x <input type="number" id="inpH" value="10"><br>
+    
+    <label>Enemies:</label><br>
+    <input type="number" id="inpE" value="3"><br>
+    
+    <button onclick="startGame()">START MISSION</button>
 </div>
 
 <div id="ui-layer">
     <div id="info"></div>
     <div id="controls" class="hidden">
-        <button onclick="playerWait()">END TURN</button>
-        <button onclick="location.reload()">RESTART</button>
+        <button onclick="playerWait()">WAIT</button>
+        <button onclick="location.reload()">MENU</button>
     </div>
 </div>
 
@@ -38,20 +45,23 @@
 
 <script>
 /* ===== CONFIG ===== */
-const TILE = 54;
+const TILE = 48;
 const FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4;
 let levelNumber = 1, grid, player, enemies, gameOver = false, playerTurn = true;
-let mapW = 10, mapH = 10;
+let mapW, mapH, enemyCount;
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-/* ===== INITIALIZATION ===== */
-function changeLevel(v) { levelNumber = Math.max(1, levelNumber + v); document.getElementById("levelText").textContent = levelNumber; }
-
+/* ===== SETUP ===== */
 function startGame() {
+    mapW = parseInt(document.getElementById("inpW").value) || 10;
+    mapH = parseInt(document.getElementById("inpH").value) || 10;
+    enemyCount = parseInt(document.getElementById("inpE").value) || 3;
+    
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+    
     document.getElementById("menu").classList.add("hidden");
     canvas.classList.remove("hidden");
     document.getElementById("controls").classList.remove("hidden");
@@ -60,39 +70,45 @@ function startGame() {
 
 function generateLevel() {
     gameOver = false; playerTurn = true;
-    // Map bounds
     grid = Array.from({length: mapH}, (_, y) => Array.from({length: mapW}, (_, x) => 
         (x===0 || y===0 || x===mapW-1 || y===mapH-1) ? WALL : Math.random() < 0.15 ? WALL : FLOOR
     ));
 
+    // Exit
     let ex, ey; do { ex = Math.floor(Math.random()*(mapW-2))+1; ey = Math.floor(Math.random()*(mapH-2))+1; } while(grid[ey][ex] !== FLOOR);
     grid[ey][ex] = EXIT;
 
+    // Player
     let px, py; do { px = Math.floor(Math.random()*(mapW-2))+1; py = Math.floor(Math.random()*(mapH-2))+1; } 
-    while(grid[py][px] !== FLOOR || Math.hypot(px-ex, py-ey) < 5);
+    while(grid[py][px] !== FLOOR || Math.hypot(px-ex, py-ey) < 4);
     player = { x: px, y: py, animX: px, animY: py, hidden: false };
 
-    for(let i=0; i<3; i++) placeRandom(NOISE);
+    // Props
+    for(let i=0; i<2; i++) placeRandom(NOISE);
     for(let i=0; i<2; i++) placeRandom(HIDE);
 
+    // Enemies
     enemies = [];
-    for(let i=0; i<Math.min(2 + Math.floor(levelNumber/1.5), 6); i++) {
+    for(let i=0; i<enemyCount; i++) {
         let enX, enY; do { enX = Math.floor(Math.random()*(mapW-2))+1; enY = Math.floor(Math.random()*(mapH-2))+1; }
-        while(grid[enY][enX] !== FLOOR || Math.hypot(enX-px, enY-py) < 3);
+        while(grid[enY][enX] !== FLOOR || (enX === px && enY === py));
+        
         enemies.push({
             x: enX, y: enY, animX: enX, animY: enY,
-            dir: {x: 1, y: 0}, target: null, alert: false
+            dir: [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)],
+            target: null, 
+            visionRange: Math.floor(Math.random() * 3) + 1 // Random vision 1-3
         });
     }
     draw();
 }
 
 function placeRandom(type) {
-    let x, y; do { x = Math.floor(Math.random()*mapW); y = Math.floor(Math.random()*mapH); } while(grid[y][x] !== FLOOR);
+    let x, y; do { x = Math.floor(Math.random()*(mapW-2))+1; y = Math.floor(Math.random()*(mapH-2))+1; } while(grid[y][x] !== FLOOR);
     grid[y][x] = type;
 }
 
-/* ===== CORE LOGIC ===== */
+/* ===== MOVEMENT ===== */
 function isValid(x, y) { return x >= 0 && y >= 0 && x < mapW && y < mapH && grid[y][x] !== WALL; }
 
 function getMovableTiles() {
@@ -101,9 +117,9 @@ function getMovableTiles() {
         for(let dy=-2; dy<=2; dy++) {
             if(Math.abs(dx) + Math.abs(dy) > 2 || (dx===0 && dy===0)) continue;
             let tx = player.x + dx, ty = player.y + dy;
-            if(isValid(tx, ty)) {
-                // Check if path is clear (simple raycast)
-                if(isValid(player.x + Math.sign(dx), player.y + Math.sign(dy))) tiles.push({x:tx, y:ty});
+            // Strict check: No moving through walls even on diagonal
+            if(isValid(tx, ty) && isValid(player.x + Math.sign(dx), player.y + Math.sign(dy))) {
+                tiles.push({x:tx, y:ty});
             }
         }
     }
@@ -132,7 +148,7 @@ function animateMove(ent, tx, ty, cb) {
     const startX = ent.animX, startY = ent.animY;
     let progress = 0;
     function step() {
-        progress += 0.1;
+        progress += 0.15; // Animation speed
         ent.animX = startX + (tx - startX) * progress;
         ent.animY = startY + (ty - startY) * progress;
         draw();
@@ -142,34 +158,29 @@ function animateMove(ent, tx, ty, cb) {
     step();
 }
 
-/* ===== ENEMY AI (CALM RHYTHM) ===== */
+/* ===== AI TURN ===== */
 async function enemyTurn() {
     if(gameOver) return;
     for(let e of enemies) {
-        await new Promise(r => setTimeout(r, 400)); // Calm delay between enemies
+        await new Promise(r => setTimeout(r, 350)); // Calm rhythm
         
-        // 1. Check Vision
         if(!player.hidden && isInVision(e, player)) {
-            gameOver = true; showMessage("TERMINATED: You were seen.");
+            gameOver = true; showMessage("CAUGHT! You were seen.");
             return;
         }
 
-        // 2. Decide Move
-        let nextX = e.x, nextY = e.y;
+        let nx = e.x, ny = e.y;
         if(e.target) {
-            nextX += Math.sign(e.target.x - e.x);
-            nextY += Math.sign(e.target.y - e.y);
-            if(e.x === e.target.x && e.y === e.target.y) { e.target = null; e.alert = false; }
+            nx += Math.sign(e.target.x - e.x);
+            ny += Math.sign(e.target.y - e.y);
+            if(e.x === e.target.x && e.y === e.target.y) e.target = null;
         } else {
             // Random Patrol
-            const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-            const d = dirs[Math.floor(Math.random()*4)];
-            if(isValid(e.x+d.x, e.y+d.y)) { nextX += d.x; nextY += d.y; e.dir = d; }
+            const d = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)];
+            if(isValid(e.x+d.x, e.y+d.y)) { nx += d.x; ny += d.y; e.dir = d; }
         }
         
-        if(isValid(nextX, nextY)) {
-            await new Promise(r => animateMove(e, nextX, nextY, r));
-        }
+        if(isValid(nx, ny)) await new Promise(r => animateMove(e, nx, ny, r));
     }
     playerTurn = true;
     draw();
@@ -178,8 +189,7 @@ async function enemyTurn() {
 function isInVision(e, p) {
     const dx = p.x - e.x, dy = p.y - e.y;
     const dist = Math.abs(dx) + Math.abs(dy);
-    if(dist > 3) return false;
-    // Check if player is in the direction enemy is facing
+    if(dist > e.visionRange) return false;
     if(e.dir.x !== 0 && Math.sign(dx) !== e.dir.x) return false;
     if(e.dir.y !== 0 && Math.sign(dy) !== e.dir.y) return false;
     return true;
@@ -196,65 +206,70 @@ function draw() {
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
 
-    // Tiles
+    // Grid
     for(let y=0; y<mapH; y++) {
         for(let x=0; x<mapW; x++) {
-            ctx.fillStyle = grid[y][x] === WALL ? "#333" : "#111";
-            ctx.fillRect(x*TILE, y*TILE, TILE-1, TILE-1);
-            if(grid[y][x] === EXIT) { ctx.fillStyle="#0f0"; ctx.fillRect(x*TILE+10, y*TILE+10, TILE-20, TILE-20); }
-            if(grid[y][x] === NOISE) { ctx.strokeStyle="#f80"; ctx.strokeRect(x*TILE+5, y*TILE+5, TILE-10, TILE-10); }
-            if(grid[y][x] === HIDE) { ctx.fillStyle="#005"; ctx.fillRect(x*TILE+5, y*TILE+5, TILE-10, TILE-10); }
+            ctx.fillStyle = grid[y][x] === WALL ? "#555" : "#222";
+            ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
+            ctx.strokeStyle = "#111";
+            ctx.strokeRect(x*TILE, y*TILE, TILE, TILE);
+            
+            if(grid[y][x] === EXIT) { ctx.fillStyle="#0a0"; ctx.fillRect(x*TILE+5, y*TILE+5, TILE-10, TILE-10); }
+            if(grid[y][x] === NOISE) { ctx.fillStyle="#422"; ctx.fillRect(x*TILE+5, y*TILE+5, TILE-10, TILE-10); }
+            if(grid[y][x] === HIDE) { ctx.fillStyle="#000"; ctx.fillRect(x*TILE+5, y*TILE+5, TILE-10, TILE-10); }
         }
     }
 
-    // Player Movement Shadow
+    // Movable
     if(playerTurn) {
-        ctx.fillStyle = "rgba(0,150,255,0.1)";
-        getMovableTiles().forEach(t => ctx.fillRect(t.x*TILE, t.y*TILE, TILE-1, TILE-1));
+        ctx.fillStyle = "rgba(0,150,255,0.2)";
+        getMovableTiles().forEach(t => ctx.fillRect(t.x*TILE, t.y*TILE, TILE, TILE));
     }
 
-    // Enemies & FOV
+    // Enemies
     enemies.forEach(e => {
-        // Vision Cone
-        ctx.fillStyle = "rgba(255, 255, 0, 0.15)";
+        // Vision Cone (Visual only)
+        ctx.fillStyle = "rgba(255,0,0,0.15)";
         ctx.beginPath();
         ctx.moveTo(e.animX*TILE + TILE/2, e.animY*TILE + TILE/2);
+        let endX = e.animX + e.dir.x * e.visionRange;
+        let endY = e.animY + e.dir.y * e.visionRange;
+        
         if(e.dir.x !== 0) {
-            ctx.lineTo((e.animX + e.dir.x*3.5)*TILE, (e.animY-1)*TILE);
-            ctx.lineTo((e.animX + e.dir.x*3.5)*TILE, (e.animY+2)*TILE);
+            ctx.lineTo((endX + e.dir.x)*TILE + TILE/2, (e.animY-1)*TILE);
+            ctx.lineTo((endX + e.dir.x)*TILE + TILE/2, (e.animY+2)*TILE);
         } else {
-            ctx.lineTo((e.animX-1)*TILE, (e.animY + e.dir.y*3.5)*TILE);
-            ctx.lineTo((e.animX+2)*TILE, (e.animY + e.dir.y*3.5)*TILE);
+            ctx.lineTo((e.animX-1)*TILE, (endY + e.dir.y)*TILE + TILE/2);
+            ctx.lineTo((e.animX+2)*TILE, (endY + e.dir.y)*TILE + TILE/2);
         }
         ctx.fill();
 
-        // Enemy Body
         ctx.fillStyle = "#f00";
-        ctx.fillRect(e.animX*TILE + 12, e.animY*TILE + 12, TILE-24, TILE-24);
+        ctx.fillRect(e.animX*TILE+12, e.animY*TILE+12, 24, 24);
         
-        // Alert Mark
-        if(e.alert) {
+        if(e.target) {
             ctx.fillStyle = "#fff";
-            ctx.font = "bold 30px Arial";
-            ctx.fillText("?", e.animX*TILE + 18, e.animY*TILE + 5);
+            ctx.font = "bold 20px monospace";
+            ctx.fillText("?", e.animX*TILE + 18, e.animY*TILE + 8);
         }
     });
 
     // Player
-    ctx.fillStyle = player.hidden ? "#444" : "#0af";
-    ctx.fillRect(player.animX*TILE + 10, player.animY*TILE + 10, TILE-20, TILE-20);
+    ctx.fillStyle = player.hidden ? "#00a" : "#0af";
+    ctx.fillRect(player.animX*TILE+12, player.animY*TILE+12, 24, 24);
 }
 
 function checkTile() {
     const t = grid[player.y][player.x];
     player.hidden = (t === HIDE);
     if(t === NOISE) {
-        showMessage("! NOISE !");
-        enemies.forEach(e => { e.target = {x: player.x, y: player.y}; e.alert = true; });
+        showMessage("CLATTER! Nearby enemies alerted.");
+        enemies.forEach(e => { if(Math.hypot(e.x-player.x, e.y-player.y) < 6) { e.target = {x: player.x, y: player.y}; }});
     }
     if(t === EXIT) {
         levelNumber++;
-        showMessage("LEVEL ESCAPED");
+        document.getElementById("levelText").textContent = levelNumber;
+        showMessage("LEVEL COMPLETE");
         setTimeout(generateLevel, 1000);
     }
 }
@@ -263,6 +278,7 @@ function playerWait() { if(playerTurn) { playerTurn = false; enemyTurn(); } }
 function showMessage(m) {
     const d = document.createElement("div"); d.className="message"; d.textContent=m;
     document.getElementById("info").appendChild(d);
+    if(document.getElementById("info").childElementCount > 4) document.getElementById("info").firstChild.remove();
     setTimeout(() => d.remove(), 3000);
 }
 </script>
