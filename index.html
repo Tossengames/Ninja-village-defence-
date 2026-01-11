@@ -3,51 +3,50 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Silent House: Advanced Stealth</title>
+<title>Silent House: Dynamic Camera Stealth</title>
 <style>
 body{margin:0;background:#111;color:#eee;font-family:monospace;text-align:center;touch-action:none;overscroll-behavior:none;}
-canvas{display:block;margin:0 auto;background:#222;border:2px solid #555;}
-button{padding:10px 16px;margin:5px;background:#333;color:#eee;border:1px solid #666;}
+canvas{display:block;margin:0 auto;background:#222;}
+button{padding:8px 14px;margin:4px;background:#333;color:#eee;border:1px solid #666;}
 .hidden{display:none;}
 #controls button{width:60px;height:60px;font-size:22px;}
-#info{min-height:80px;position:relative;overflow:hidden;}
+#info{min-height:100px;position:relative;overflow:hidden;}
 .message{position:relative;background:rgba(0,0,0,0.8);padding:4px 8px;border-radius:4px;color:#fff;font-size:14px;margin-bottom:2px;opacity:1;transition:opacity 2s;}
 </style>
 </head>
 <body>
-
-<h2>Silent House: Advanced Stealth</h2>
+<h2>Silent House: Dynamic Camera</h2>
 
 <div id="menu">
-  <p>Turn-based ninja puzzle</p>
   <p>Level: <span id="levelText">1</span></p>
   <button onclick="changeLevel(-1)">−</button>
   <button onclick="changeLevel(1)">+</button><br><br>
   <p>Map Size:</p>
-  <input type="number" id="mapWidth" value="10" min="6" max="20"> x
-  <input type="number" id="mapHeight" value="10" min="6" max="20"><br><br>
+  <input type="number" id="mapWidth" value="10" min="6" max="30"> x
+  <input type="number" id="mapHeight" value="10" min="6" max="30"><br><br>
   <button onclick="startGame()">START</button>
 </div>
 
 <canvas id="game" width="480" height="480" class="hidden"></canvas>
-
 <div id="controls" class="hidden">
   <button onclick="playerWait()">Wait</button>
 </div>
-
 <p id="info"></p>
 <button id="backBtn" class="hidden" onclick="backToMenu()">BACK</button>
 
 <script>
 /* ===== CONFIG ===== */
-let TILE=32;
-let FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4;
-
+let TILE=32, FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4;
 let levelNumber=1, grid, player, enemies, gameOver, playerTurn=true;
 let mapW=10,mapH=10;
+
 const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
 const info=document.getElementById("info");
+
+let camera={x:0,y:0,scale:1};
+let dragging=false, lastX=0, lastY=0;
+let pinchStartDist=0, pinchStartScale=1;
 
 /* ===== MENU ===== */
 function changeLevel(v){levelNumber=Math.max(1,levelNumber+v);levelText.textContent=levelNumber;}
@@ -56,6 +55,8 @@ function startGame(){
   mapH=parseInt(document.getElementById("mapHeight").value);
   TILE=Math.min(480/mapW,480/mapH);
   canvas.width=TILE*mapW; canvas.height=TILE*mapH;
+  camera.scale=Math.min(480/(TILE*mapW),480/(TILE*mapH));
+  camera.x=0; camera.y=0;
   menu.classList.add("hidden");
   game.classList.remove("hidden");
   controls.classList.remove("hidden");
@@ -67,18 +68,23 @@ function backToMenu(){menu.classList.remove("hidden");game.classList.add("hidden
 /* ===== LEVEL GENERATION ===== */
 function generateLevel(){
   gameOver=false; playerTurn=true;
-  grid=Array.from({length:mapH},(_,y)=>
-    Array.from({length:mapW},(_,x)=>
-      (x===0||y===0||x===mapW-1||y===mapH-1)?WALL:
-      Math.random()<0.15?WALL:FLOOR
-    )
-  );
-  player={x:1,y:1,px:1,py:1,hidden:false};
-  grid[mapH-2][mapW-2]=EXIT;
+  grid=Array.from({length:mapH},(_,y)=>Array.from({length:mapW},(_,x)=>(x===0||y===0||x===mapW-1||y===mapH-1)?WALL:Math.random()<0.15?WALL:FLOOR));
 
+  // Player random valid position
+  let px,py;
+  do{px=Math.floor(Math.random()*mapW); py=Math.floor(Math.random()*mapH);}while(grid[py][px]!==FLOOR);
+  player={x:px,y:py,px:px,py:py,hidden:false};
+
+  // Exit random valid position
+  let ex,ey;
+  do{ex=Math.floor(Math.random()*mapW); ey=Math.floor(Math.random()*mapH);}while(grid[ey][ex]!==FLOOR || (ex===px && ey===py));
+  grid[ey][ex]=EXIT;
+
+  // Noise and Hide
   for(let i=0;i<levelNumber+1;i++) placeRandom(NOISE);
   for(let i=0;i<Math.max(1,Math.floor(levelNumber/2));i++) placeRandom(HIDE);
 
+  // Enemies
   enemies=[];
   const count=Math.min(1+Math.floor(levelNumber/2),6);
   for(let i=0;i<count;i++) spawnEnemy();
@@ -89,15 +95,14 @@ function generateLevel(){
 
 function placeRandom(type){
   let x,y;
-  do{x=Math.floor(Math.random()*mapW);y=Math.floor(Math.random()*mapH);}while(grid[y][x]!==FLOOR||(x===1&&y===1));
+  do{x=Math.floor(Math.random()*mapW);y=Math.floor(Math.random()*mapH);}while(grid[y][x]!==FLOOR||(x===player.x && y===player.y));
   grid[y][x]=type;
 }
 
 function spawnEnemy(){
   let x,y;
-  do{x=Math.floor(Math.random()*mapW);y=Math.floor(Math.random()*mapH);}while(grid[y][x]!==FLOOR);
-  enemies.push({x,y,px:x,py:y,dir:[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)],
-    target:null, alert:0, vision:Math.floor(Math.random()*3)+1});
+  do{x=Math.floor(Math.random()*mapW);y=Math.floor(Math.random()*mapH);}while(grid[y][x]!==FLOOR || (x===player.x && y===player.y));
+  enemies.push({x,y,px:x,py:y,dir:[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)],target:null, alert:0, vision:Math.floor(Math.random()*3)+1});
 }
 
 /* ===== MESSAGES ===== */
@@ -115,9 +120,7 @@ function getMovableTiles(){
   const tiles=[];
   for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
     const nx=player.x+dx, ny=player.y+dy;
-    if(nx>=0&&ny>=0&&nx<mapW&&ny<mapH){
-      if(grid[ny][nx]!==WALL && Math.abs(dx)+Math.abs(dy)<=2 && !(dx===0&&dy===0)) tiles.push({x:nx,y:ny});
-    }
+    if(nx>=0&&ny>=0&&nx<mapW&&ny<mapH && grid[ny][nx]!==WALL && Math.abs(dx)+Math.abs(dy)<=2 && !(dx===0&&dy===0)) tiles.push({x:nx,y:ny});
   }
   return tiles;
 }
@@ -186,14 +189,14 @@ function moveEnemy(e,callback){
   if(e.target){tx=e.target.x;ty=e.target.y;}
   else{
     const nx=e.x+e.dir.x, ny=e.y+e.dir.y;
-    if(nx>=0&&ny>=0&&nx<mapW&&ny<mapH&&grid[ny][nx]!==WALL){tx=nx;ty=ny;} else {e.dir.x*=-1; e.dir.y*=-1; tx=e.x+e.dir.x; ty=e.y+e.dir.y;}
+    if(nx>=0&&ny>=0&&nx<mapW&&ny<mapH&&grid[ny][nx]!==WALL){tx=nx;ty=ny;} else {e.dir.x*=-1;e.dir.y*=-1;tx=e.x+e.dir.x;ty=e.y+e.dir.y;}
   }
   const path=[{x:tx,y:ty}];
   animateEnemyMovement(e,path,callback);
 }
 
 function animateEnemyMovement(e,path,callback){
-  if(path.length===0){ if(e.target && e.x===e.target.x && e.y===e.target.y) e.target=null; if(e.alert>0)e.alert--; callback(); return; }
+  if(path.length===0){if(e.target && e.x===e.target.x && e.y===e.target.y) e.target=null;if(e.alert>0)e.alert--; callback(); return;}
   const p=path.shift();
   e.px=e.x*TILE + (p.x-e.x)*TILE;
   e.py=e.y*TILE + (p.y-e.y)*TILE;
@@ -206,7 +209,7 @@ function animateEnemyMovement(e,path,callback){
 function canSee(e){
   for(let i=1;i<=e.vision;i++){
     const x=e.x + e.dir.x*i, y=e.y + e.dir.y*i;
-    if(x<0||y<0||x>=mapW||y>=mapH||grid[y][x]===WALL) return false;
+    if(x<0||y<0||x>=mapW||y>=mapH||grid[y][x]===WALL) break;
     if(x===player.x && y===player.y) { e.alert=3; return true; }
   }
   return false;
@@ -215,23 +218,27 @@ function canSee(e){
 /* ===== DRAW ===== */
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  ctx.translate(camera.x,camera.y);
+  ctx.scale(camera.scale,camera.scale);
+
   // tiles
   for(let y=0;y<mapH;y++)for(let x=0;x<mapW;x++){
     ctx.fillStyle=
       grid[y][x]===WALL?"#555":
       grid[y][x]===HIDE?"#000":
-      grid[y][x]===NOISE?"#222": // invisible noise
+      grid[y][x]===NOISE?"#222": // invisible
       grid[y][x]===EXIT?"#0a0":"#222";
     ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
   }
 
   // highlight moves
-  if(playerTurn)getMovableTiles().forEach(t=>{ctx.fillStyle="rgba(0,150,255,0.3)"; ctx.fillRect(t.x*TILE,t.y*TILE,TILE,TILE);});
+  if(playerTurn)getMovableTiles().forEach(t=>{ctx.fillStyle="rgba(0,150,255,0.3)";ctx.fillRect(t.x*TILE,t.y*TILE,TILE,TILE);});
 
   // enemy vision
   enemies.forEach(e=>{
     for(let i=1;i<=e.vision;i++){
-      const x=e.x + e.dir.x*i, y=e.y + e.dir.y*i;
+      const x=e.x+e.dir.x*i, y=e.y+e.dir.y*i;
       if(x<0||y<0||x>=mapW||y>=mapH||grid[y][x]===WALL) break;
       ctx.fillStyle=e.alert>0?"rgba(255,0,0,0.3)":"rgba(255,0,0,0.1)";
       ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
@@ -251,7 +258,27 @@ function draw(){
     ctx.fillStyle=e.alert>0?"#ff5555":"#f00";
     ctx.fillRect(ex+8,ey+8,16,16);
   });
+
+  ctx.restore();
 }
+
+/* ===== CAMERA TOUCH PAN & PINCH ===== */
+canvas.addEventListener("pointerdown",e=>{
+  dragging=true; lastX=e.clientX; lastY=e.clientY;
+});
+canvas.addEventListener("pointermove",e=>{
+  if(dragging){camera.x+=e.clientX-lastX; camera.y+=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY; draw();}
+});
+canvas.addEventListener("pointerup",()=>{dragging=false;});
+canvas.addEventListener("pointercancel",()=>{dragging=false;});
+canvas.addEventListener("wheel",e=>{
+  const oldScale=camera.scale;
+  camera.scale=Math.max(0.3, Math.min(3, camera.scale*(1+e.deltaY*-.001)));
+  camera.x-=(canvas.width/2 - camera.x)*(camera.scale/oldScale-1);
+  camera.y-=(canvas.height/2 - camera.y)*(camera.scale/oldScale-1);
+  draw();
+  e.preventDefault();
+},{passive:false});
 </script>
 </body>
 </html>
