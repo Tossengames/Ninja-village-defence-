@@ -23,13 +23,13 @@ button{padding:8px 14px;margin:4px;background:#333;color:#eee;border:1px solid #
 <p>Level: <span id="levelText">1</span></p>
 <button onclick="changeLevel(-1)">−</button>
 <button onclick="changeLevel(1)">+</button><br><br>
-<p>Map Size:</p>
+<p>Map Tiles:</p>
 <input type="number" id="mapWidth" value="10" min="6" max="20"> x
 <input type="number" id="mapHeight" value="10" min="6" max="20"><br><br>
 <button onclick="startGame()">START</button>
 </div>
 
-<canvas id="game" width="480" height="480" class="hidden"></canvas>
+<canvas id="game" width="960" height="960" class="hidden"></canvas>
 
 <div id="controls" class="hidden">
 <button onclick="playerWait()">Wait</button>
@@ -40,8 +40,10 @@ button{padding:8px 14px;margin:4px;background:#333;color:#eee;border:1px solid #
 
 <script>
 /* ===== CONFIG ===== */
-let TILE=32, FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4;
-let levelNumber=1, grid, player, enemies, gameOver, playerTurn=true;
+const TILE=48; // fixed size tile
+const FLOOR=0,WALL=1,NOISE=2,EXIT=3,HIDE=4;
+
+let levelNumber=1,grid,player,enemies,gameOver,playerTurn=true;
 let mapW=10,mapH=10;
 
 const canvas=document.getElementById("game");
@@ -56,10 +58,9 @@ function changeLevel(v){levelNumber=Math.max(1,levelNumber+v);levelText.textCont
 function startGame(){
   mapW=Math.min(Math.max(parseInt(document.getElementById("mapWidth").value),6),20);
   mapH=Math.min(Math.max(parseInt(document.getElementById("mapHeight").value),6),20);
-  TILE=Math.min(480/mapW,480/mapH);
   canvas.width=TILE*mapW;
   canvas.height=TILE*mapH;
-  camera.scale=Math.min(480/(TILE*mapW),480/(TILE*mapH));
+  camera.scale=Math.min(window.innerWidth/(TILE*mapW), window.innerHeight/(TILE*mapH),1);
   camera.x=0; camera.y=0;
   menu.classList.add("hidden");
   canvas.classList.remove("hidden");
@@ -73,22 +74,32 @@ function generateLevel(){
   gameOver=false; playerTurn=true;
   grid=Array.from({length:mapH},(_,y)=>Array.from({length:mapW},(_,x)=>(x===0||y===0||x===mapW-1||y===mapH-1)?WALL:Math.random()<0.15?WALL:FLOOR));
 
-  // Player random valid
-  let px,py; do{px=Math.floor(Math.random()*mapW); py=Math.floor(Math.random()*mapH);}while(grid[py][px]!==FLOOR);
-  player={x:px,y:py,px:px,py:py,hidden:false};
+  // Exit position
+  let exitX,exitY;
+  do{exitX=Math.floor(Math.random()*mapW); exitY=Math.floor(Math.random()*mapH);}while(grid[exitY][exitX]!==FLOOR);
+  grid[exitY][exitX]=EXIT;
 
-  // Exit random valid
-  let ex,ey; do{ex=Math.floor(Math.random()*mapW); ey=Math.floor(Math.random()*mapH);}while(grid[ey][ex]!==FLOOR || (ex===px && ey===py));
-  grid[ey][ex]=EXIT;
+  // Player far from exit
+  let px,py;
+  do{px=Math.floor(Math.random()*mapW); py=Math.floor(Math.random()*mapH);}
+  while(grid[py][px]!==FLOOR || Math.abs(px-exitX)+Math.abs(py-exitY)<Math.floor(Math.max(mapW,mapH)/2));
+  player={x:px,y:py,hidden:false};
 
   // Noise/Hide
   for(let i=0;i<levelNumber+1;i++) placeRandom(NOISE);
   for(let i=0;i<Math.max(1,Math.floor(levelNumber/2));i++) placeRandom(HIDE);
 
-  // Enemies
+  // Enemies near exit
   enemies=[];
   const count=Math.min(1+Math.floor(levelNumber/2),6);
-  for(let i=0;i<count;i++) spawnEnemy();
+  for(let i=0;i<count;i++){
+    let ex,ey;
+    do{
+      ex=Math.floor(exitX + (Math.random()*3|0)-1);
+      ey=Math.floor(exitY + (Math.random()*3|0)-1);
+    }while(ex<0||ey<0||ex>=mapW||ey>=mapH||grid[ey][ex]!==FLOOR||enemies.some(e=>e.x===ex&&e.y===ey));
+    enemies.push({x:ex,y:ey,dir:[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)],target:null,alert:0,vision:3});
+  }
 
   showMessage(`Level ${levelNumber} • Enemies ${count}`);
   draw();
@@ -100,12 +111,6 @@ function placeRandom(type){
   grid[y][x]=type;
 }
 
-function spawnEnemy(){
-  let x,y;
-  do{x=Math.floor(Math.random()*mapW);y=Math.floor(Math.random()*mapH);}while(grid[y][x]!==FLOOR||(x===player.x && y===player.y) || enemies.some(e=>e.x===x&&e.y===y));
-  enemies.push({x,y,px:x,py:y,dir:[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)],target:null, alert:0, vision:Math.floor(Math.random()*3)+1});
-}
-
 /* ===== MESSAGES ===== */
 function showMessage(text){
   const msg=document.createElement("div"); msg.className="message"; msg.textContent=text;
@@ -115,47 +120,43 @@ function showMessage(text){
 }
 function clearMessages(){info.innerHTML="";}
 
-/* ===== PLAYER TURN ===== */
-function playerWait(){if(!playerTurn||gameOver)return; showMessage("You wait...");playerTurn=false; setTimeout(enemyTurn,300);}
+/* ===== PLAYER ===== */
 function getMovableTiles(){
   const tiles=[];
   for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
-    const nx=player.x+dx, ny=player.y+dy;
+    const nx=player.x+dx,ny=player.y+dy;
     if(nx>=0&&ny>=0&&nx<mapW&&ny<mapH && grid[ny][nx]!==WALL && Math.abs(dx)+Math.abs(dy)<=2 && !(dx===0&&dy===0)) tiles.push({x:nx,y:ny});
   }
   return tiles;
 }
 
-/* ===== PLAYER CLICK MOVE ===== */
 canvas.addEventListener("click",e=>{
   if(!playerTurn||gameOver)return;
   const rect=canvas.getBoundingClientRect();
   const mx=Math.floor((e.clientX-rect.left)/TILE);
   const my=Math.floor((e.clientY-rect.top)/TILE);
-  const tiles=getMovableTiles();
-  const target=tiles.find(t=>t.x===mx&&t.y===my);
+  const target=getMovableTiles().find(t=>t.x===mx && t.y===my);
   if(target) movePlayerTo(target.x,target.y);
 });
 
-/* ===== PLAYER MOVE LOGIC ===== */
 function movePlayerTo(tx,ty){
   playerTurn=false; showMessage("Moving...");
-  const dx=tx-player.x, dy=ty-player.y;
+  const dx=tx-player.x,dy=ty-player.y;
   const steps=Math.max(Math.abs(dx),Math.abs(dy));
   const path=[];
-  for(let i=1;i<=steps;i++) path.push({x:player.x + Math.round(dx*i/steps), y:player.y + Math.round(dy*i/steps)});
-  animateMovement(path,()=>{postPlayerMove();});
+  for(let i=1;i<=steps;i++) path.push({x:player.x + Math.round(dx*i/steps),y:player.y + Math.round(dy*i/steps)});
+  animateMovement(path,postPlayerMove);
 }
 
 function animateMovement(path,callback){
   if(path.length===0){ callback(); return; }
   const p=path.shift();
-  player.px=player.x*TILE + (p.x-player.x)*TILE;
-  player.py=player.y*TILE + (p.y-player.y)*TILE;
   player.x=p.x; player.y=p.y;
   draw();
   setTimeout(()=>animateMovement(path,callback),150);
 }
+
+function playerWait(){if(!playerTurn||gameOver)return; showMessage("Waiting...");playerTurn=false; setTimeout(enemyTurn,300);}
 
 function postPlayerMove(){
   player.hidden=grid[player.y][player.x]===HIDE;
@@ -165,53 +166,40 @@ function postPlayerMove(){
       if(dist<=2){e.target={x:player.x,y:player.y}; e.alert=3; showMessage("Enemy investigates nearby noise!");}
     });
   }
-  if(grid[player.y][player.x]===EXIT){
-    showMessage("Escaped!"); gameOver=true; levelNumber++; setTimeout(startGame,1000); return;
-  }
+  if(grid[player.y][player.x]===EXIT){ showMessage("Escaped!"); gameOver=true; levelNumber++; setTimeout(startGame,1000); return; }
   setTimeout(enemyTurn,300);
 }
 
-/* ===== ENEMY TURN ===== */
+/* ===== ENEMIES ===== */
 function enemyTurn(){
-  if(gameOver)return;
+  if(gameOver) return;
   showMessage("Enemy Turn...");
   let index=0;
   function nextEnemy(){
     if(index>=enemies.length){playerTurn=true; showMessage("Your Turn"); draw(); return;}
     const e=enemies[index++];
-    if(!player.hidden && canSee(e)){showMessage("You were seen!");gameOver=true;return;}
+    if(!player.hidden && canSee(e)){ showMessage("You were seen!"); gameOver=true; return;}
     moveEnemy(e,nextEnemy);
   }
   nextEnemy();
 }
 
 function moveEnemy(e,callback){
-  let tx=e.x, ty=e.y;
-  if(e.target){tx=e.target.x;ty=e.target.y;}
+  let tx=e.x,ty=e.y;
+  if(e.target){tx=e.target.x; ty=e.target.y;}
   else{
     const nx=e.x+e.dir.x, ny=e.y+e.dir.y;
-    if(nx>=0&&ny>=0&&nx<mapW&&ny<mapH&&grid[ny][nx]!==WALL){tx=nx;ty=ny;} else {e.dir.x*=-1;e.dir.y*=-1;tx=e.x+e.dir.x;ty=e.y+e.dir.y;}
+    if(nx>=0&&ny>=0&&nx<mapW&&ny<mapH && grid[ny][nx]!==WALL){tx=nx; ty=ny;} else {e.dir.x*=-1; e.dir.y*=-1; tx=e.x+e.dir.x; ty=e.y+e.dir.y;}
   }
-  const path=[{x:tx,y:ty}];
-  animateEnemyMovement(e,path,callback);
+  e.x=tx; e.y=ty; if(e.alert>0) e.alert--; draw();
+  setTimeout(callback,200);
 }
 
-function animateEnemyMovement(e,path,callback){
-  if(path.length===0){if(e.target && e.x===e.target.x && e.y===e.target.y) e.target=null;if(e.alert>0)e.alert--; callback(); return;}
-  const p=path.shift();
-  e.px=e.x*TILE + (p.x-e.x)*TILE;
-  e.py=e.y*TILE + (p.y-e.y)*TILE;
-  e.x=p.x; e.y=p.y;
-  draw();
-  setTimeout(()=>animateEnemyMovement(e,path,callback),200);
-}
-
-/* ===== VISION ===== */
 function canSee(e){
   for(let i=1;i<=e.vision;i++){
-    const x=e.x + e.dir.x*i, y=e.y + e.dir.y*i;
-    if(x<0||y<0||x>=mapW||y>=mapH||grid[y][x]===WALL) break;
-    if(x===player.x && y===player.y) { e.alert=3; return true; }
+    const x=e.x+e.dir.x*i, y=e.y+e.dir.y*i;
+    if(x<0||y<0||x>=mapW||y>=mapH || grid[y][x]===WALL) break;
+    if(x===player.x && y===player.y){ e.alert=3; return true; }
   }
   return false;
 }
@@ -233,38 +221,35 @@ function draw(){
     ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
   }
 
-  // highlight moves
-  if(playerTurn)getMovableTiles().forEach(t=>{ctx.fillStyle="rgba(0,150,255,0.3)";ctx.fillRect(t.x*TILE,t.y*TILE,TILE,TILE);});
+  // highlight movable tiles
+  if(playerTurn)getMovableTiles().forEach(t=>{
+    ctx.fillStyle="rgba(0,150,255,0.3)";
+    ctx.fillRect(t.x*TILE,t.y*TILE,TILE,TILE);
+  });
 
-  // enemy vision
+  // enemies
   enemies.forEach(e=>{
-    for(let i=1;i<=e.vision;i++){
-      const x=e.x+e.dir.x*i, y=e.y+e.dir.y*i;
-      if(x<0||y<0||x>=mapW||y>=mapH||grid[y][x]===WALL) break;
-      ctx.fillStyle=e.alert>0?"rgba(255,0,0,0.3)":"rgba(255,0,0,0.1)";
-      ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
+    if(e.alert>0){
+      ctx.strokeStyle="red"; ctx.lineWidth=3; ctx.strokeRect(e.x*TILE,e.y*TILE,TILE,TILE);
+      ctx.fillStyle="red"; ctx.font="14px monospace"; ctx.fillText("ALERT!",e.x*TILE,e.y*TILE-2);
     }
+    ctx.fillStyle="#f00"; ctx.fillRect(e.x*TILE+12,e.y*TILE+12,24,24);
   });
 
   // player
   ctx.fillStyle=player.hidden?"#00a":"#0af";
-  ctx.fillRect(player.x*TILE+8,player.y*TILE+8,16,16);
-
-  // enemies
-  enemies.forEach(e=>{
-    ctx.fillStyle=e.alert>0?"#ff5555":"#f00";
-    ctx.fillRect(e.x*TILE+8,e.y*TILE+8,16,16);
-  });
+  ctx.fillRect(player.x*TILE+12,player.y*TILE+12,24,24);
 
   ctx.restore();
 }
 
 /* ===== CAMERA TOUCH ===== */
-canvas.addEventListener("pointerdown",e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;});
-canvas.addEventListener("pointermove",e=>{if(dragging){camera.x+=e.clientX-lastX;camera.y+=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;draw();}});
+canvas.addEventListener("pointerdown",e=>{dragging=true; lastX=e.clientX; lastY=e.clientY;});
+canvas.addEventListener("pointermove",e=>{if(dragging){camera.x+=e.clientX-lastX;camera.y+=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY; draw();}});
 canvas.addEventListener("pointerup",()=>{dragging=false;});
 canvas.addEventListener("pointercancel",()=>{dragging=false;});
-canvas.addEventListener("wheel",e=>{const old=camera.scale; camera.scale=Math.max(0.5,Math.min(3,camera.scale*(1-e.deltaY*0.001))); draw(); e.preventDefault();},{passive:false});
+canvas.addEventListener("wheel",e=>{camera.scale=Math.max(0.5,Math.min(2,camera.scale*(1-e.deltaY*0.001))); draw(); e.preventDefault();},{passive:false});
+
 </script>
 </body>
 </html>
