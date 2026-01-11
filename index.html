@@ -2,267 +2,339 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Silent House: Mobile Stealth</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+<title>Silent House: Mobile Stealth Pro</title>
 <style>
-body{margin:0;background:#111;color:#eee;font-family:monospace;text-align:center;touch-action:none;overscroll-behavior:none;}
-canvas{display:block;margin:0 auto;background:#222;}
-button{padding:8px 14px;margin:4px;background:#333;color:#eee;border:1px solid #666;}
-.hidden{display:none;}
-#controls{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);z-index:10;}
-#controls button{width:60px;height:60px;font-size:20px;margin:4px;}
-#info{position:fixed;top:10px;left:50%;transform:translateX(-50%);max-width:90%;z-index:10;}
-.message{background:rgba(0,0,0,0.8);padding:4px 8px;border-radius:4px;color:#fff;font-size:14px;margin-bottom:2px;opacity:1;transition:opacity 2s;}
+    body { margin: 0; background: #0f0f0f; color: #eee; font-family: 'Courier New', monospace; text-align: center; touch-action: none; overflow: hidden; }
+    canvas { display: block; margin: 0 auto; background: #1a1a1a; cursor: crosshair; }
+    button { padding: 10px 20px; margin: 5px; background: #333; color: #0af; border: 1px solid #444; border-radius: 4px; font-weight: bold; }
+    button:active { background: #0af; color: #000; }
+    .hidden { display: none; }
+    #ui-layer { position: fixed; width: 100%; pointer-events: none; z-index: 10; }
+    #controls { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); pointer-events: auto; }
+    #info { top: 20px; left: 50%; transform: translateX(-50%); max-width: 80%; }
+    .message { background: rgba(0,0,0,0.85); padding: 6px 12px; border-left: 3px solid #0af; margin-bottom: 5px; font-size: 14px; animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 </style>
 </head>
 <body>
 
-<h2>Silent House: Mobile Stealth</h2>
-
 <div id="menu">
-<p>Level: <span id="levelText">1</span></p>
-<button onclick="changeLevel(-1)">−</button>
-<button onclick="changeLevel(1)">+</button><br><br>
-<p>Map Tiles:</p>
-<input type="number" id="mapWidth" value="10" min="6" max="20"> x
-<input type="number" id="mapHeight" value="10" min="6" max="20"><br><br>
-<button onclick="startGame()">START</button>
+    <h1 style="color:#0af">SILENT HOUSE</h1>
+    <p>Level: <span id="levelText">1</span></p>
+    <button onclick="changeLevel(-1)">-</button>
+    <button onclick="changeLevel(1)">+</button><br><br>
+    <p>Map Size:</p>
+    <input type="number" id="mapWidth" value="12" style="width:50px"> x 
+    <input type="number" id="mapHeight" value="12" style="width:50px"><br><br>
+    <button onclick="startGame()">START MISSION</button>
 </div>
 
-<canvas id="game" width="960" height="960" class="hidden"></canvas>
+<div id="ui-layer">
+    <div id="info"></div>
+</div>
+
+<canvas id="game" class="hidden"></canvas>
 
 <div id="controls" class="hidden">
-<button onclick="playerWait()">Wait</button>
-<button onclick="backToMenu()">Back</button>
+    <button onclick="playerWait()">STAY STILL</button>
+    <button onclick="backToMenu()">ABORT</button>
 </div>
 
-<div id="info"></div>
-
 <script>
-/* ===== CONFIG ===== */
-const TILE=48; // fixed size tile
-const FLOOR=0,WALL=1,NOISE=2,EXIT=3,HIDE=4;
+/* ===== CONFIG & STATE ===== */
+const TILE = 48;
+const FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4;
+let levelNumber = 1, grid, player, enemies, gameOver = false, playerTurn = true;
+let mapW, mapH;
 
-let levelNumber=1,grid,player,enemies,gameOver,playerTurn=true;
-let mapW=10,mapH=10;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const info = document.getElementById("info");
 
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
-const info=document.getElementById("info");
+let camera = { x: 0, y: 0, scale: 1 };
+let isDragging = false, lastX, lastY;
 
-let camera={x:0,y:0,scale:1};
-let dragging=false,lastX=0,lastY=0;
+/* ===== CORE ENGINE ===== */
+function changeLevel(v) { levelNumber = Math.max(1, levelNumber + v); document.getElementById("levelText").textContent = levelNumber; }
 
-/* ===== MENU ===== */
-function changeLevel(v){levelNumber=Math.max(1,levelNumber+v);levelText.textContent=levelNumber;}
-function startGame(){
-  mapW=Math.min(Math.max(parseInt(document.getElementById("mapWidth").value),6),20);
-  mapH=Math.min(Math.max(parseInt(document.getElementById("mapHeight").value),6),20);
-  canvas.width=TILE*mapW;
-  canvas.height=TILE*mapH;
-  camera.scale=Math.min(window.innerWidth/(TILE*mapW), window.innerHeight/(TILE*mapH),1);
-  camera.x=0; camera.y=0;
-  menu.classList.add("hidden");
-  canvas.classList.remove("hidden");
-  controls.classList.remove("hidden");
-  generateLevel();
-}
-function backToMenu(){menu.classList.remove("hidden");canvas.classList.add("hidden");controls.classList.add("hidden");clearMessages();}
+function startGame() {
+    mapW = parseInt(document.getElementById("mapWidth").value);
+    mapH = parseInt(document.getElementById("mapHeight").value);
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    // Initial Camera Center
+    camera.scale = Math.min(window.innerWidth / (mapW * TILE), window.innerHeight / (mapH * TILE), 1.2);
+    camera.x = (canvas.width - (mapW * TILE * camera.scale)) / 2;
+    camera.y = (canvas.height - (mapH * TILE * camera.scale)) / 2;
 
-/* ===== LEVEL GENERATION ===== */
-function generateLevel(){
-  gameOver=false; playerTurn=true;
-  grid=Array.from({length:mapH},(_,y)=>Array.from({length:mapW},(_,x)=>(x===0||y===0||x===mapW-1||y===mapH-1)?WALL:Math.random()<0.15?WALL:FLOOR));
-
-  // Exit position
-  let exitX,exitY;
-  do{exitX=Math.floor(Math.random()*mapW); exitY=Math.floor(Math.random()*mapH);}while(grid[exitY][exitX]!==FLOOR);
-  grid[exitY][exitX]=EXIT;
-
-  // Player far from exit
-  let px,py;
-  do{px=Math.floor(Math.random()*mapW); py=Math.floor(Math.random()*mapH);}
-  while(grid[py][px]!==FLOOR || Math.abs(px-exitX)+Math.abs(py-exitY)<Math.floor(Math.max(mapW,mapH)/2));
-  player={x:px,y:py,hidden:false};
-
-  // Noise/Hide
-  for(let i=0;i<levelNumber+1;i++) placeRandom(NOISE);
-  for(let i=0;i<Math.max(1,Math.floor(levelNumber/2));i++) placeRandom(HIDE);
-
-  // Enemies near exit
-  enemies=[];
-  const count=Math.min(1+Math.floor(levelNumber/2),6);
-  for(let i=0;i<count;i++){
-    let ex,ey;
-    do{
-      ex=Math.floor(exitX + (Math.random()*3|0)-1);
-      ey=Math.floor(exitY + (Math.random()*3|0)-1);
-    }while(ex<0||ey<0||ex>=mapW||ey>=mapH||grid[ey][ex]!==FLOOR||enemies.some(e=>e.x===ex&&e.y===ey));
-    enemies.push({x:ex,y:ey,dir:[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)],target:null,alert:0,vision:3});
-  }
-
-  showMessage(`Level ${levelNumber} • Enemies ${count}`);
-  draw();
+    document.getElementById("menu").classList.add("hidden");
+    canvas.classList.remove("hidden");
+    document.getElementById("controls").classList.remove("hidden");
+    generateLevel();
 }
 
-function placeRandom(type){
-  let x,y;
-  do{x=Math.floor(Math.random()*mapW);y=Math.floor(Math.random()*mapH);}while(grid[y][x]!==FLOOR||(x===player.x && y===player.y));
-  grid[y][x]=type;
+function generateLevel() {
+    gameOver = false; playerTurn = true;
+    grid = Array.from({length: mapH}, (_, y) => Array.from({length: mapW}, (_, x) => 
+        (x===0 || y===0 || x===mapW-1 || y===mapH-1) ? WALL : Math.random() < 0.18 ? WALL : FLOOR
+    ));
+
+    // Place Exit
+    let ex, ey; do { ex = Math.floor(Math.random()*mapW); ey = Math.floor(Math.random()*mapH); } while(grid[ey][ex] !== FLOOR);
+    grid[ey][ex] = EXIT;
+
+    // Place Player
+    let px, py; do { px = Math.floor(Math.random()*mapW); py = Math.floor(Math.random()*mapH); } 
+    while(grid[py][px] !== FLOOR || Math.hypot(px-ex, py-ey) < 6);
+    player = { x: px, y: py, hidden: false, animX: px, animY: py };
+
+    // Props
+    for(let i=0; i<levelNumber+2; i++) placeRandom(NOISE);
+    for(let i=0; i<3; i++) placeRandom(HIDE);
+
+    // Enemies
+    enemies = [];
+    const eCount = Math.min(2 + Math.floor(levelNumber/2), 8);
+    for(let i=0; i<eCount; i++) {
+        let enX, enY; do { enX = Math.floor(Math.random()*mapW); enY = Math.floor(Math.random()*mapH); }
+        while(grid[enY][enX] !== FLOOR || Math.hypot(enX-px, enY-py) < 4);
+        enemies.push({
+            x: enX, y: enY, animX: enX, animY: enY,
+            dir: {x: Math.random() > 0.5 ? 1 : -1, y: 0},
+            target: null, alert: 0, vision: 3
+        });
+    }
+    showMessage("MISSION START: Reach the Extraction Point.");
+    draw();
 }
 
-/* ===== MESSAGES ===== */
-function showMessage(text){
-  const msg=document.createElement("div"); msg.className="message"; msg.textContent=text;
-  info.appendChild(msg);
-  if(info.childElementCount>5) info.removeChild(info.firstChild);
-  setTimeout(()=>{msg.style.opacity=0; setTimeout(()=>msg.remove(),2000);},2000);
-}
-function clearMessages(){info.innerHTML="";}
-
-/* ===== PLAYER ===== */
-function getMovableTiles(){
-  const tiles=[];
-  for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
-    const nx=player.x+dx,ny=player.y+dy;
-    if(nx>=0&&ny>=0&&nx<mapW&&ny<mapH && grid[ny][nx]!==WALL && Math.abs(dx)+Math.abs(dy)<=2 && !(dx===0&&dy===0)) tiles.push({x:nx,y:ny});
-  }
-  return tiles;
+function placeRandom(type) {
+    let x, y; do { x = Math.floor(Math.random()*mapW); y = Math.floor(Math.random()*mapH); } while(grid[y][x] !== FLOOR);
+    grid[y][x] = type;
 }
 
-canvas.addEventListener("click",e=>{
-  if(!playerTurn||gameOver)return;
-  const rect=canvas.getBoundingClientRect();
-  const mx=Math.floor((e.clientX-rect.left)/TILE);
-  const my=Math.floor((e.clientY-rect.top)/TILE);
-  const target=getMovableTiles().find(t=>t.x===mx && t.y===my);
-  if(target) movePlayerTo(target.x,target.y);
+/* ===== MOVEMENT LOGIC ===== */
+function getMovableTiles() {
+    const reachable = [];
+    const dirs = [{x:1,y:0}, {x:-1,y:0}, {x:0,y:1}, {x:0,y:-1}, {x:1,y:1}, {x:-1,y:-1}, {x:1,y:-1}, {x:-1,y:1}];
+    
+    // 1-step moves
+    dirs.forEach(d => {
+        let nx = player.x + d.x, ny = player.y + d.y;
+        if(isValid(nx, ny)) {
+            reachable.push({x: nx, y: ny});
+            // 2nd step from this position
+            dirs.forEach(d2 => {
+                let nnx = nx + d2.x, nny = ny + d2.y;
+                if(isValid(nnx, nny) && (nnx !== player.x || nny !== player.y)) {
+                    if(!reachable.some(r => r.x === nnx && r.y === nny)) reachable.push({x: nnx, y: nny});
+                }
+            });
+        }
+    });
+    return reachable;
+}
+
+function isValid(x, y) { return x >= 0 && y >= 0 && x < mapW && y < mapH && grid[y][x] !== WALL; }
+
+function movePlayerTo(tx, ty) {
+    if(!playerTurn || gameOver) return;
+    playerTurn = false;
+    
+    // Path animation
+    const path = [];
+    // Simple 2-step logic: move to target
+    if(Math.abs(tx - player.x) <= 2 && Math.abs(ty - player.y) <= 2) {
+        path.push({x: tx, y: ty});
+    }
+
+    animatePath(player, path, () => {
+        checkPlayerTile();
+        enemyTurn();
+    });
+}
+
+function animatePath(entity, path, callback) {
+    if(path.length === 0) { callback(); return; }
+    const next = path.shift();
+    entity.x = next.x; entity.y = next.y;
+    
+    let start = null;
+    const duration = 150;
+    const sX = entity.animX, sY = entity.animY;
+
+    function step(timestamp) {
+        if(!start) start = timestamp;
+        let progress = (timestamp - start) / duration;
+        if(progress > 1) progress = 1;
+        
+        entity.animX = sX + (entity.x - sX) * progress;
+        entity.animY = sY + (entity.y - sY) * progress;
+        draw();
+
+        if(progress < 1) requestAnimationFrame(step);
+        else animatePath(entity, path, callback);
+    }
+    requestAnimationFrame(step);
+}
+
+/* ===== ENEMY AI ===== */
+function enemyTurn() {
+    if(gameOver) return;
+    let i = 0;
+    function processNext() {
+        if(i >= enemies.length) { playerTurn = true; draw(); return; }
+        const e = enemies[i++];
+        
+        // Check vision BEFORE moving
+        if(!player.hidden && canSee(e, player)) {
+            showMessage("! DETECTED !");
+            gameOver = true;
+            setTimeout(() => alert("CAUGHT! Game Over."), 100);
+            return;
+        }
+
+        // Logic
+        let move = {x: 0, y: 0};
+        if(e.target) {
+            // Move toward investigation target
+            move.x = Math.sign(e.target.x - e.x);
+            move.y = Math.sign(e.target.y - e.y);
+            if(e.x === e.target.x && e.y === e.target.y) e.target = null;
+        } else {
+            // Patrol
+            if(!isValid(e.x + e.dir.x, e.y + e.dir.y)) {
+                e.dir.x *= -1; e.dir.y *= -1;
+            }
+            move = e.dir;
+        }
+
+        if(isValid(e.x + move.x, e.y + move.y)) {
+            animatePath(e, [{x: e.x + move.x, y: e.y + move.y}], processNext);
+        } else {
+            processNext();
+        }
+    }
+    processNext();
+}
+
+function canSee(e, target) {
+    const dx = Math.sign(e.dir.x || (target.x - e.x));
+    const dy = Math.sign(e.dir.y || (target.y - e.y));
+    
+    for(let i=1; i<=e.vision; i++) {
+        let vx = e.x + dx*i, vy = e.y + dy*i;
+        if(!isValid(vx, vy)) break;
+        if(vx === target.x && vy === target.y) return true;
+    }
+    return false;
+}
+
+function checkPlayerTile() {
+    const tile = grid[player.y][player.x];
+    player.hidden = (tile === HIDE);
+    if(tile === NOISE) {
+        showMessage("CLATTER! Enemies are investigating.");
+        enemies.forEach(e => { if(Math.hypot(e.x-player.x, e.y-player.y) < 5) e.target = {x: player.x, y: player.y}; });
+    }
+    if(tile === EXIT) {
+        showMessage("LEVEL COMPLETE!");
+        gameOver = true;
+        levelNumber++;
+        setTimeout(startGame, 1000);
+    }
+}
+
+/* ===== DRAWING ===== */
+function draw() {
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    
+    ctx.translate(camera.x, camera.y);
+    ctx.scale(camera.scale, camera.scale);
+
+    // Draw Grid
+    for(let y=0; y<mapH; y++) {
+        for(let x=0; x<mapW; x++) {
+            let color = "#222";
+            if(grid[y][x] === WALL) color = "#444";
+            if(grid[y][x] === EXIT) color = "#0a0";
+            if(grid[y][x] === NOISE) color = "#433";
+            if(grid[y][x] === HIDE) color = "#111";
+            
+            ctx.fillStyle = color;
+            ctx.fillRect(x*TILE, y*TILE, TILE-1, TILE-1);
+        }
+    }
+
+    // Movable Highlights
+    if(playerTurn && !gameOver) {
+        ctx.fillStyle = "rgba(0, 170, 255, 0.15)";
+        getMovableTiles().forEach(t => ctx.fillRect(t.x*TILE, t.y*TILE, TILE-1, TILE-1));
+    }
+
+    // Enemies
+    enemies.forEach(e => {
+        ctx.fillStyle = e.target ? "#f80" : "#f33";
+        ctx.beginPath();
+        ctx.arc(e.animX*TILE + TILE/2, e.animY*TILE + TILE/2, TILE/3, 0, Math.PI*2);
+        ctx.fill();
+        // Vision Direction
+        ctx.strokeStyle = "rgba(255,0,0,0.3)";
+        ctx.beginPath();
+        ctx.moveTo(e.animX*TILE + TILE/2, e.animY*TILE + TILE/2);
+        ctx.lineTo((e.animX + e.dir.x*2)*TILE + TILE/2, (e.animY + e.dir.y*2)*TILE + TILE/2);
+        ctx.stroke();
+    });
+
+    // Player
+    ctx.fillStyle = player.hidden ? "#55f" : "#0af";
+    ctx.shadowBlur = player.hidden ? 0 : 10;
+    ctx.shadowColor = "#0af";
+    ctx.fillRect(player.animX*TILE + TILE/4, player.animY*TILE + TILE/4, TILE/2, TILE/2);
+    ctx.shadowBlur = 0;
+
+    requestAnimationFrame(() => {}); 
+}
+
+/* ===== INPUTS ===== */
+canvas.addEventListener("pointerdown", e => {
+    isDragging = true; lastX = e.clientX; lastY = e.clientY;
 });
 
-function movePlayerTo(tx, ty){
-    playerTurn=false; 
-    showMessage("Moving...");
-    
-    const path = [];
-    let cx = player.x;
-    let cy = player.y;
-    
-    // move horizontally first
-    while(cx !== tx){
-        cx += (tx > cx ? 1 : -1);
-        path.push({x: cx, y: cy});
+canvas.addEventListener("pointermove", e => {
+    if(isDragging) {
+        camera.x += e.clientX - lastX;
+        camera.y += e.clientY - lastY;
+        lastX = e.clientX; lastY = e.clientY;
+        draw();
     }
-    // then move vertically
-    while(cy !== ty){
-        cy += (ty > cy ? 1 : -1);
-        path.push({x: cx, y: cy});
-    }
+});
+
+canvas.addEventListener("pointerup", e => {
+    if(!isDragging) return;
+    isDragging = false;
+    // If it was a short tap, treat as move
+    const rect = canvas.getBoundingClientRect();
+    const worldX = (e.clientX - camera.x) / camera.scale;
+    const worldY = (e.clientY - camera.y) / camera.scale;
+    const tx = Math.floor(worldX / TILE);
+    const ty = Math.floor(worldY / TILE);
     
-    animateMovement(path, postPlayerMove);
+    if(getMovableTiles().some(t => t.x === tx && t.y === ty)) movePlayerTo(tx, ty);
+});
+
+function playerWait() { if(playerTurn) { showMessage("Remaining silent..."); playerTurn = false; enemyTurn(); } }
+function showMessage(m) {
+    const div = document.createElement("div"); div.className = "message"; div.textContent = m;
+    info.appendChild(div);
+    setTimeout(() => div.remove(), 3000);
 }
+function backToMenu() { location.reload(); }
 
-function animateMovement(path, callback){
-    if(path.length === 0){ callback(); return; }
-    const p = path.shift();
-    player.x = p.x;
-    player.y = p.y;
-    draw();
-    setTimeout(() => animateMovement(path, callback), 150);
-}
-
-function playerWait(){if(!playerTurn||gameOver)return; showMessage("Waiting...");playerTurn=false; setTimeout(enemyTurn,300);}
-
-function postPlayerMove(){
-  player.hidden=grid[player.y][player.x]===HIDE;
-  if(grid[player.y][player.x]===NOISE){
-    enemies.forEach(e=>{
-      const dist=Math.abs(e.x-player.x)+Math.abs(e.y-player.y);
-      if(dist<=2){e.target={x:player.x,y:player.y}; e.alert=3; showMessage("Enemy investigates nearby noise!");}
-    });
-  }
-  if(grid[player.y][player.x]===EXIT){ showMessage("Escaped!"); gameOver=true; levelNumber++; setTimeout(startGame,1000); return; }
-  setTimeout(enemyTurn,300);
-}
-
-/* ===== ENEMIES ===== */
-function enemyTurn(){
-  if(gameOver) return;
-  showMessage("Enemy Turn...");
-  let index=0;
-  function nextEnemy(){
-    if(index>=enemies.length){playerTurn=true; showMessage("Your Turn"); draw(); return;}
-    const e=enemies[index++];
-    if(!player.hidden && canSee(e)){ showMessage("You were seen!"); gameOver=true; return;}
-    moveEnemy(e,nextEnemy);
-  }
-  nextEnemy();
-}
-
-function moveEnemy(e,callback){
-  let tx=e.x,ty=e.y;
-  if(e.target){tx=e.target.x; ty=e.target.y;}
-  else{
-    const nx=e.x+e.dir.x, ny=e.y+e.dir.y;
-    if(nx>=0&&ny>=0&&nx<mapW&&ny<mapH && grid[ny][nx]!==WALL){tx=nx; ty=ny;} else {e.dir.x*=-1; e.dir.y*=-1; tx=e.x+e.dir.x; ty=e.y+e.dir.y;}
-  }
-  e.x=tx; e.y=ty; if(e.alert>0) e.alert--; draw();
-  setTimeout(callback,200);
-}
-
-function canSee(e){
-  for(let i=1;i<=e.vision;i++){
-    const x=e.x+e.dir.x*i, y=e.y+e.dir.y*i;
-    if(x<0||y<0||x>=mapW||y>=mapH || grid[y][x]===WALL) break;
-    if(x===player.x && y===player.y){ e.alert=3; return true; }
-  }
-  return false;
-}
-
-/* ===== DRAW ===== */
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.save();
-  ctx.translate(camera.x,camera.y);
-  ctx.scale(camera.scale,camera.scale);
-
-  // tiles
-  for(let y=0;y<mapH;y++)for(let x=0;x<mapW;x++){
-    ctx.fillStyle=
-      grid[y][x]===WALL?"#555":
-      grid[y][x]===HIDE?"#000":
-      grid[y][x]===NOISE?"#222":
-      grid[y][x]===EXIT?"#0a0":"#222";
-    ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
-  }
-
-  // highlight movable tiles
-  if(playerTurn)getMovableTiles().forEach(t=>{
-    ctx.fillStyle="rgba(0,150,255,0.3)";
-    ctx.fillRect(t.x*TILE,t.y*TILE,TILE,TILE);
-  });
-
-  // enemies
-  enemies.forEach(e=>{
-    if(e.alert>0){
-      ctx.strokeStyle="red"; ctx.lineWidth=3; ctx.strokeRect(e.x*TILE,e.y*TILE,TILE,TILE);
-      ctx.fillStyle="red"; ctx.font="14px monospace"; ctx.fillText("ALERT!",e.x*TILE,e.y*TILE-2);
-    }
-    ctx.fillStyle="#f00"; ctx.fillRect(e.x*TILE+12,e.y*TILE+12,24,24);
-  });
-
-  // player
-  ctx.fillStyle=player.hidden?"#00a":"#0af";
-  ctx.fillRect(player.x*TILE+12,player.y*TILE+12,24,24);
-
-  ctx.restore();
-}
-
-/* ===== CAMERA TOUCH ===== */
-canvas.addEventListener("pointerdown",e=>{dragging=true; lastX=e.clientX; lastY=e.clientY;});
-canvas.addEventListener("pointermove",e=>{if(dragging){camera.x+=e.clientX-lastX;camera.y+=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY; draw();}});
-canvas.addEventListener("pointerup",()=>{dragging=false;});
-canvas.addEventListener("pointercancel",()=>{dragging=false;});
-canvas.addEventListener("wheel",e=>{camera.scale=Math.max(0.5,Math.min(2,camera.scale*(1-e.deltaY*0.001))); draw(); e.preventDefault();},{passive:false});
+window.addEventListener("resize", () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; draw(); });
 
 </script>
 </body>
