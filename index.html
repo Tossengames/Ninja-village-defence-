@@ -3,71 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Silent House: Advanced</title>
+<title>Silent House: Advanced Stealth</title>
 <style>
-body {
-  margin:0;
-  background:#111;
-  color:#eee;
-  font-family: monospace;
-  text-align:center;
-  touch-action:none;
-  overscroll-behavior:none;
-}
-canvas {
-  display:block;
-  margin:0 auto;
-  background:#222;
-  border:2px solid #555;
-}
-button {
-  padding:10px 16px;
-  margin:5px;
-  background:#333;
-  color:#eee;
-  border:1px solid #666;
-}
-.hidden { display:none; }
-#controls button {
-  width:60px;
-  height:60px;
-  font-size:22px;
-}
-#info {
-  min-height:40px;
-  position:relative;
-}
-.message {
-  position:absolute;
-  top:0;
-  left:50%;
-  transform:translateX(-50%);
-  background:rgba(0,0,0,0.8);
-  padding:4px 8px;
-  border-radius:4px;
-  color:#fff;
-  font-size:14px;
-  animation:fade 2s forwards;
-}
-@keyframes fade {
-  0%{opacity:1;}
-  100%{opacity:0;}
-}
+body{margin:0;background:#111;color:#eee;font-family:monospace;text-align:center;touch-action:none;overscroll-behavior:none;}
+canvas{display:block;margin:0 auto;background:#222;border:2px solid #555;}
+button{padding:10px 16px;margin:5px;background:#333;color:#eee;border:1px solid #666;}
+.hidden{display:none;}
+#controls button{width:60px;height:60px;font-size:22px;}
+#info{min-height:80px;position:relative;overflow:hidden;}
+.message{position:relative;background:rgba(0,0,0,0.8);padding:4px 8px;border-radius:4px;color:#fff;font-size:14px;margin-bottom:2px;opacity:1;transition:opacity 2s;}
 </style>
 </head>
 <body>
 
-<h2>Silent House: Advanced</h2>
+<h2>Silent House: Advanced Stealth</h2>
 
 <div id="menu">
   <p>Turn-based ninja puzzle</p>
   <p>Level: <span id="levelText">1</span></p>
   <button onclick="changeLevel(-1)">−</button>
   <button onclick="changeLevel(1)">+</button><br><br>
+  <p>Map Size:</p>
+  <input type="number" id="mapWidth" value="10" min="6" max="20"> x
+  <input type="number" id="mapHeight" value="10" min="6" max="20"><br><br>
   <button onclick="startGame()">START</button>
 </div>
 
-<canvas id="game" width="320" height="320" class="hidden"></canvas>
+<canvas id="game" width="480" height="480" class="hidden"></canvas>
 
 <div id="controls" class="hidden">
   <button onclick="playerWait()">Wait</button>
@@ -78,43 +40,41 @@ button {
 
 <script>
 /* ===== CONFIG ===== */
-const SIZE=10, TILE=32;
-const FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4;
+let TILE=32;
+let FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4;
 
 let levelNumber=1, grid, player, enemies, gameOver, playerTurn=true;
+let mapW=10,mapH=10;
 const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
 const info=document.getElementById("info");
 
 /* ===== MENU ===== */
-function changeLevel(v){ levelNumber=Math.max(1,levelNumber+v); levelText.textContent=levelNumber;}
+function changeLevel(v){levelNumber=Math.max(1,levelNumber+v);levelText.textContent=levelNumber;}
 function startGame(){
+  mapW=parseInt(document.getElementById("mapWidth").value);
+  mapH=parseInt(document.getElementById("mapHeight").value);
+  TILE=Math.min(480/mapW,480/mapH);
+  canvas.width=TILE*mapW; canvas.height=TILE*mapH;
   menu.classList.add("hidden");
   game.classList.remove("hidden");
   controls.classList.remove("hidden");
   backBtn.classList.remove("hidden");
   generateLevel();
 }
-function backToMenu(){
-  menu.classList.remove("hidden");
-  game.classList.add("hidden");
-  controls.classList.add("hidden");
-  backBtn.classList.add("hidden");
-  clearMessages();
-}
+function backToMenu(){menu.classList.remove("hidden");game.classList.add("hidden");controls.classList.add("hidden");backBtn.classList.add("hidden");clearMessages();}
 
 /* ===== LEVEL GENERATION ===== */
 function generateLevel(){
-  gameOver=false;
-  playerTurn=true;
-  grid=Array.from({length:SIZE},(_,y)=>
-    Array.from({length:SIZE},(_,x)=>
-      (x===0||y===0||x===SIZE-1||y===SIZE-1)?WALL:
+  gameOver=false; playerTurn=true;
+  grid=Array.from({length:mapH},(_,y)=>
+    Array.from({length:mapW},(_,x)=>
+      (x===0||y===0||x===mapW-1||y===mapH-1)?WALL:
       Math.random()<0.15?WALL:FLOOR
     )
   );
-  player={x:1,y:1,hidden:false,px:1,py:1};
-  grid[SIZE-2][SIZE-2]=EXIT;
+  player={x:1,y:1,px:1,py:1,hidden:false};
+  grid[mapH-2][mapW-2]=EXIT;
 
   for(let i=0;i<levelNumber+1;i++) placeRandom(NOISE);
   for(let i=0;i<Math.max(1,Math.floor(levelNumber/2));i++) placeRandom(HIDE);
@@ -129,45 +89,40 @@ function generateLevel(){
 
 function placeRandom(type){
   let x,y;
-  do{x=Math.floor(Math.random()*SIZE);y=Math.floor(Math.random()*SIZE);}while(grid[y][x]!==FLOOR||(x===1&&y===1));
+  do{x=Math.floor(Math.random()*mapW);y=Math.floor(Math.random()*mapH);}while(grid[y][x]!==FLOOR||(x===1&&y===1));
   grid[y][x]=type;
 }
 
 function spawnEnemy(){
   let x,y;
-  do{x=Math.floor(Math.random()*SIZE);y=Math.floor(Math.random()*SIZE);}while(grid[y][x]!==FLOOR);
-  enemies.push({x,y,dir:[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)],target:null,px:x,py:y});
+  do{x=Math.floor(Math.random()*mapW);y=Math.floor(Math.random()*mapH);}while(grid[y][x]!==FLOOR);
+  enemies.push({x,y,px:x,py:y,dir:[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)],
+    target:null, alert:0, vision:Math.floor(Math.random()*3)+1});
 }
 
 /* ===== MESSAGES ===== */
 function showMessage(text){
-  const msg=document.createElement("div");
-  msg.className="message"; msg.textContent=text;
+  const msg=document.createElement("div"); msg.className="message"; msg.textContent=text;
   info.appendChild(msg);
-  setTimeout(()=>{msg.remove();},2000);
+  if(info.childElementCount>5) info.removeChild(info.firstChild);
+  setTimeout(()=>{msg.style.opacity=0; setTimeout(()=>msg.remove(),2000);},2000);
 }
 function clearMessages(){info.innerHTML="";}
 
 /* ===== PLAYER TURN ===== */
-function playerWait(){
-  if(!playerTurn||gameOver)return;
-  showMessage("You wait...");
-  playerTurn=false;
-  setTimeout(enemyTurn,300);
-}
-
+function playerWait(){if(!playerTurn||gameOver)return; showMessage("You wait...");playerTurn=false; setTimeout(enemyTurn,300);}
 function getMovableTiles(){
   const tiles=[];
   for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
     const nx=player.x+dx, ny=player.y+dy;
-    if(nx>=0&&ny>=0&&nx<SIZE&&ny<SIZE){
-      if(grid[ny][nx]!==WALL && Math.abs(dx)+Math.abs(dy)<=2 && !(dx===0 && dy===0)) tiles.push({x:nx,y:ny});
+    if(nx>=0&&ny>=0&&nx<mapW&&ny<mapH){
+      if(grid[ny][nx]!==WALL && Math.abs(dx)+Math.abs(dy)<=2 && !(dx===0&&dy===0)) tiles.push({x:nx,y:ny});
     }
   }
   return tiles;
 }
 
-/* ===== PLAYER MOVE CLICK ===== */
+/* ===== PLAYER CLICK MOVE ===== */
 canvas.addEventListener("click",e=>{
   if(!playerTurn||gameOver)return;
   const rect=canvas.getBoundingClientRect();
@@ -180,14 +135,11 @@ canvas.addEventListener("click",e=>{
 
 /* ===== PLAYER MOVE LOGIC ===== */
 function movePlayerTo(tx,ty){
-  playerTurn=false;
-  showMessage("Moving...");
+  playerTurn=false; showMessage("Moving...");
   const dx=tx-player.x, dy=ty-player.y;
   const steps=Math.max(Math.abs(dx),Math.abs(dy));
   const path=[];
-  for(let i=1;i<=steps;i++){
-    path.push({x:player.x + Math.round(dx*i/steps), y:player.y + Math.round(dy*i/steps)});
-  }
+  for(let i=1;i<=steps;i++) path.push({x:player.x + Math.round(dx*i/steps), y:player.y + Math.round(dy*i/steps)});
   animateMovement(path,()=>{postPlayerMove();});
 }
 
@@ -204,15 +156,13 @@ function animateMovement(path,callback){
 function postPlayerMove(){
   player.hidden=grid[player.y][player.x]===HIDE;
   if(grid[player.y][player.x]===NOISE){
-    enemies.forEach(e=>e.target={x:player.x,y:player.y});
-    showMessage("Noise! Guards alerted");
+    enemies.forEach(e=>{
+      const dist=Math.abs(e.x-player.x)+Math.abs(e.y-player.y);
+      if(dist<=2){e.target={x:player.x,y:player.y}; e.alert=3; showMessage("Enemy investigates nearby noise!");}
+    });
   }
   if(grid[player.y][player.x]===EXIT){
-    showMessage("Escaped!");
-    gameOver=true;
-    levelNumber++;
-    setTimeout(startGame,1000);
-    return;
+    showMessage("Escaped!"); gameOver=true; levelNumber++; setTimeout(startGame,1000); return;
   }
   setTimeout(enemyTurn,300);
 }
@@ -221,32 +171,29 @@ function postPlayerMove(){
 function enemyTurn(){
   if(gameOver)return;
   showMessage("Enemy Turn...");
-  const moves=[];
-  enemies.forEach(e=>{
-    if(!player.hidden && canSee(e)) { showMessage("You were seen!"); gameOver=true; return; }
-    if(e.target) moves.push({enemy:e,type:"target"});
-    else moves.push({enemy:e,type:"patrol"});
-  });
-  if(gameOver)return;
-  animateEnemies(moves,()=>{playerTurn=true; showMessage("Your Turn"); draw();});
+  let index=0;
+  function nextEnemy(){
+    if(index>=enemies.length){playerTurn=true; showMessage("Your Turn"); draw(); return;}
+    const e=enemies[index++];
+    if(!player.hidden && canSee(e)){showMessage("You were seen!");gameOver=true;return;}
+    moveEnemy(e,nextEnemy);
+  }
+  nextEnemy();
 }
 
-function animateEnemies(list,callback){
-  if(list.length===0){ callback(); return; }
-  const m=list.shift();
-  const e=m.enemy;
+function moveEnemy(e,callback){
   let tx=e.x, ty=e.y;
-  if(m.type==="target"){ tx=e.target.x; ty=e.target.y; }
-  else{ 
+  if(e.target){tx=e.target.x;ty=e.target.y;}
+  else{
     const nx=e.x+e.dir.x, ny=e.y+e.dir.y;
-    if(nx>=0&&ny>=0&&nx<SIZE&&ny<SIZE&&grid[ny][nx]!==WALL){tx=nx; ty=ny;} else { e.dir.x*=-1; e.dir.y*=-1; tx=e.x+e.dir.x; ty=e.y+e.dir.y;}
+    if(nx>=0&&ny>=0&&nx<mapW&&ny<mapH&&grid[ny][nx]!==WALL){tx=nx;ty=ny;} else {e.dir.x*=-1; e.dir.y*=-1; tx=e.x+e.dir.x; ty=e.y+e.dir.y;}
   }
   const path=[{x:tx,y:ty}];
-  animateEnemyMovement(e,path,()=>{animateEnemies(list,callback);});
+  animateEnemyMovement(e,path,callback);
 }
 
 function animateEnemyMovement(e,path,callback){
-  if(path.length===0){ if(e.target && e.x===e.target.x && e.y===e.target.y) e.target=null; callback(); return; }
+  if(path.length===0){ if(e.target && e.x===e.target.x && e.y===e.target.y) e.target=null; if(e.alert>0)e.alert--; callback(); return; }
   const p=path.shift();
   e.px=e.x*TILE + (p.x-e.x)*TILE;
   e.py=e.y*TILE + (p.y-e.y)*TILE;
@@ -255,48 +202,38 @@ function animateEnemyMovement(e,path,callback){
   setTimeout(()=>animateEnemyMovement(e,path,callback),200);
 }
 
-/* ===== VISION CHECK ===== */
+/* ===== VISION ===== */
 function canSee(e){
-  const dx=player.x-e.x, dy=player.y-e.y;
-  if(Math.abs(dx)+Math.abs(dy)>4) return false;
-  if(dx!==0&&dy!==0) return false;
-  const sx=Math.sign(dx), sy=Math.sign(dy);
-  let x=e.x+sx, y=e.y+sy;
-  while(x!==player.x||y!==player.y){
-    if(grid[y][x]===WALL) return false;
-    x+=sx; y+=sy;
+  for(let i=1;i<=e.vision;i++){
+    const x=e.x + e.dir.x*i, y=e.y + e.dir.y*i;
+    if(x<0||y<0||x>=mapW||y>=mapH||grid[y][x]===WALL) return false;
+    if(x===player.x && y===player.y) { e.alert=3; return true; }
   }
-  return true;
+  return false;
 }
 
 /* ===== DRAW ===== */
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-
   // tiles
-  for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++){
+  for(let y=0;y<mapH;y++)for(let x=0;x<mapW;x++){
     ctx.fillStyle=
       grid[y][x]===WALL?"#555":
       grid[y][x]===HIDE?"#000":
-      grid[y][x]===NOISE?"#aa0":
+      grid[y][x]===NOISE?"#222": // invisible noise
       grid[y][x]===EXIT?"#0a0":"#222";
     ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
   }
 
   // highlight moves
-  if(playerTurn){
-    getMovableTiles().forEach(t=>{
-      ctx.fillStyle="rgba(0,150,255,0.3)";
-      ctx.fillRect(t.x*TILE,t.y*TILE,TILE,TILE);
-    });
-  }
+  if(playerTurn)getMovableTiles().forEach(t=>{ctx.fillStyle="rgba(0,150,255,0.3)"; ctx.fillRect(t.x*TILE,t.y*TILE,TILE,TILE);});
 
-  // enemy vision cones
+  // enemy vision
   enemies.forEach(e=>{
-    for(let i=1;i<=4;i++){
+    for(let i=1;i<=e.vision;i++){
       const x=e.x + e.dir.x*i, y=e.y + e.dir.y*i;
-      if(x<0||y<0||x>=SIZE||y>=SIZE||grid[y][x]===WALL) break;
-      ctx.fillStyle="rgba(255,0,0,0.2)";
+      if(x<0||y<0||x>=mapW||y>=mapH||grid[y][x]===WALL) break;
+      ctx.fillStyle=e.alert>0?"rgba(255,0,0,0.3)":"rgba(255,0,0,0.1)";
       ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
     }
   });
@@ -308,33 +245,13 @@ function draw(){
   ctx.fillRect(px+8,py+8,16,16);
 
   // enemies
-  ctx.fillStyle="#f00";
   enemies.forEach(e=>{
     const ex=e.px!==undefined?e.px:TILE*e.x;
     const ey=e.py!==undefined?e.py:TILE*e.y;
+    ctx.fillStyle=e.alert>0?"#ff5555":"#f00";
     ctx.fillRect(ex+8,ey+8,16,16);
   });
 }
-
-/* ===== TOUCH SWIPE ===== */
-let sx=0, sy=0;
-canvas.addEventListener("touchstart",e=>{
-  const t=e.touches[0]; sx=t.clientX; sy=t.clientY; e.preventDefault();
-});
-canvas.addEventListener("touchend",e=>{
-  const t=e.changedTouches[0]; const dx=t.clientX-sx, dy=t.clientY-sy;
-  if(!playerTurn||gameOver)return;
-  const tiles=getMovableTiles();
-  if(Math.abs(dx)>Math.abs(dy)){
-    const target=dx>30?tiles.find(t=>t.x>player.x):tiles.find(t=>t.x<player.x);
-    if(target) movePlayerTo(target.x,target.y);
-  } else{
-    const target=dy>30?tiles.find(t=>t.y>player.y):tiles.find(t=>t.y<player.y);
-    if(target) movePlayerTo(target.x,target.y);
-  }
-  e.preventDefault();
-});
-
 </script>
 </body>
 </html>
