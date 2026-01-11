@@ -3,36 +3,40 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Silent House: Dynamic Camera Stealth</title>
+<title>Silent House: Mobile Stealth</title>
 <style>
 body{margin:0;background:#111;color:#eee;font-family:monospace;text-align:center;touch-action:none;overscroll-behavior:none;}
 canvas{display:block;margin:0 auto;background:#222;}
 button{padding:8px 14px;margin:4px;background:#333;color:#eee;border:1px solid #666;}
 .hidden{display:none;}
-#controls button{width:60px;height:60px;font-size:22px;}
-#info{min-height:100px;position:relative;overflow:hidden;}
-.message{position:relative;background:rgba(0,0,0,0.8);padding:4px 8px;border-radius:4px;color:#fff;font-size:14px;margin-bottom:2px;opacity:1;transition:opacity 2s;}
+#controls{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);z-index:10;}
+#controls button{width:60px;height:60px;font-size:20px;margin:4px;}
+#info{position:fixed;top:10px;left:50%;transform:translateX(-50%);max-width:90%;z-index:10;}
+.message{background:rgba(0,0,0,0.8);padding:4px 8px;border-radius:4px;color:#fff;font-size:14px;margin-bottom:2px;opacity:1;transition:opacity 2s;}
 </style>
 </head>
 <body>
-<h2>Silent House: Dynamic Camera</h2>
+
+<h2>Silent House: Mobile Stealth</h2>
 
 <div id="menu">
-  <p>Level: <span id="levelText">1</span></p>
-  <button onclick="changeLevel(-1)">−</button>
-  <button onclick="changeLevel(1)">+</button><br><br>
-  <p>Map Size:</p>
-  <input type="number" id="mapWidth" value="10" min="6" max="30"> x
-  <input type="number" id="mapHeight" value="10" min="6" max="30"><br><br>
-  <button onclick="startGame()">START</button>
+<p>Level: <span id="levelText">1</span></p>
+<button onclick="changeLevel(-1)">−</button>
+<button onclick="changeLevel(1)">+</button><br><br>
+<p>Map Size:</p>
+<input type="number" id="mapWidth" value="10" min="6" max="20"> x
+<input type="number" id="mapHeight" value="10" min="6" max="20"><br><br>
+<button onclick="startGame()">START</button>
 </div>
 
 <canvas id="game" width="480" height="480" class="hidden"></canvas>
+
 <div id="controls" class="hidden">
-  <button onclick="playerWait()">Wait</button>
+<button onclick="playerWait()">Wait</button>
+<button onclick="backToMenu()">Back</button>
 </div>
-<p id="info"></p>
-<button id="backBtn" class="hidden" onclick="backToMenu()">BACK</button>
+
+<div id="info"></div>
 
 <script>
 /* ===== CONFIG ===== */
@@ -45,42 +49,39 @@ const ctx=canvas.getContext("2d");
 const info=document.getElementById("info");
 
 let camera={x:0,y:0,scale:1};
-let dragging=false, lastX=0, lastY=0;
-let pinchStartDist=0, pinchStartScale=1;
+let dragging=false,lastX=0,lastY=0;
 
 /* ===== MENU ===== */
 function changeLevel(v){levelNumber=Math.max(1,levelNumber+v);levelText.textContent=levelNumber;}
 function startGame(){
-  mapW=parseInt(document.getElementById("mapWidth").value);
-  mapH=parseInt(document.getElementById("mapHeight").value);
+  mapW=Math.min(Math.max(parseInt(document.getElementById("mapWidth").value),6),20);
+  mapH=Math.min(Math.max(parseInt(document.getElementById("mapHeight").value),6),20);
   TILE=Math.min(480/mapW,480/mapH);
-  canvas.width=TILE*mapW; canvas.height=TILE*mapH;
+  canvas.width=TILE*mapW;
+  canvas.height=TILE*mapH;
   camera.scale=Math.min(480/(TILE*mapW),480/(TILE*mapH));
   camera.x=0; camera.y=0;
   menu.classList.add("hidden");
-  game.classList.remove("hidden");
+  canvas.classList.remove("hidden");
   controls.classList.remove("hidden");
-  backBtn.classList.remove("hidden");
   generateLevel();
 }
-function backToMenu(){menu.classList.remove("hidden");game.classList.add("hidden");controls.classList.add("hidden");backBtn.classList.add("hidden");clearMessages();}
+function backToMenu(){menu.classList.remove("hidden");canvas.classList.add("hidden");controls.classList.add("hidden");clearMessages();}
 
 /* ===== LEVEL GENERATION ===== */
 function generateLevel(){
   gameOver=false; playerTurn=true;
   grid=Array.from({length:mapH},(_,y)=>Array.from({length:mapW},(_,x)=>(x===0||y===0||x===mapW-1||y===mapH-1)?WALL:Math.random()<0.15?WALL:FLOOR));
 
-  // Player random valid position
-  let px,py;
-  do{px=Math.floor(Math.random()*mapW); py=Math.floor(Math.random()*mapH);}while(grid[py][px]!==FLOOR);
+  // Player random valid
+  let px,py; do{px=Math.floor(Math.random()*mapW); py=Math.floor(Math.random()*mapH);}while(grid[py][px]!==FLOOR);
   player={x:px,y:py,px:px,py:py,hidden:false};
 
-  // Exit random valid position
-  let ex,ey;
-  do{ex=Math.floor(Math.random()*mapW); ey=Math.floor(Math.random()*mapH);}while(grid[ey][ex]!==FLOOR || (ex===px && ey===py));
+  // Exit random valid
+  let ex,ey; do{ex=Math.floor(Math.random()*mapW); ey=Math.floor(Math.random()*mapH);}while(grid[ey][ex]!==FLOOR || (ex===px && ey===py));
   grid[ey][ex]=EXIT;
 
-  // Noise and Hide
+  // Noise/Hide
   for(let i=0;i<levelNumber+1;i++) placeRandom(NOISE);
   for(let i=0;i<Math.max(1,Math.floor(levelNumber/2));i++) placeRandom(HIDE);
 
@@ -101,7 +102,7 @@ function placeRandom(type){
 
 function spawnEnemy(){
   let x,y;
-  do{x=Math.floor(Math.random()*mapW);y=Math.floor(Math.random()*mapH);}while(grid[y][x]!==FLOOR || (x===player.x && y===player.y));
+  do{x=Math.floor(Math.random()*mapW);y=Math.floor(Math.random()*mapH);}while(grid[y][x]!==FLOOR||(x===player.x && y===player.y) || enemies.some(e=>e.x===x&&e.y===y));
   enemies.push({x,y,px:x,py:y,dir:[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)],target:null, alert:0, vision:Math.floor(Math.random()*3)+1});
 }
 
@@ -227,7 +228,7 @@ function draw(){
     ctx.fillStyle=
       grid[y][x]===WALL?"#555":
       grid[y][x]===HIDE?"#000":
-      grid[y][x]===NOISE?"#222": // invisible
+      grid[y][x]===NOISE?"#222":
       grid[y][x]===EXIT?"#0a0":"#222";
     ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
   }
@@ -247,38 +248,23 @@ function draw(){
 
   // player
   ctx.fillStyle=player.hidden?"#00a":"#0af";
-  const px=player.px!==undefined?player.px:TILE*player.x;
-  const py=player.py!==undefined?player.py:TILE*player.y;
-  ctx.fillRect(px+8,py+8,16,16);
+  ctx.fillRect(player.x*TILE+8,player.y*TILE+8,16,16);
 
   // enemies
   enemies.forEach(e=>{
-    const ex=e.px!==undefined?e.px:TILE*e.x;
-    const ey=e.py!==undefined?e.py:TILE*e.y;
     ctx.fillStyle=e.alert>0?"#ff5555":"#f00";
-    ctx.fillRect(ex+8,ey+8,16,16);
+    ctx.fillRect(e.x*TILE+8,e.y*TILE+8,16,16);
   });
 
   ctx.restore();
 }
 
-/* ===== CAMERA TOUCH PAN & PINCH ===== */
-canvas.addEventListener("pointerdown",e=>{
-  dragging=true; lastX=e.clientX; lastY=e.clientY;
-});
-canvas.addEventListener("pointermove",e=>{
-  if(dragging){camera.x+=e.clientX-lastX; camera.y+=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY; draw();}
-});
+/* ===== CAMERA TOUCH ===== */
+canvas.addEventListener("pointerdown",e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;});
+canvas.addEventListener("pointermove",e=>{if(dragging){camera.x+=e.clientX-lastX;camera.y+=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;draw();}});
 canvas.addEventListener("pointerup",()=>{dragging=false;});
 canvas.addEventListener("pointercancel",()=>{dragging=false;});
-canvas.addEventListener("wheel",e=>{
-  const oldScale=camera.scale;
-  camera.scale=Math.max(0.3, Math.min(3, camera.scale*(1+e.deltaY*-.001)));
-  camera.x-=(canvas.width/2 - camera.x)*(camera.scale/oldScale-1);
-  camera.y-=(canvas.height/2 - camera.y)*(camera.scale/oldScale-1);
-  draw();
-  e.preventDefault();
-},{passive:false});
+canvas.addEventListener("wheel",e=>{const old=camera.scale; camera.scale=Math.max(0.5,Math.min(3,camera.scale*(1-e.deltaY*0.001))); draw(); e.preventDefault();},{passive:false});
 </script>
 </body>
 </html>
