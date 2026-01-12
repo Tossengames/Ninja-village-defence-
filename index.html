@@ -3,60 +3,74 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-<title>Silent House: Pro</title>
+<title>Silent House: Ninja Rank</title>
 <style>
-    body { margin: 0; background: #111; color: #eee; font-family: monospace; text-align: center; touch-action: none; overflow: hidden; }
-    canvas { display: block; margin: 0 auto; background: #222; border: 2px solid #333; }
-    #menu, #gameOverScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 20; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    input { background: #222; color: #0af; border: 1px solid #444; padding: 8px; width: 60px; text-align: center; margin: 5px; font-size: 18px; }
-    button { padding: 15px 30px; margin: 10px; background: #333; color: #eee; border: 1px solid #555; cursor: pointer; font-family: monospace; font-size: 16px; }
-    button:active { background: #0af; color: #000; }
+    body { margin: 0; background: #000; color: #eee; font-family: 'Courier New', monospace; text-align: center; touch-action: none; overflow: hidden; }
+    canvas { display: block; margin: 0 auto; background: #111; border: 2px solid #333; }
+    #menu, #gameOverScreen, #resultScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 20; display: flex; flex-direction: column; justify-content: center; align-items: center; }
     .hidden { display: none !important; }
+    input { background: #222; color: #0af; border: 1px solid #444; padding: 8px; width: 60px; text-align: center; margin: 5px; font-size: 18px; }
+    button { padding: 15px 30px; margin: 10px; background: #222; color: #eee; border: 1px solid #555; cursor: pointer; font-size: 16px; }
+    button:hover { border-color: #0af; color: #0af; }
+    
+    /* Result Screen Styling */
+    .stat-row { width: 300px; display: flex; justify-content: space-between; margin: 5px; border-bottom: 1px solid #333; padding: 5px; }
+    #rankDisplay { font-size: 40px; color: #f00; letter-spacing: 5px; margin-top: 20px; text-shadow: 0 0 10px #f00; }
     #ui-layer { position: fixed; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; }
     #info { margin-top: 10px; align-self: center; width: 90%; }
-    #controls { margin-bottom: 20px; align-self: center; pointer-events: auto; }
-    .message { background: rgba(0,0,0,0.8); padding: 5px 10px; border: 1px solid #444; margin-bottom: 2px; font-size: 14px; }
+    .score-popup { position: absolute; color: #ff0; animation: fadeUp 1s forwards; pointer-events: none; }
+    @keyframes fadeUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-30px); } }
 </style>
 </head>
 <body>
 
 <div id="menu">
-    <h2 style="color:#0af; letter-spacing: 4px;">SILENT HOUSE</h2>
-    <p>Mission Level: <span id="levelText">1</span></p>
-    <div>Map: <input type="number" id="inpW" value="12"> x <input type="number" id="inpH" value="12"></div>
+    <h1 style="color:#0af; letter-spacing: 8px;">SILENT HOUSE</h1>
+    <p>Level: <span id="levelText">1</span></p>
+    <div>Map Size: <input type="number" id="inpW" value="12"> x <input type="number" id="inpH" value="12"></div>
     <div>Enemies: <input type="number" id="inpE" value="4"></div>
-    <button onclick="startGame()">START INFILTRATION</button>
+    <button onclick="startGame()">START MISSION</button>
+</div>
+
+<div id="resultScreen" class="hidden">
+    <h2 style="color:#0af; letter-spacing: 4px;">MISSION COMPLETE</h2>
+    <div class="stat-row"><span>Turns Taken:</span><span id="resTurns">0</span></div>
+    <div class="stat-row"><span>Alerts Triggered:</span><span id="resAlerts">0</span></div>
+    <div class="stat-row"><span>Coins Found:</span><span id="resCoins">0</span></div>
+    <div id="rankDisplay">MASTER</div>
+    <button onclick="generateLevel()">NEXT MISSION</button>
+    <button onclick="toggleMenu(true)">MAIN MENU</button>
 </div>
 
 <div id="gameOverScreen" class="hidden">
-    <h1 id="statusTitle" style="color:#f00;">DETECTED</h1>
-    <button onclick="startGame()">RETRY MISSION</button>
-    <button onclick="toggleMenu(true)">MAIN MENU</button>
+    <h1 style="color:#f00; letter-spacing: 5px;">ELIMINATED</h1>
+    <button onclick="startGame()">RETRY</button>
+    <button onclick="toggleMenu(true)">MENU</button>
 </div>
 
 <div id="ui-layer">
     <div id="info"></div>
-    <div id="controls" class="hidden">
-        <button onclick="playerWait()">WAIT</button>
-    </div>
 </div>
 
 <canvas id="game" class="hidden"></canvas>
 
 <script>
 const TILE = 48;
-const FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4;
+const FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4, COIN=5;
 let levelNumber = 1, grid, player, enemies, gameOver = false, playerTurn = true;
 let mapW, mapH, enemyCount;
+
+// Score Tracking
+let stats = { turns: 0, alerts: 0, coins: 0 };
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 function toggleMenu(show) {
     document.getElementById("menu").classList.toggle("hidden", !show);
+    document.getElementById("resultScreen").classList.add("hidden");
     document.getElementById("gameOverScreen").classList.add("hidden");
     canvas.classList.toggle("hidden", show);
-    document.getElementById("controls").classList.toggle("hidden", show);
 }
 
 function startGame() {
@@ -70,7 +84,10 @@ function startGame() {
 }
 
 function generateLevel() {
+    document.getElementById("resultScreen").classList.add("hidden");
     gameOver = false; playerTurn = true;
+    stats = { turns: 0, alerts: 0, coins: 0 };
+
     grid = Array.from({length: mapH}, (_, y) => Array.from({length: mapW}, (_, x) => 
         (x===0 || y===0 || x===mapW-1 || y===mapH-1) ? WALL : Math.random() < 0.18 ? WALL : FLOOR
     ));
@@ -84,8 +101,10 @@ function generateLevel() {
     while(grid[py][px] !== FLOOR || Math.hypot(px-ex, py-ey) < 6);
     player = { x: px, y: py, animX: px, animY: py, hidden: false };
 
+    // Place challenge items
     for(let i=0; i<3; i++) placeRandom(NOISE);
     for(let i=0; i<3; i++) placeRandom(HIDE);
+    for(let i=0; i<5; i++) placeRandom(COIN);
 
     enemies = [];
     for(let i=0; i<enemyCount; i++) {
@@ -104,23 +123,14 @@ function placeRandom(type) {
 
 function isValid(x, y) { return x >= 0 && y >= 0 && x < mapW && y < mapH && grid[y][x] !== WALL; }
 
-/* ===== PATHFINDING (BFS for simplicity/speed) ===== */
-function findPath(startX, startY, targetX, targetY) {
-    let queue = [[{x: startX, y: startY}]];
-    let visited = new Set([startX + ',' + startY]);
-    while(queue.length > 0) {
-        let path = queue.shift();
-        let curr = path[path.length - 1];
-        if(curr.x === targetX && curr.y === targetY) return path;
-        for(let d of [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]) {
-            let next = {x: curr.x + d.x, y: curr.y + d.y};
-            if(isValid(next.x, next.y) && !visited.has(next.x + ',' + next.y)) {
-                visited.add(next.x + ',' + next.y);
-                queue.push([...path, next]);
-            }
-        }
+function getMovableTiles() {
+    const movable = [];
+    for(let dx=-2; dx<=2; dx++) for(let dy=-2; dy<=2; dy++) {
+        if(Math.abs(dx) + Math.abs(dy) > 2 || (dx===0 && dy===0)) continue;
+        if(isValid(player.x + dx, player.y + dy) && isValid(player.x + Math.sign(dx), player.y + Math.sign(dy)))
+            movable.push({x: player.x + dx, y: player.y + dy});
     }
-    return null;
+    return movable;
 }
 
 canvas.addEventListener("pointerdown", e => {
@@ -129,14 +139,9 @@ canvas.addEventListener("pointerdown", e => {
     const ox = (canvas.width - mapW*TILE*scale)/2, oy = (canvas.height - mapH*TILE*scale)/2;
     const tx = Math.floor(((e.clientX - ox) / scale) / TILE), ty = Math.floor(((e.clientY - oy) / scale) / TILE);
 
-    const movable = [];
-    for(let dx=-2; dx<=2; dx++) for(let dy=-2; dy<=2; dy++) {
-        if(Math.abs(dx) + Math.abs(dy) > 2 || (dx===0 && dy===0)) continue;
-        if(isValid(player.x + dx, player.y + dy) && isValid(player.x + Math.sign(dx), player.y + Math.sign(dy))) movable.push({x: player.x + dx, y: player.y + dy});
-    }
-
-    if(movable.some(t => t.x === tx && t.y === ty)) {
+    if(getMovableTiles().some(t => t.x === tx && t.y === ty)) {
         playerTurn = false;
+        stats.turns++;
         animateMove(player, tx, ty, () => { checkTile(); if(!gameOver) enemyTurn(); });
     }
 });
@@ -151,7 +156,7 @@ function animateMove(ent, tx, ty, cb) {
         ent.animX = startX + (tx - startX) * progress;
         ent.animY = startY + (ty - startY) * progress;
         if(ent === player && !player.hidden) {
-            for(let e of enemies) if(isInVision(e, ent.animX, ent.animY)) { gameOver=true; draw(); setTimeout(() => document.getElementById("gameOverScreen").classList.remove("hidden"), 300); return; }
+            for(let e of enemies) if(isInVision(e, ent.animX, ent.animY)) { triggerGameOver(); return; }
         }
         draw();
         if(progress < 1) requestAnimationFrame(step);
@@ -160,49 +165,71 @@ function animateMove(ent, tx, ty, cb) {
     step();
 }
 
+function triggerGameOver() {
+    gameOver = true; draw();
+    setTimeout(() => document.getElementById("gameOverScreen").classList.remove("hidden"), 300);
+}
+
+function showResults() {
+    gameOver = true;
+    document.getElementById("resultScreen").classList.remove("hidden");
+    document.getElementById("resTurns").innerText = stats.turns;
+    document.getElementById("resAlerts").innerText = stats.alerts;
+    document.getElementById("resCoins").innerText = stats.coins;
+    
+    // Rank calculation logic
+    let score = (stats.coins * 100) - (stats.turns * 2) - (stats.alerts * 50);
+    let rank = "THUG";
+    if(score > 400) rank = "GRAND MASTER";
+    else if(score > 250) rank = "MASTER NINJA";
+    else if(score > 100) rank = "EXPERT";
+    else if(score > 0) rank = "NOVICE";
+    
+    const display = document.getElementById("rankDisplay");
+    display.innerText = rank;
+    display.style.color = (rank.includes("MASTER")) ? "#0af" : "#f00";
+}
+
 async function enemyTurn() {
     if(gameOver) return;
     for(let e of enemies) {
         await new Promise(r => setTimeout(r, 200));
-        
-        // If no target, pick a random floor tile to "patrol"
-        if(!e.target) {
-            let rx, ry; do { rx = Math.floor(Math.random()*mapW); ry = Math.floor(Math.random()*mapH); } while(!isValid(rx, ry));
-            e.target = {x: rx, y: ry}; e.mark = null;
+        let nx = e.x, ny = e.y;
+        if(e.target) {
+            let path = findPath(e.x, e.y, e.target.x, e.target.y);
+            if(path && path.length > 1) { nx = path[1].x; ny = path[1].y; }
+            if(e.x === e.target.x && e.y === e.target.y) { e.target = null; e.mark = null; }
+        } else {
+            const d = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)];
+            if(isValid(e.x+d.x, e.y+d.y)) { nx += d.x; ny += d.y; }
         }
-
-        let path = findPath(e.x, e.y, e.target.x, e.target.y);
-        if(path && path.length > 1) {
-            let next = path[1];
-            // Don't walk into other enemies
-            if(!enemies.some(other => other !== e && other.x === next.x && other.y === next.y)) {
-                await new Promise(r => animateMove(e, next.x, next.y, r));
-            }
-        } else { e.target = null; } // Target reached or unreachable
-
-        if(!player.hidden && isInVision(e, player.x, player.y)) { gameOver=true; draw(); setTimeout(() => document.getElementById("gameOverScreen").classList.remove("hidden"), 300); return; }
+        if(isValid(nx, ny) && !enemies.some(o => o!==e && o.x === nx && o.y === ny)) await new Promise(r => animateMove(e, nx, ny, r));
+        if(!player.hidden && isInVision(e, player.x, player.y)) { triggerGameOver(); return; }
     }
     playerTurn = true; draw();
 }
 
-function isInVision(e, px, py) {
-    const dx = px - e.x, dy = py - e.y;
-    const dist = Math.hypot(dx, dy);
-    if(dist > e.visionRange) return false;
-    
-    // Check Angle
-    const angleToPlayer = Math.atan2(dy, dx);
-    const enemyAngle = Math.atan2(e.dir.y, e.dir.x);
-    let diff = Math.abs(angleToPlayer - enemyAngle);
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    if(Math.abs(diff) > 0.7) return false;
+function findPath(sx, sy, tx, ty) {
+    let q = [[{x:sx, y:sy}]], v = new Set([sx+','+sy]);
+    while(q.length > 0) {
+        let p = q.shift(), c = p[p.length-1];
+        if(c.x === tx && c.y === ty) return p;
+        for(let d of [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]) {
+            let n = {x:c.x+d.x, y:c.y+d.y};
+            if(isValid(n.x, n.y) && !v.has(n.x+','+n.y)) { v.add(n.x+','+n.y); q.push([...p, n]); }
+        }
+    }
+    return null;
+}
 
-    // RAYCAST: Check if wall is in between
+function isInVision(e, px, py) {
+    const dx = px - e.x, dy = py - e.y, dist = Math.hypot(dx, dy);
+    if(dist > e.visionRange) return false;
+    const ang = Math.abs(Math.atan2(dy, dx) - Math.atan2(e.dir.y, e.dir.x));
+    if(ang > 0.8 && ang < 5.5) return false;
     let steps = dist * 2;
     for(let i=1; i<=steps; i++) {
-        let checkX = e.x + (dx * (i/steps));
-        let checkY = e.y + (dy * (i/steps));
-        if(grid[Math.floor(checkY)][Math.floor(checkX)] === WALL) return false;
+        if(grid[Math.floor(e.y + dy*(i/steps))][Math.floor(e.x + dx*(i/steps))] === WALL) return false;
     }
     return true;
 }
@@ -215,39 +242,46 @@ function draw() {
     ctx.translate(ox, oy); ctx.scale(scale, scale);
 
     for(let y=0; y<mapH; y++) for(let x=0; x<mapW; x++) {
-        ctx.fillStyle = grid[y][x] === WALL ? "#444" : "#111";
+        ctx.fillStyle = grid[y][x] === WALL ? "#333" : "#111";
         ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
         ctx.strokeStyle = "#000"; ctx.strokeRect(x*TILE, y*TILE, TILE, TILE);
         if(grid[y][x] === EXIT) { ctx.fillStyle="#0a0"; ctx.fillRect(x*TILE+8, y*TILE+8, TILE-16, TILE-16); }
         if(grid[y][x] === NOISE) { ctx.strokeStyle="#f80"; ctx.strokeRect(x*TILE+10, y*TILE+10, TILE-20, TILE-20); }
-        if(grid[y][x] === HIDE) { ctx.fillStyle="#000"; ctx.strokeRect(x*TILE+5, y*TILE+5, TILE-10, TILE-10); }
+        if(grid[y][x] === HIDE) { ctx.fillStyle="#000"; ctx.fillRect(x*TILE+5, y*TILE+5, TILE-10, TILE-10); }
+        if(grid[y][x] === COIN) { ctx.fillStyle="#ff0"; ctx.beginPath(); ctx.arc(x*TILE+TILE/2, y*TILE+TILE/2, 6, 0, 7); ctx.fill(); }
+    }
+
+    if(playerTurn && !gameOver) {
+        ctx.fillStyle = "rgba(0,150,255,0.15)";
+        getMovableTiles().forEach(t => ctx.fillRect(t.x*TILE, t.y*TILE, TILE, TILE));
     }
 
     enemies.forEach(e => {
         ctx.fillStyle = "rgba(255,0,0,0.15)";
-        ctx.beginPath(); ctx.moveTo(e.animX*TILE + TILE/2, e.animY*TILE + TILE/2);
-        const ang = Math.atan2(e.dir.y, e.dir.x);
-        ctx.arc(e.animX*TILE + TILE/2, e.animY*TILE + TILE/2, e.visionRange * TILE, ang-0.6, ang+0.6);
+        ctx.beginPath(); ctx.moveTo(e.animX*TILE+24, e.animY*TILE+24);
+        const a = Math.atan2(e.dir.y, e.dir.x);
+        ctx.arc(e.animX*TILE+24, e.animY*TILE+24, e.visionRange*TILE, a-0.6, a+0.6);
         ctx.fill();
-
         ctx.fillStyle = "#f33"; ctx.fillRect(e.animX*TILE+12, e.animY*TILE+12, 24, 24);
-        if(e.mark) { ctx.fillStyle="#fff"; ctx.fillText(e.mark, e.animX*TILE+18, e.animY*TILE+8); }
+        if(e.mark) { ctx.fillStyle="#fff"; ctx.font="20px Arial"; ctx.fillText(e.mark, e.animX*TILE+18, e.animY*TILE+8); }
     });
 
-    ctx.fillStyle = player.hidden ? "#00a" : "#0af";
+    ctx.fillStyle = player.hidden ? "#006" : "#0af";
     ctx.fillRect(player.animX*TILE+12, player.animY*TILE+12, 24, 24);
 }
 
 function checkTile() {
     const t = grid[player.y][player.x];
     player.hidden = (t === HIDE);
+    if(t === COIN) { stats.coins++; grid[player.y][player.x] = FLOOR; }
     if(t === NOISE) {
-        enemies.forEach(e => { if(Math.hypot(e.x-player.x, e.y-player.y) < 7) { e.target = {x: player.x, y: player.y}; e.mark = "?"; }});
+        stats.alerts++;
+        enemies.forEach(e => { if(Math.hypot(e.x-player.x, e.y-player.y) < 7) { e.target = {x:player.x, y:player.y}; e.mark="?"; }});
     }
-    if(t === EXIT) { levelNumber++; generateLevel(); }
+    if(t === EXIT) { showResults(); }
 }
 
-function playerWait() { if(playerTurn) { playerTurn = false; enemyTurn(); } }
+function playerWait() { if(playerTurn) { playerTurn = false; stats.turns++; enemyTurn(); } }
 </script>
 </body>
 </html>
