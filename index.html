@@ -9,9 +9,7 @@
     body { margin: 0; background: var(--bg); color: #eee; font-family: 'Palatino', 'Georgia', serif; overflow: hidden; touch-action: none; }
     canvas { display: block; margin: 0 auto; image-rendering: pixelated; background: #000; }
     
-    .overlay-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; animation: fadeIn 0.5s; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
+    .overlay-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; }
     .scroll-bg { background: #e8dcc4; color: var(--ink); padding: 40px; border: 4px double #5c4033; width: 300px; box-shadow: 0 0 50px rgba(0,0,0,1); text-align: center; border-radius: 5px; }
     .hidden { display: none !important; }
 
@@ -19,12 +17,11 @@
     .stats-row { display: flex; justify-content: space-between; margin: 10px 0; border-bottom: 1px dashed #aaa; font-size: 14px; }
     
     #toolbar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 10; background: rgba(20,20,20,0.9); padding: 10px; border: 1px solid var(--accent); border-radius: 4px; }
-    .tool-btn { width: 55px; height: 65px; background: #111; border: 1px solid #444; color: #888; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 10px; cursor: pointer; transition: 0.2s; }
-    .tool-btn.active { border-color: var(--accent); color: var(--accent); background: #222; }
+    .tool-btn { width: 55px; height: 65px; background: #111; border: 1px solid #444; color: #888; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 10px; cursor: pointer; }
+    .tool-btn.active { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 10px var(--accent); }
     
-    .btn-main { padding: 10px 20px; background: #1a1a1a; color: var(--accent); border: 1px solid var(--accent); cursor: pointer; font-family: inherit; margin-top: 20px; text-transform: uppercase; }
-    .btn-main:hover { background: var(--accent); color: #000; }
-    input { background: #1a1a1a; border: 1px solid #444; color: var(--accent); text-align: center; padding: 5px; }
+    .btn-main { padding: 10px 20px; background: #1a1a1a; color: var(--accent); border: 1px solid var(--accent); cursor: pointer; font-family: inherit; margin-top: 20px; }
+    input { background: #1a1a1a; border: 1px solid #444; color: var(--accent); text-align: center; width: 40px; }
 </style>
 </head>
 <body>
@@ -45,7 +42,7 @@
 </div>
 
 <div id="gameOverScreen" class="overlay-screen hidden">
-    <h1 style="color:var(--red); letter-spacing: 10px; text-shadow: 0 0 20px red;">YOU ARE DEAD</h1>
+    <h1 style="color:var(--red); letter-spacing: 10px;">YOU ARE DEAD</h1>
     <button class="btn-main" onclick="location.reload()">RETRY</button>
 </div>
 
@@ -73,6 +70,17 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const sprites = {};
 
+// Preload Sprites
+function preload() {
+    const assetNames = ['player', 'guard', 'wall', 'floor', 'exit', 'trap', 'rice', 'bomb', 'chest', 'coin'];
+    assetNames.forEach(name => {
+        const img = new Image();
+        img.src = `sprites/${name}.png`;
+        img.onload = () => { sprites[name] = img; };
+    });
+}
+preload();
+
 function initGame() {
     inv.trap = parseInt(document.getElementById('inpTraps').value);
     inv.rice = parseInt(document.getElementById('inpRice').value);
@@ -91,14 +99,14 @@ function generateLevel() {
     grid = Array.from({length: mapDim}, (_, y) => Array.from({length: mapDim}, (_, x) => 
         (x==0 || y==0 || x==mapDim-1 || y==mapDim-1) ? WALL : Math.random() < 0.18 ? WALL : FLOOR
     ));
-    player = { x: 1, y: 1, ax: 1, ay: 1, hidden: false };
+    player = { x: 1, y: 1, ax: 1, ay: 1 };
     grid[mapDim-2][mapDim-2] = EXIT;
     
     placeRandom(COIN, 5);
     placeRandom(NOISE, 2); 
 
     enemies = [];
-    for(let i=0; i<Math.floor(mapDim/2); i++) {
+    for(let i=0; i<Math.floor(mapDim/2.5); i++) {
         let ex, ey; do { ex = Math.floor(Math.random()*(mapDim-2))+1; ey = Math.floor(Math.random()*(mapDim-2))+1; }
         while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
         enemies.push({ x: ex, y: ey, ax: ex, ay: ey, dir: {x:1, y:0}, target: null, alive: true, range: 4 });
@@ -115,16 +123,18 @@ function placeRandom(type, count) {
 
 function drawSprite(name, x, y) {
     const px = x * TILE, py = y * TILE;
-    ctx.beginPath();
-    if(name === 'floor') { ctx.fillStyle = '#0a0a0a'; ctx.fillRect(px,py,TILE,TILE); }
-    if(name === 'wall') { ctx.fillStyle = '#222'; ctx.fillRect(px,py,TILE,TILE); ctx.strokeStyle="#333"; ctx.strokeRect(px+2,py+2,TILE-4,TILE-4); }
-    if(name === 'player') { ctx.fillStyle = '#0af'; ctx.arc(px+25, py+25, 12, 0, 7); ctx.fill(); }
-    if(name === 'guard') { ctx.fillStyle = '#f33'; ctx.arc(px+25, py+25, 12, 0, 7); ctx.fill(); }
-    if(name === 'exit') { ctx.strokeStyle = '#0f0'; ctx.lineWidth=3; ctx.strokeRect(px+10, py+10, 30, 30); }
-    if(name === 'coin') { ctx.fillStyle = '#ff0'; ctx.arc(px+25, py+25, 4, 0, 7); ctx.fill(); }
-    if(name === 'rice') { ctx.fillStyle = '#fff'; ctx.fillRect(px+20, py+20, 10, 10); }
-    if(name === 'trap') { ctx.strokeStyle = '#f0f'; ctx.strokeRect(px+15, py+15, 20, 20); }
-    if(name === 'bomb') { ctx.fillStyle = '#f00'; ctx.beginPath(); ctx.arc(px+25, py+25, 8, 0, 7); ctx.fill(); ctx.fillStyle="#fff"; ctx.fillRect(px+24, py+12, 2, 5); }
+    if (sprites[name]) {
+        ctx.drawImage(sprites[name], px, py, TILE, TILE);
+    } else {
+        // Fallback placeholders
+        ctx.beginPath();
+        if(name === 'floor') { ctx.fillStyle = '#0a0a0a'; ctx.fillRect(px,py,TILE,TILE); }
+        else if(name === 'wall') { ctx.fillStyle = '#222'; ctx.fillRect(px,py,TILE,TILE); }
+        else if(name === 'player') { ctx.fillStyle = '#0af'; ctx.arc(px+25, py+25, 12, 0, 7); ctx.fill(); }
+        else if(name === 'guard') { ctx.fillStyle = '#f33'; ctx.arc(px+25, py+25, 12, 0, 7); ctx.fill(); }
+        else if(name === 'exit') { ctx.strokeStyle = '#0f0'; ctx.strokeRect(px+10, py+10, 30, 30); }
+        else if(name === 'coin') { ctx.fillStyle = '#ff0'; ctx.arc(px+25, py+25, 4, 0, 7); ctx.fill(); }
+    }
 }
 
 function gameLoop() {
@@ -138,6 +148,7 @@ function gameLoop() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.translate(ox, oy); ctx.scale(scale, scale);
 
+    // 1. Draw Map Base
     for(let y=0; y<mapDim; y++) for(let x=0; x<mapDim; x++) {
         drawSprite('floor', x, y);
         const cell = grid[y][x];
@@ -146,9 +157,26 @@ function gameLoop() {
         else if(cell === COIN) drawSprite('coin', x, y);
         else if(cell === TRAP) drawSprite('trap', x, y);
         else if(cell === RICE) drawSprite('rice', x, y);
-        else if(cell === BOMB) drawSprite('bomb', x, y);
+        else if(cell === BOMB) {
+            drawSprite('bomb', x, y);
+            let b = activeBombs.find(ab => ab.x === x && ab.y === y);
+            if(b) { ctx.fillStyle="white"; ctx.font="bold 15px Arial"; ctx.fillText(b.t, x*TILE+20, y*TILE+30); }
+        }
     }
 
+    // 2. Draw Movement Highlights
+    if(selectMode === 'move' && playerTurn) {
+        ctx.strokeStyle = "rgba(0, 170, 255, 0.5)";
+        ctx.lineWidth = 2;
+        [[0,1],[0,-1],[1,0],[-1,0]].forEach(d => {
+            let nx = player.x + d[0], ny = player.y + d[1];
+            if(grid[ny]?.[nx] !== undefined && grid[ny][nx] !== WALL) {
+                ctx.strokeRect(nx*TILE+5, ny*TILE+5, TILE-10, TILE-10);
+            }
+        });
+    }
+
+    // 3. Draw Enemies
     enemies.forEach(e => {
         if(!e.alive) return;
         drawSprite('guard', e.ax, e.ay);
@@ -161,6 +189,7 @@ function gameLoop() {
         ctx.fill();
     });
 
+    // 4. Draw Player
     drawSprite('player', player.ax, player.ay);
     requestAnimationFrame(gameLoop);
 }
@@ -176,29 +205,22 @@ function animMove(obj, tx, ty, cb) {
 }
 
 async function endTurn() {
-    // Process Bombs
     for(let i = activeBombs.length - 1; i >= 0; i--) {
         activeBombs[i].t--;
         if(activeBombs[i].t <= 0) {
             let b = activeBombs[i];
             grid[b.y][b.x] = FLOOR;
             shake = 30;
-            enemies.forEach(e => {
-                if(Math.abs(e.x - b.x) <= 1 && Math.abs(e.y - b.y) <= 1) { e.alive = false; gameStats.kills++; }
-            });
+            enemies.forEach(e => { if(Math.abs(e.x - b.x) <= 1 && Math.abs(e.y - b.y) <= 1) { e.alive = false; gameStats.kills++; } });
             activeBombs.splice(i, 1);
         }
     }
 
-    // Process Enemies
     for(let e of enemies.filter(en => en.alive)) {
         await new Promise(r => setTimeout(r, 50));
-        
-        // Trap Check
         if(grid[e.y][e.x] === TRAP || grid[e.y][e.x] === RICE) {
             e.alive = false; grid[e.y][e.x] = FLOOR; gameStats.kills++; continue;
         }
-
         let nx = e.x, ny = e.y;
         if(e.target) {
             if(nx < e.target.x) nx++; else if(nx > e.target.x) nx--;
@@ -209,7 +231,6 @@ async function endTurn() {
             const d = dirs[Math.floor(Math.random()*4)];
             if(grid[e.y+d.y]?.[e.x+d.x] === FLOOR) { nx+=d.x; ny+=d.y; }
         }
-        
         await new Promise(r => animMove(e, nx, ny, r));
         if(hasLineOfSight(e, player.x, player.y)) { triggerDeath(); return; }
     }
@@ -232,19 +253,6 @@ function checkTile() {
     if(t === NOISE) { shake = 15; enemies.forEach(e => { if(e.alive) e.target = {x:player.x, y:player.y}; }); }
 }
 
-function showResults() {
-    gameOver = true;
-    let score = (gameStats.kills * 100) + (gameStats.coins * 50) - (gameStats.turns * 2);
-    let rank = score > 500 ? "Grand Master" : score > 250 ? "Expert" : "Thug";
-    document.getElementById('rankLabel').innerText = rank;
-    document.getElementById('statsContent').innerHTML = `
-        <div class="stats-row"><span>Eliminations</span><span>${gameStats.kills}</span></div>
-        <div class="stats-row"><span>Loot</span><span>${gameStats.coins}</span></div>
-        <div class="stats-row"><span>Turns Taken</span><span>${gameStats.turns}</span></div>
-    `;
-    document.getElementById('resultScreen').classList.remove('hidden');
-}
-
 canvas.addEventListener('pointerdown', e => {
     if(!playerTurn || gameOver) return;
     const scale = Math.min(canvas.width/(mapDim*TILE), canvas.height/(mapDim*TILE));
@@ -252,22 +260,19 @@ canvas.addEventListener('pointerdown', e => {
     const tx = Math.floor(((e.clientX - ox)/scale)/TILE), ty = Math.floor(((e.clientY - oy)/scale)/TILE);
     
     if (tx < 0 || ty < 0 || tx >= mapDim || ty >= mapDim) return;
-    const dist = Math.hypot(tx-player.x, ty-player.y);
+    const dist = Math.abs(tx-player.x) + Math.abs(ty-player.y);
 
-    if(selectMode === 'move' && dist > 0 && dist < 1.5 && grid[ty][tx] !== WALL) { 
+    if(selectMode === 'move' && dist === 1 && grid[ty][tx] !== WALL) { 
         playerTurn = false; gameStats.turns++; animMove(player, tx, ty, () => { checkTile(); endTurn(); }); 
     }
-    else if(selectMode !== 'move' && dist < 1.5 && grid[ty][tx] === FLOOR) { 
-        deployTool(tx, ty); 
-    }
+    else if(selectMode !== 'move' && dist === 1 && grid[ty][tx] === FLOOR) { deployTool(tx, ty); }
 });
 
 function deployTool(tx, ty) {
     if(selectMode === 'trap' && inv.trap > 0) { grid[ty][tx] = TRAP; inv.trap--; }
     else if(selectMode === 'rice' && inv.rice > 0) { grid[ty][tx] = RICE; inv.rice--; }
-    else if(selectMode === 'bomb' && inv.bomb > 0) { grid[ty][tx] = BOMB; inv.bomb--; activeBombs.push({x:tx, y:ty, t:2}); }
+    else if(selectMode === 'bomb' && inv.bomb > 0) { grid[ty][tx] = BOMB; inv.bomb--; activeBombs.push({x:tx, y:ty, t:3}); }
     else return;
-    
     updateUI(); playerTurn = false; endTurn();
 }
 
@@ -283,7 +288,11 @@ function setMode(m) {
 }
 function triggerDeath() { gameOver = true; document.getElementById('gameOverScreen').classList.remove('hidden'); }
 function playerWait() { if(playerTurn) { playerTurn = false; gameStats.turns++; endTurn(); } }
-
+function showResults() {
+    gameOver = true;
+    document.getElementById('statsContent').innerHTML = `<div class="stats-row"><span>Coins</span><span>${gameStats.coins}</span></div><div class="stats-row"><span>Turns</span><span>${gameStats.turns}</span></div>`;
+    document.getElementById('resultScreen').classList.remove('hidden');
+}
 window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
 </script>
 </body>
