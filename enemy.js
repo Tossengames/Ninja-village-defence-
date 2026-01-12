@@ -1,12 +1,11 @@
 async function endTurn() {
-    // Process Bombs
     activeBombs.forEach((b, i) => {
         b.t--; 
         if(b.t <= 0) {
             grid[b.y][b.x] = FLOOR; shake = 30; log("BOOM!", "#f44");
             enemies.forEach(e => { 
                 if(Math.abs(e.x-b.x) <= 1 && Math.abs(e.y-b.y) <= 1) { 
-                    e.alive = false; stats.kills++; log("Guard killed by blast");
+                    e.alive = false; stats.kills++; log("Guard neutralized by blast");
                 } 
             });
             activeBombs.splice(i, 1);
@@ -15,17 +14,11 @@ async function endTurn() {
 
     for(let e of enemies.filter(en => en.alive)) {
         await new Promise(r => setTimeout(r, 150));
-        
-        if(grid[e.y][e.x] === TRAP) { 
-            e.alive = false; grid[e.y][e.x] = FLOOR; stats.kills++; 
-            log("Guard caught in trap", "#f44"); continue; 
-        }
-        
+        if(grid[e.y][e.x] === TRAP) { e.alive = false; grid[e.y][e.x] = FLOOR; stats.kills++; log("Guard caught in trap", "#f44"); continue; }
         if(e.distracted > 0) { e.distracted--; continue; }
 
         let nx = e.x, ny = e.y;
         let rice = null;
-        // Search for rice in range
         for(let dy=-3; dy<=3; dy++) for(let dx=-3; dx<=3; dx++) {
             if(grid[e.y+dy]?.[e.x+dx] === RICE) rice = {x:e.x+dx, y:e.y+dy};
         }
