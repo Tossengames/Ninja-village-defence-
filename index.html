@@ -1,853 +1,290 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Silent House: Shadow Protocol</title>
-    <style>
-        :root {
-            --accent: #d4af37;
-            --bg: #050505;
-            --ink: #1a1a1a;
-            --move-hl: rgba(0, 170, 255, 0.3);
-            --danger: rgba(255, 50, 50, 0.3);
-        }
-        body {
-            margin: 0;
-            background: var(--bg);
-            color: #eee;
-            font-family: 'Palatino', 'Georgia', serif;
-            overflow: hidden;
-            touch-action: none;
-        }
-        canvas {
-            display: block;
-            margin: 0 auto;
-            image-rendering: pixelated;
-            background: #000;
-        }
-        .overlay-screen {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.95);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 20;
-        }
-        .scroll-bg {
-            background: #e8dcc4;
-            color: var(--ink);
-            padding: 40px;
-            border: 4px double #5c4033;
-            width: 300px;
-            box-shadow: 0 0 50px rgba(0,0,0,1);
-            text-align: center;
-            border-radius: 5px;
-        }
-        .hidden {
-            display: none !important;
-        }
-        .rank-text {
-            font-size: 32px;
-            font-weight: bold;
-            color: #8b0000;
-            border-bottom: 2px solid #8b0000;
-            margin-bottom: 20px;
-            text-transform: uppercase;
-        }
-        .stats-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 10px 0;
-            border-bottom: 1px dashed #aaa;
-            font-size: 14px;
-        }
-        #toolbar {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 8px;
-            z-index: 10;
-            background: rgba(20,20,20,0.9);
-            padding: 10px;
-            border: 1px solid #d4af37;
-            border-radius: 4px;
-        }
-        .tool-btn {
-            width: 55px;
-            height: 65px;
-            background: #111;
-            border: 1px solid #444;
-            color: #888;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            cursor: pointer;
-        }
-        .tool-btn.active {
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-        .tool-btn.disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-        }
-        .btn-main {
-            padding: 10px 20px;
-            background: #1a1a1a;
-            color: #d4af37;
-            border: 1px solid #d4af37;
-            cursor: pointer;
-            font-family: inherit;
-            margin-top: 20px;
-        }
-        input {
-            background: #1a1a1a;
-            border: 1px solid #444;
-            color: var(--accent);
-            text-align: center;
-        }
-        .turn-indicator {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(20,20,20,0.8);
-            padding: 8px 15px;
-            border: 1px solid #444;
-            border-radius: 4px;
-            font-size: 12px;
-            z-index: 5;
-        }
-        .player-turn {
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-        .enemy-turn {
-            border-color: #f33;
-            color: #f33;
-        }
-        .range-display {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            background: rgba(20,20,20,0.8);
-            padding: 8px 15px;
-            border: 1px solid #444;
-            border-radius: 4px;
-            font-size: 12px;
-            z-index: 5;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Silent House: Shadow Protocol</title>
+<style>
+    :root { --accent: #d4af37; --bg: #050505; --red: #ff4444; --blue: #00d2ff; --panel: rgba(20, 20, 20, 0.95); }
+    body { margin: 0; background: var(--bg); color: #eee; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; touch-action: none; }
+    canvas { display: block; margin: 0 auto; background: #000; }
+    
+    .overlay-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.98); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; }
+    .hidden { display: none !important; }
+
+    /* Tactical Menu */
+    .menu-card { background: var(--panel); border: 1px solid var(--accent); padding: 30px; border-radius: 4px; box-shadow: 0 0 40px rgba(0,0,0,1); width: 320px; }
+    .config-row { display: flex; justify-content: space-between; align-items: center; margin: 12px 0; border-bottom: 1px solid #333; padding-bottom: 8px; }
+    .config-row label { font-size: 12px; text-transform: uppercase; color: #888; }
+    .config-row input { background: #000; border: 1px solid #444; color: var(--accent); width: 50px; text-align: center; font-weight: bold; }
+
+    /* Buttons & Toolbar */
+    #toolbar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 5px; z-index: 10; background: var(--panel); padding: 8px; border: 1px solid #333; border-radius: 4px; }
+    .tool-btn { width: 60px; height: 75px; background: #111; border: 1px solid #222; color: #666; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 10px; cursor: pointer; transition: 0.2s; border-radius: 2px; }
+    .tool-btn.active { border-color: var(--blue); color: var(--blue); background: #001520; box-shadow: inset 0 0 10px rgba(0,210,255,0.2); }
+    
+    .btn-main { width: 100%; padding: 15px; background: var(--accent); color: #000; border: none; cursor: pointer; font-weight: bold; font-size: 1rem; margin-top: 20px; text-transform: uppercase; letter-spacing: 2px; }
+    .btn-main:hover { filter: brightness(1.2); }
+</style>
 </head>
 <body>
-    <div id="menu" class="overlay-screen">
-        <h1 style="color:var(--accent); letter-spacing: 5px;">NINJA SELECTION</h1>
-        <div style="margin: 10px;">Traps: <input type="number" id="inpTraps" value="2" min="0" max="10" style="width:40px">
-        Rice: <input type="number" id="inpRice" value="2" min="0" max="10" style="width:40px"></div>
-        <div style="margin: 10px;">Bombs: <input type="number" id="inpBombs" value="1" min="0" max="5" style="width:40px">
-        Map: <input type="number" id="inpSize" value="12" min="8" max="20" style="width:40px"></div>
-        <button class="btn-main" onclick="initGame()">INFILTRATE</button>
-    </div>
 
-    <div id="resultScreen" class="overlay-screen hidden">
-        <div class="scroll-bg">
-            <div id="rankLabel" class="rank-text">Grand Master</div>
-            <div id="statsContent"></div>
-            <button class="btn-main" onclick="location.reload()">NEXT MISSION</button>
-        </div>
+<div id="menu" class="overlay-screen">
+    <div class="menu-card">
+        <h2 style="color:var(--accent); text-align: center; letter-spacing: 5px; margin-top:0;">MISSION CONFIG</h2>
+        <div class="config-row"><label>Map Size</label><input type="number" id="mapSize" value="12" max="15"></div>
+        <div class="config-row"><label>Guard Count</label><input type="number" id="guardCount" value="4" max="15"></div>
+        <div class="config-row"><label>Steel Traps</label><input type="number" id="setTrap" value="3"></div>
+        <div class="config-row"><label>Rice Lures</label><input type="number" id="setRice" value="2"></div>
+        <div class="config-row"><label>Smoke Bombs</label><input type="number" id="setBomb" value="1"></div>
+        <button class="btn-main" onclick="initGame()">Infiltrate</button>
     </div>
+</div>
 
-    <div id="gameOverScreen" class="overlay-screen hidden">
-        <h1 style="color:#8b0000; letter-spacing: 10px;">YOU ARE DEAD</h1>
-        <button class="btn-main" onclick="location.reload()">RETRY</button>
-    </div>
+<div id="gameOverScreen" class="overlay-screen hidden">
+    <h1 style="color:var(--red); letter-spacing: 10px;">MISSION FAILED</h1>
+    <button class="btn-main" style="width:200px" onclick="location.reload()">Retry</button>
+</div>
 
-    <canvas id="game"></canvas>
+<canvas id="game"></canvas>
+
+<div id="toolbar" class="hidden">
+    <div class="tool-btn active" id="btnMove" onclick="setMode('move')">👣<br>Move</div>
+    <div class="tool-btn" id="btnTrap" onclick="setMode('trap')">⚙️<br>Trap (<span id="c-trap">0</span>)</div>
+    <div class="tool-btn" id="btnRice" onclick="setMode('rice')">🍚<br>Rice (<span id="c-rice">0</span>)</div>
+    <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')">💣<br>Bomb (<span id="c-bomb">0</span>)</div>
+    <div class="tool-btn" onclick="playerWait()">⌛<br>Wait</div>
+</div>
+
+<script>
+const TILE = 60;
+const FLOOR=0, WALL=1, HIDE=2, EXIT=3, COIN=5, TRAP=6, RICE=7, BOMB=8;
+
+let grid, player, enemies, activeBombs = [], fTexts = [];
+let selectMode = 'move', gameOver = false, playerTurn = true, shake = 0, mapDim = 12;
+let inv = { trap: 0, rice: 0, bomb: 0 };
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const sprites = {};
+
+// Asset Loader
+['player', 'guard', 'wall', 'floor', 'exit', 'trap', 'rice', 'bomb', 'coin', 'hide'].forEach(n => {
+    const img = new Image(); img.src = `sprites/${n}.png`;
+    img.onload = () => sprites[n] = img;
+});
+
+function initGame() {
+    mapDim = Math.min(15, parseInt(document.getElementById('mapSize').value));
+    inv.trap = parseInt(document.getElementById('setTrap').value);
+    inv.rice = parseInt(document.getElementById('setRice').value);
+    inv.bomb = parseInt(document.getElementById('setBomb').value);
     
-    <div id="turnIndicator" class="turn-indicator hidden">YOUR TURN</div>
-    <div id="rangeDisplay" class="range-display hidden">Range: 1 tile</div>
+    document.getElementById('menu').classList.add('hidden');
+    document.getElementById('toolbar').classList.remove('hidden');
+    generateLevel();
+    updateUI();
+    requestAnimationFrame(gameLoop);
+}
 
-    <div id="toolbar" class="hidden">
-        <div class="tool-btn active" id="btnMove" onclick="setMode('move')">Move</div>
-        <div class="tool-btn" id="btnTrap" onclick="setMode('trap')">Trap (<span id="c-trap">0</span>)</div>
-        <div class="tool-btn" id="btnRice" onclick="setMode('rice')">Rice (<span id="c-rice">0</span>)</div>
-        <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')">Bomb (<span id="c-bomb">0</span>)</div>
-        <div class="tool-btn" onclick="playerWait()">Wait</div>
-    </div>
+function generateLevel() {
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    grid = Array.from({length: mapDim}, (_, y) => Array.from({length: mapDim}, (_, x) => 
+        (x==0 || y==0 || x==mapDim-1 || y==mapDim-1) ? WALL : Math.random() < 0.18 ? WALL : Math.random() < 0.08 ? HIDE : FLOOR
+    ));
+    player = { x: 1, y: 1, ax: 1, ay: 1, isHidden: false };
+    grid[mapDim-2][mapDim-2] = EXIT;
+    
+    const gc = Math.min(15, parseInt(document.getElementById('guardCount').value));
+    enemies = [];
+    for(let i=0; i<gc; i++) {
+        let ex, ey; do { ex = Math.floor(Math.random()*(mapDim-2))+1; ey = Math.floor(Math.random()*(mapDim-2))+1; }
+        while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
+        enemies.push({ x: ex, y: ey, ax: ex, ay: ey, dir: {x:1, y:0}, alive: true, range: 4 });
+    }
+}
 
-    <script>
-        const TILE = 50;
-        const FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4, COIN=5, TRAP=6, RICE=7, BOMB=8, CHEST=10;
-        
-        let grid, player, enemies, activeTools = [], highlightedTiles = [], dangerTiles = [];
-        let selectMode = 'move', gameOver = false, playerTurn = true;
-        let gameStats = { turns: 0, kills: 0, coins: 0, spotted: 0 };
-        let inv = { trap: 0, rice: 0, bomb: 0 };
-        let mapDim = 12, shake = 0;
-        let moveRange = 2; // Maximum movement distance per turn
-        let toolRange = 1; // Maximum tool placement distance
-        
-        const canvas = document.getElementById('game');
-        const ctx = canvas.getContext('2d');
-        const sprites = {};
-        
-        function initGame() {
-            inv.trap = Math.max(0, parseInt(document.getElementById('inpTraps').value));
-            inv.rice = Math.max(0, parseInt(document.getElementById('inpRice').value));
-            inv.bomb = Math.max(0, parseInt(document.getElementById('inpBombs').value));
-            mapDim = Math.max(8, Math.min(20, parseInt(document.getElementById('inpSize').value)));
-            
-            // Load sprites
-            ['player', 'guard', 'wall', 'floor', 'exit', 'trap', 'rice', 'bomb', 'chest', 'coin'].forEach(name => {
-                const img = new Image();
-                img.src = `sprites/${name}.png`;
-                img.onerror = () => console.log(`Sprite not found: ${name}.png - using fallback`);
-                img.onload = () => sprites[name] = img;
-            });
-            
-            document.getElementById('menu').classList.add('hidden');
-            document.getElementById('toolbar').classList.remove('hidden');
-            document.getElementById('turnIndicator').classList.remove('hidden');
-            document.getElementById('rangeDisplay').classList.remove('hidden');
-            generateLevel();
-            updateTurnIndicator();
-            updateMoveHighlights();
-            requestAnimationFrame(gameLoop);
+function drawSprite(n, x, y) {
+    const px = x*TILE, py = y*TILE;
+    if(sprites[n]) {
+        ctx.drawImage(sprites[n], px, py, TILE, TILE);
+    } else {
+        ctx.beginPath();
+        if(n === 'player') { ctx.fillStyle=player.isHidden?"rgba(0,210,255,0.3)":"#00d2ff"; ctx.arc(px+30, py+30, 15, 0, 7); ctx.fill(); }
+        else if(n === 'guard') { ctx.fillStyle="#ff4444"; ctx.fillRect(px+20, py+20, 20, 20); }
+        else if(n === 'wall') { ctx.fillStyle="#1a1a1a"; ctx.fillRect(px,py,TILE,TILE); ctx.strokeStyle="#333"; ctx.strokeRect(px+2,py+2,TILE-4,TILE-4); }
+        else if(n === 'floor') { ctx.fillStyle="#050505"; ctx.fillRect(px,py,TILE,TILE); }
+        else if(n === 'hide') { ctx.strokeStyle="#444"; ctx.strokeRect(px+10, py+10, TILE-20, TILE-20); ctx.strokeRect(px+15, py+15, TILE-30, TILE-30); }
+        else if(n === 'trap') { ctx.strokeStyle="#f0f"; ctx.strokeRect(px+20, py+20, 20, 20); }
+    }
+}
+
+function spawnText(x, y, txt, color="#fff") {
+    fTexts.push({ x: x*TILE+15, y: y*TILE+30, txt, life: 1, color });
+}
+
+function gameLoop() {
+    if(gameOver) return;
+    const scale = Math.min(canvas.width/(mapDim*TILE), canvas.height/(mapDim*TILE));
+    const ox = (canvas.width - mapDim*TILE*scale)/2 + (Math.random()-0.5)*shake;
+    const oy = (canvas.height - mapDim*TILE*scale)/2 + (Math.random()-0.5)*shake;
+    shake *= 0.9;
+
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle = "#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.translate(ox, oy); ctx.scale(scale, scale);
+
+    // Grid Base
+    for(let y=0; y<mapDim; y++) for(let x=0; x<mapDim; x++) {
+        drawSprite('floor', x, y);
+        const cell = grid[y][x];
+        if(cell === WALL) drawSprite('wall', x, y);
+        else if(cell === HIDE) drawSprite('hide', x, y);
+        else if(cell === EXIT) drawSprite('exit', x, y);
+        else if(cell === TRAP) drawSprite('trap', x, y);
+        else if(cell === RICE) drawSprite('rice', x, y);
+        else if(cell === BOMB) drawSprite('bomb', x, y);
+    }
+
+    // High Vis Placement/Move Highlight
+    ctx.strokeStyle = selectMode === 'move' ? "rgba(0, 210, 255, 0.4)" : "rgba(212, 175, 55, 0.4)";
+    ctx.lineWidth = 2;
+    for(let dy=-2; dy<=2; dy++) for(let dx=-2; dx<=2; dx++) {
+        let tx = player.x + dx, ty = player.y + dy;
+        if(tx > 0 && tx < mapDim-1 && ty > 0 && ty < mapDim-1 && grid[ty][tx] !== WALL) {
+            // Block jump over walls
+            if(grid[player.y + Math.sign(dy)][player.x + Math.sign(dx)] !== WALL)
+                ctx.strokeRect(tx*TILE+4, ty*TILE+4, TILE-8, TILE-8);
         }
-        
-        function generateLevel() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            grid = Array.from({length: mapDim}, (_, y) => Array.from({length: mapDim}, (_, x) => 
-                (x==0 || y==0 || x==mapDim-1 || y==mapDim-1) ? WALL : Math.random() < 0.18 ? WALL : FLOOR
-            ));
-            player = { x: 1, y: 1, ax: 1, ay: 1, hidden: false };
-            grid[mapDim-2][mapDim-2] = EXIT;
-            
-            // Ensure there's always a clear path to exit
-            createPathToExit();
-            
-            placeRandom(CHEST, 2);
-            placeRandom(COIN, 4 + Math.floor(mapDim/4));
-            placeRandom(NOISE, 3);
-            
-            enemies = [];
-            for(let i=0; i<4 + Math.floor(mapDim/8); i++) {
-                let ex, ey;
-                do {
-                    ex = Math.floor(Math.random()*(mapDim-2))+1;
-                    ey = Math.floor(Math.random()*(mapDim-2))+1;
-                } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
-                
-                enemies.push({
-                    x: ex, y: ey,
-                    ax: ex, ay: ey,
-                    dir: {x: Math.random() > 0.5 ? 1 : -1, y: 0},
-                    target: null,
-                    alive: true,
-                    range: 4 + Math.floor(Math.random() * 3),
-                    status: "Patrolling",
-                    visionAngle: Math.PI/3 // 60 degree vision cone
-                });
+    }
+
+    enemies.forEach(e => {
+        if(!e.alive) return;
+        drawSprite('guard', e.ax, e.ay);
+        // Vision
+        ctx.fillStyle = "rgba(255, 0, 0, 0.1)";
+        ctx.beginPath(); ctx.moveTo(e.ax*TILE+30, e.ay*TILE+30);
+        const baseA = Math.atan2(e.dir.y, e.dir.x);
+        for(let a = baseA-0.7; a <= baseA+0.7; a += 0.05) {
+            let d = 0; while(d < e.range) {
+                d += 0.2; if(grid[Math.floor(e.y + Math.sin(a)*d)]?.[Math.floor(e.x + Math.cos(a)*d)] === WALL) break;
             }
-            updateUI();
+            ctx.lineTo(e.ax*TILE+30 + Math.cos(a)*d*TILE, e.ay*TILE+30 + Math.sin(a)*d*TILE);
         }
-        
-        function createPathToExit() {
-            // Simple pathfinding to ensure exit is reachable
-            let x = player.x, y = player.y;
-            while(x < mapDim-2 || y < mapDim-2) {
-                if(Math.random() > 0.5 && x < mapDim-2) {
-                    x++;
-                } else if(y < mapDim-2) {
-                    y++;
-                }
-                if(grid[y][x] === WALL) grid[y][x] = FLOOR;
-            }
-        }
-        
-        function placeRandom(type, count) {
-            for(let i=0; i<count; i++) {
-                let x, y;
-                let attempts = 0;
-                do {
-                    x = Math.floor(Math.random()*(mapDim-2))+1;
-                    y = Math.floor(Math.random()*(mapDim-2))+1;
-                    attempts++;
-                } while((grid[y][x] !== FLOOR || Math.hypot(x-player.x, y-player.y) < 2) && attempts < 100);
-                if(attempts < 100) grid[y][x] = type;
-            }
-        }
-        
-        function gameLoop() {
-            if(gameOver) return;
-            const scale = Math.min(canvas.width/(mapDim*TILE), canvas.height/(mapDim*TILE));
-            const ox = (canvas.width - mapDim*TILE*scale)/2 + (Math.random()-0.5)*shake;
-            const oy = (canvas.height - mapDim*TILE*scale)/2 + (Math.random()-0.5)*shake;
-            shake *= 0.9;
-            
-            ctx.setTransform(1,0,0,1,0,0);
-            ctx.clearRect(0,0,canvas.width,canvas.height);
-            ctx.translate(ox, oy);
-            ctx.scale(scale, scale);
-            
-            // Draw grid with highlights
-            for(let y=0; y<mapDim; y++) {
-                for(let x=0; x<mapDim; x++) {
-                    drawSprite('floor', x, y);
-                    
-                    // Draw move highlights
-                    if(selectMode === 'move' && playerTurn) {
-                        const isHighlighted = highlightedTiles.some(t => t.x === x && t.y === y);
-                        const isDanger = dangerTiles.some(t => t.x === x && t.y === y);
-                        
-                        if(isDanger) {
-                            ctx.fillStyle = 'rgba(255, 50, 50, 0.3)';
-                            ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
-                        } else if(isHighlighted) {
-                            ctx.fillStyle = 'rgba(0, 170, 255, 0.3)';
-                            ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
-                            ctx.strokeStyle = 'rgba(0, 170, 255, 0.7)';
-                            ctx.lineWidth = 2;
-                            ctx.strokeRect(x*TILE+2, y*TILE+2, TILE-4, TILE-4);
-                        }
-                    }
-                    
-                    // Draw tool placement highlights
-                    if(selectMode !== 'move' && playerTurn) {
-                        const dist = Math.hypot(x - player.x, y - player.y);
-                        if(dist <= toolRange && grid[y][x] === FLOOR) {
-                            ctx.fillStyle = 'rgba(170, 255, 0, 0.2)';
-                            ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
-                            ctx.strokeStyle = 'rgba(170, 255, 0, 0.6)';
-                            ctx.lineWidth = 2;
-                            ctx.strokeRect(x*TILE+2, y*TILE+2, TILE-4, TILE-4);
-                        }
-                    }
-                    
-                    const cell = grid[y][x];
-                    if(cell === WALL) drawSprite('wall', x, y);
-                    else if(cell === EXIT) drawSprite('exit', x, y);
-                    else if(cell === COIN) drawSprite('coin', x, y);
-                    else if(cell === TRAP) drawSprite('trap', x, y);
-                    else if(cell === RICE) drawSprite('rice', x, y);
-                    else if(cell === BOMB) {
-                        drawSprite('bomb', x, y);
-                        // Draw bomb timer
-                        const bomb = activeTools.find(b => b.x === x && b.y === y);
-                        if(bomb) {
-                            ctx.fillStyle = '#f00';
-                            ctx.font = '12px Arial';
-                            ctx.fillText(bomb.t.toString(), x*TILE+20, y*TILE+15);
-                        }
-                    }
-                    else if(cell === CHEST) drawSprite('chest', x, y);
-                }
-            }
-            
-            // Draw enemies with vision cones
-            enemies.forEach(e => {
-                if(!e.alive) return;
-                
-                drawSprite('guard', e.ax, e.ay);
-                
-                // Draw enemy vision cone
-                ctx.fillStyle = "rgba(255,0,0,0.1)";
-                ctx.beginPath();
-                ctx.moveTo(e.ax*TILE+25, e.ay*TILE+25);
-                const baseA = Math.atan2(e.dir.y, e.dir.x);
-                
-                for(let a = baseA - e.visionAngle/2; a <= baseA + e.visionAngle/2; a += 0.1) {
-                    let d = 0;
-                    while(d < e.range) {
-                        d += 0.2;
-                        const tx = Math.floor(e.x + Math.cos(a)*d);
-                        const ty = Math.floor(e.y + Math.sin(a)*d);
-                        if(tx < 0 || tx >= mapDim || ty < 0 || ty >= mapDim || grid[ty][tx] === WALL) break;
-                    }
-                    ctx.lineTo(e.ax*TILE+25 + Math.cos(a)*d*TILE, e.ay*TILE+25 + Math.sin(a)*d*TILE);
-                }
-                ctx.closePath();
-                ctx.fill();
-                
-                // Draw enemy status indicator
-                if(e.target) {
-                    ctx.fillStyle = '#ff0';
-                    ctx.font = '10px Arial';
-                    ctx.fillText('!', e.ax*TILE+40, e.ay*TILE+15);
-                }
-            });
-            
-            // Draw player
-            drawSprite('player', player.ax, player.ay);
-            
-            // Draw player status
-            if(player.hidden) {
-                ctx.fillStyle = '#0af';
-                ctx.font = '10px Arial';
-                ctx.fillText('HIDDEN', player.ax*TILE, player.ay*TILE-5);
-            }
-            
-            requestAnimationFrame(gameLoop);
-        }
-        
-        function drawSprite(name, x, y) {
-            const px = x * TILE, py = y * TILE;
-            if (sprites[name]) {
-                ctx.drawImage(sprites[name], px, py, TILE, TILE);
-            } else {
-                // Fallback sprites
-                ctx.beginPath();
-                switch(name) {
-                    case 'floor':
-                        ctx.fillStyle = '#0a0a0a';
-                        ctx.fillRect(px, py, TILE, TILE);
-                        break;
-                    case 'wall':
-                        ctx.fillStyle = '#222';
-                        ctx.fillRect(px, py, TILE, TILE);
-                        ctx.strokeStyle = "#444";
-                        ctx.strokeRect(px+5, py+5, TILE-10, TILE-10);
-                        break;
-                    case 'player':
-                        ctx.fillStyle = player.hidden ? '#555' : '#0af';
-                        ctx.arc(px+25, py+25, 12, 0, Math.PI*2);
-                        ctx.fill();
-                        // Draw facing direction
-                        ctx.strokeStyle = player.hidden ? '#777' : '#0ff';
-                        ctx.beginPath();
-                        ctx.moveTo(px+25, py+25);
-                        ctx.lineTo(px+40, py+25);
-                        ctx.stroke();
-                        break;
-                    case 'guard':
-                        ctx.fillStyle = '#f33';
-                        ctx.arc(px+25, py+25, 12, 0, Math.PI*2);
-                        ctx.fill();
-                        break;
-                    case 'exit':
-                        ctx.strokeStyle = '#0f0';
-                        ctx.lineWidth = 3;
-                        ctx.strokeRect(px+10, py+10, 30, 30);
-                        break;
-                    case 'coin':
-                        ctx.fillStyle = '#ff0';
-                        ctx.arc(px+25, py+25, 5, 0, Math.PI*2);
-                        ctx.fill();
-                        break;
-                    case 'rice':
-                        ctx.fillStyle = '#eee';
-                        ctx.beginPath();
-                        ctx.moveTo(px+25, py+15);
-                        ctx.lineTo(px+35, py+35);
-                        ctx.lineTo(px+15, py+35);
-                        ctx.closePath();
-                        ctx.fill();
-                        break;
-                    case 'trap':
-                        ctx.strokeStyle = '#f0f';
-                        ctx.lineWidth = 2;
-                        ctx.strokeRect(px+15, py+15, 20, 20);
-                        ctx.beginPath();
-                        ctx.moveTo(px+15, py+15);
-                        ctx.lineTo(px+35, py+35);
-                        ctx.moveTo(px+35, py+15);
-                        ctx.lineTo(px+15, py+35);
-                        ctx.stroke();
-                        break;
-                    case 'bomb':
-                        ctx.fillStyle = '#f00';
-                        ctx.beginPath();
-                        ctx.arc(px+25, py+25, 8, 0, Math.PI*2);
-                        ctx.fill();
-                        break;
-                    case 'chest':
-                        ctx.fillStyle = '#8b4513';
-                        ctx.fillRect(px+10, py+20, 30, 20);
-                        ctx.fillRect(px+15, py+15, 20, 5);
-                        break;
-                }
-            }
-        }
-        
-        function updateMoveHighlights() {
-            highlightedTiles = [];
-            dangerTiles = [];
-            
-            if(!playerTurn || selectMode !== 'move') return;
-            
-            // Calculate reachable tiles within moveRange
-            for(let dy = -moveRange; dy <= moveRange; dy++) {
-                for(let dx = -moveRange; dx <= moveRange; dx++) {
-                    const x = player.x + dx;
-                    const y = player.y + dy;
-                    const dist = Math.abs(dx) + Math.abs(dy); // Manhattan distance
-                    
-                    if(dist <= moveRange && dist > 0 &&
-                       x >= 0 && x < mapDim && y >= 0 && y < mapDim &&
-                       grid[y][x] !== WALL) {
-                        
-                        // Check if tile is in enemy line of sight
-                        let isDanger = false;
-                        for(const enemy of enemies.filter(e => e.alive)) {
-                            if(hasLineOfSight(enemy, x, y)) {
-                                isDanger = true;
-                                break;
-                            }
-                        }
-                        
-                        if(isDanger) {
-                            dangerTiles.push({x, y});
-                        } else {
-                            highlightedTiles.push({x, y});
-                        }
-                    }
-                }
-            }
-        }
-        
-        function animMove(obj, tx, ty, cb) {
-            const sx = obj.ax, sy = obj.ay;
-            let p = 0;
-            if(obj !== player) {
-                obj.dir = {
-                    x: Math.sign(tx - obj.x),
-                    y: Math.sign(ty - obj.y) || obj.dir.y
-                };
-            }
-            
-            function step() {
-                p += 0.2;
-                obj.ax = sx + (tx - sx) * p;
-                obj.ay = sy + (ty - sy) * p;
-                if(p < 1) {
-                    requestAnimationFrame(step);
-                } else {
-                    obj.x = tx;
-                    obj.y = ty;
-                    obj.ax = tx;
-                    obj.ay = ty;
-                    cb();
-                }
-            }
-            step();
-        }
-        
-        async function endTurn() {
-            // Update bomb timers
-            activeTools.forEach(bomb => {
-                if(bomb.t > 0) bomb.t--;
-                if(bomb.t <= 0) {
-                    // Explode bomb
-                    grid[bomb.y][bomb.x] = FLOOR;
-                    shake = 20;
-                    // Damage enemies in adjacent tiles
-                    for(const enemy of enemies) {
-                        if(enemy.alive && Math.abs(enemy.x - bomb.x) <= 1 && Math.abs(enemy.y - bomb.y) <= 1) {
-                            enemy.alive = false;
-                            gameStats.kills++;
-                        }
-                    }
-                }
-            });
-            activeTools = activeTools.filter(b => b.t > 0);
-            
-            // Enemy turns
-            for(let e of enemies.filter(en => en.alive)) {
-                await new Promise(r => setTimeout(r, 60));
-                
-                // Check if enemy steps on trap or rice
-                if(grid[e.y][e.x] === TRAP || grid[e.y][e.x] === RICE) {
-                    let wasRice = grid[e.y][e.x] === RICE;
-                    e.alive = false;
-                    grid[e.y][e.x] = FLOOR;
-                    gameStats.kills++;
-                    if(wasRice) {
-                        enemies.forEach(o => {
-                            if(o.target && o.target.x === e.x && o.target.y === e.y) o.target = null;
-                        });
-                    }
-                    continue;
-                }
-                
-                let nx = e.x, ny = e.y;
-                
-                // Enemy AI
-                if(e.target) {
-                    // Move toward target
-                    if(nx < e.target.x) nx++;
-                    else if(nx > e.target.x) nx--;
-                    else if(ny < e.target.y) ny++;
-                    else if(ny > e.target.y) ny--;
-                    
-                    // Lose interest if target is too far
-                    if(Math.hypot(nx - e.target.x, ny - e.target.y) > e.range * 2) {
-                        e.target = null;
-                        e.status = "Patrolling";
-                    }
-                } else {
-                    // Patrol behavior
-                    const dirs = [{x:1,y:0}, {x:-1,y:0}, {x:0,y:1}, {x:0,y:-1}];
-                    const validDirs = dirs.filter(d => 
-                        grid[e.y + d.y]?.[e.x + d.x] === FLOOR
-                    );
-                    
-                    if(validDirs.length > 0) {
-                        // Sometimes change direction
-                        if(Math.random() < 0.2) {
-                            e.dir = validDirs[Math.floor(Math.random() * validDirs.length)];
-                        }
-                        nx = e.x + e.dir.x;
-                        ny = e.y + e.dir.y;
-                        
-                        // If can't move in current direction, choose random valid direction
-                        if(grid[ny]?.[nx] !== FLOOR) {
-                            const newDir = validDirs[Math.floor(Math.random() * validDirs.length)];
-                            e.dir = newDir;
-                            nx = e.x + newDir.x;
-                            ny = e.y + newDir.y;
-                        }
-                    }
-                }
-                
-                // Check line of sight to player
-                if(!player.hidden && hasLineOfSight(e, player.x, player.y)) {
-                    e.target = {x: player.x, y: player.y};
-                    e.status = "Alerted!";
-                    gameStats.spotted++;
-                    
-                    // Alert other nearby enemies
-                    enemies.forEach(other => {
-                        if(other.alive && other !== e && Math.hypot(other.x - e.x, other.y - e.y) < 3) {
-                            other.target = {x: player.x, y: player.y};
-                            other.status = "Alerted!";
-                        }
-                    });
-                }
-                
-                // Move enemy
-                if(grid[ny]?.[nx] === FLOOR) {
-                    await new Promise(r => animMove(e, nx, ny, r));
-                }
-                
-                // Check for death after moving
-                if(!player.hidden && hasLineOfSight(e, player.x, player.y)) {
-                    triggerDeath();
-                    return;
-                }
-            }
-            
-            playerTurn = true;
-            updateTurnIndicator();
-            updateMoveHighlights();
-        }
-        
-        function hasLineOfSight(e, px, py) {
-            const dx = px - e.x, dy = py - e.y;
-            const dist = Math.hypot(dx, dy);
-            if(dist > e.range) return false;
-            
-            // Check if target is within vision cone
-            const targetAngle = Math.atan2(dy, dx);
-            const enemyAngle = Math.atan2(e.dir.y, e.dir.x);
-            let angleDiff = Math.abs(targetAngle - enemyAngle);
-            angleDiff = Math.min(angleDiff, Math.PI * 2 - angleDiff);
-            
-            if(angleDiff > e.visionAngle / 2) return false;
-            
-            // Check for walls blocking line of sight
-            for(let d = 0.5; d < dist; d += 0.5) {
-                const tx = Math.floor(e.x + (dx / dist) * d);
-                const ty = Math.floor(e.y + (dy / dist) * d);
-                if(grid[ty]?.[tx] === WALL) return false;
-            }
-            return true;
-        }
-        
-        function checkTile() {
-            const t = grid[player.y][player.x];
-            if(t === EXIT) showResults();
-            if(t === COIN) {
-                gameStats.coins++;
-                grid[player.y][player.x] = FLOOR;
-                shake = 5;
-            }
-            if(t === CHEST) {
-                gameStats.coins += 3;
-                grid[player.y][player.x] = FLOOR;
-                shake = 10;
-            }
-            if(t === NOISE) {
-                shake = 15;
-                enemies.forEach(e => {
-                    if(e.alive) {
-                        e.target = {x: player.x, y: player.y};
-                        e.status = "Investigate";
-                    }
-                });
-                grid[player.y][player.x] = FLOOR;
-            }
-            if(t === HIDE) {
-                player.hidden = true;
-                grid[player.y][player.x] = FLOOR;
-            }
-        }
-        
-        function showResults() {
-            gameOver = true;
-            let score = (gameStats.kills * 100) +
-                       (gameStats.coins * 50) -
-                       (gameStats.spotted * 150) -
-                       (gameStats.turns * 2);
-            let rank;
-            if(score > 400) rank = "Grand Master";
-            else if(score > 300) rank = "Expert";
-            else if(score > 200) rank = "Adept";
-            else if(score > 100) rank = "Apprentice";
-            else if(score > 0) rank = "Novice";
-            else rank = "Thug";
-            
-            document.getElementById('rankLabel').innerText = rank;
-            document.getElementById('statsContent').innerHTML = `
-                <div class="stats-row"><span>Eliminations</span><span>${gameStats.kills}</span></div>
-                <div class="stats-row"><span>Coins Collected</span><span>${gameStats.coins}</span></div>
-                <div class="stats-row"><span>Times Spotted</span><span>${gameStats.spotted}</span></div>
-                <div class="stats-row"><span>Turns Taken</span><span>${gameStats.turns}</span></div>
-                <div class="stats-row"><span>Final Score</span><span>${score}</span></div>`;
-            document.getElementById('resultScreen').classList.remove('hidden');
-        }
-        
-        canvas.addEventListener('pointerdown', e => {
-            if(!playerTurn || gameOver) return;
-            
-            const scale = Math.min(canvas.width/(mapDim*TILE), canvas.height/(mapDim*TILE));
-            const ox = (canvas.width - mapDim*TILE*scale)/2;
-            const oy = (canvas.height - mapDim*TILE*scale)/2;
-            const tx = Math.floor(((e.clientX - ox)/scale)/TILE);
-            const ty = Math.floor(((e.clientY - oy)/scale)/TILE);
-            
-            if (tx < 0 || ty < 0 || tx >= mapDim || ty >= mapDim) return;
-            
-            if(selectMode === 'move') {
-                const dist = Math.abs(tx - player.x) + Math.abs(ty - player.y); // Manhattan distance
-                if(dist <= moveRange && dist > 0 && grid[ty][tx] !== WALL) {
-                    playerTurn = false;
-                    gameStats.turns++;
-                    player.hidden = false; // Moving reveals player
-                    updateTurnIndicator();
-                    animMove(player, tx, ty, () => {
-                        checkTile();
-                        updateMoveHighlights();
-                        endTurn();
-                    });
-                }
-            } else if(selectMode !== 'move') {
-                const dist = Math.hypot(tx - player.x, ty - player.y);
-                if(dist <= toolRange && grid[ty][tx] === FLOOR) {
-                    deployTool(tx, ty);
-                }
-            }
+        ctx.fill();
+    });
+
+    drawSprite('player', player.ax, player.ay);
+
+    // Text Feedback
+    fTexts = fTexts.filter(t => t.life > 0);
+    fTexts.forEach(t => {
+        t.y -= 0.5; t.life -= 0.015;
+        ctx.globalAlpha = t.life; ctx.fillStyle = t.color; ctx.font = "bold 12px monospace";
+        ctx.fillText(t.txt, t.x, t.y);
+    });
+    ctx.globalAlpha = 1;
+
+    requestAnimationFrame(gameLoop);
+}
+
+canvas.addEventListener('pointerdown', e => {
+    if(!playerTurn || gameOver) return;
+    const scale = Math.min(canvas.width/(mapDim*TILE), canvas.height/(mapDim*TILE));
+    const ox = (canvas.width - mapDim*TILE*scale)/2, oy = (canvas.height - mapDim*TILE*scale)/2;
+    const tx = Math.floor(((e.clientX - ox)/scale)/TILE), ty = Math.floor(((e.clientY - oy)/scale)/TILE);
+    
+    if (grid[ty]?.[tx] === undefined || grid[ty][tx] === WALL) return;
+
+    const dx = tx - player.x, dy = ty - player.y;
+    const dist = Math.max(Math.abs(dx), Math.abs(dy));
+
+    if(selectMode === 'move' && dist <= 2) {
+        if(grid[player.y + Math.sign(dy)][player.x + Math.sign(dx)] === WALL) return;
+        playerTurn = false;
+        animMove(player, tx, ty, 0.1, () => {
+            player.isHidden = (grid[ty][tx] === HIDE);
+            if(player.isHidden) spawnText(tx, ty, "HIDDEN", varColor('--blue'));
+            if(grid[ty][tx] === EXIT) { alert("INFILTRATED"); location.reload(); }
+            endTurn();
         });
+    } else if(selectMode !== 'move' && dist <= 2 && grid[ty][tx] === FLOOR) {
+        deployTool(tx, ty);
+    }
+});
+
+function deployTool(tx, ty) {
+    if(selectMode === 'trap' && inv.trap > 0) { grid[ty][tx] = TRAP; inv.trap--; spawnText(tx,ty,"TRAP SET","#f0f"); }
+    else if(selectMode === 'rice' && inv.rice > 0) { grid[ty][tx] = RICE; inv.rice--; spawnText(tx,ty,"LURE SET","#fff"); }
+    else if(selectMode === 'bomb' && inv.bomb > 0) { grid[ty][tx] = BOMB; inv.bomb--; activeBombs.push({x:tx, y:ty, t:3}); spawnText(tx,ty,"ARMED","#f00"); }
+    else return;
+    updateUI(); playerTurn = false; endTurn();
+}
+
+async function endTurn() {
+    // Bomb Logic
+    activeBombs.forEach((b, i) => {
+        b.t--; 
+        if(b.t <= 0) {
+            grid[b.y][b.x] = FLOOR; shake = 30; spawnText(b.x, b.y, "BOOM!", "#ff4400");
+            enemies.forEach(e => { if(Math.abs(e.x-b.x) <= 1 && Math.abs(e.y-b.y) <= 1) e.alive = false; });
+            activeBombs.splice(i, 1);
+        } else spawnText(b.x, b.y, b.t + "...", "#f00");
+    });
+
+    // Slow Enemy Sequence
+    for(let e of enemies.filter(en => en.alive)) {
+        await new Promise(r => setTimeout(r, 400)); // Delay between each guard
         
-        function deployTool(tx, ty) {
-            let placed = false;
-            
-            if(selectMode === 'trap' && inv.trap > 0) {
-                grid[ty][tx] = TRAP;
-                inv.trap--;
-                placed = true;
-            } else if(selectMode === 'rice' && inv.rice > 0) {
-                grid[ty][tx] = RICE;
-                inv.rice--;
-                placed = true;
-            } else if(selectMode === 'bomb' && inv.bomb > 0) {
-                grid[ty][tx] = BOMB;
-                inv.bomb--;
-                activeTools.push({x: tx, y: ty, t: 2});
-                placed = true;
-            }
-            
-            if(placed) {
-                updateUI();
-                playerTurn = false;
-                updateTurnIndicator();
-                player.hidden = false; // Using tools reveals player
-                endTurn();
-            }
+        if(grid[e.y][e.x] === TRAP) { e.alive = false; grid[e.y][e.x] = FLOOR; spawnText(e.x, e.y, "DEAD", "#f00"); continue; }
+        
+        let nx = e.x, ny = e.y;
+        const d = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)];
+        if(grid[e.y+d.y]?.[e.x+d.x] === FLOOR) { nx+=d.x; ny+=d.y; }
+        
+        await new Promise(r => animMove(e, nx, ny, 0.08, r)); // Slower movement anim
+        
+        if(!player.isHidden && hasLineOfSight(e, player.x, player.y)) {
+            spawnText(player.x, player.y, "SPOTTED!", "#f00");
+            await new Promise(r => setTimeout(r, 500));
+            gameOver = true; document.getElementById('gameOverScreen').classList.remove('hidden'); return;
         }
-        
-        function updateUI() {
-            document.getElementById('c-trap').innerText = inv.trap;
-            document.getElementById('c-rice').innerText = inv.rice;
-            document.getElementById('c-bomb').innerText = inv.bomb;
-            
-            // Update button states
-            document.getElementById('btnTrap').classList.toggle('disabled', inv.trap <= 0);
-            document.getElementById('btnRice').classList.toggle('disabled', inv.rice <= 0);
-            document.getElementById('btnBomb').classList.toggle('disabled', inv.bomb <= 0);
-            
-            // Update range display
-            const rangeText = selectMode === 'move' ? `${moveRange} tiles` : `${toolRange} tile`;
-            document.getElementById('rangeDisplay').textContent = `Range: ${rangeText}`;
-        }
-        
-        function updateTurnIndicator() {
-            const indicator = document.getElementById('turnIndicator');
-            if(playerTurn) {
-                indicator.textContent = 'YOUR TURN';
-                indicator.className = 'turn-indicator player-turn';
-            } else {
-                indicator.textContent = 'ENEMY TURN';
-                indicator.className = 'turn-indicator enemy-turn';
-            }
-        }
-        
-        function setMode(m) {
-            if((m === 'trap' && inv.trap <= 0) ||
-               (m === 'rice' && inv.rice <= 0) ||
-               (m === 'bomb' && inv.bomb <= 0)) {
-                return;
-            }
-            
-            selectMode = m;
-            document.querySelectorAll('.tool-btn').forEach(b => {
-                b.classList.remove('active');
-                b.classList.remove('disabled');
-            });
-            const btn = document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1));
-            btn.classList.add('active');
-            updateUI();
-            updateMoveHighlights();
-        }
-        
-        function triggerDeath() {
-            gameOver = true;
-            document.getElementById('gameOverScreen').classList.remove('hidden');
-        }
-        
-        function playerWait() {
-            if(playerTurn) {
-                playerTurn = false;
-                gameStats.turns++;
-                player.hidden = true; // Waiting allows player to hide
-                updateTurnIndicator();
-                endTurn();
-            }
-        }
-        
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            if(canvas) {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-            }
-        });
-    </script>
+    }
+    playerTurn = true;
+}
+
+function hasLineOfSight(e, px, py) {
+    const dx = px-e.x, dy = py-e.y, dist = Math.hypot(dx, dy);
+    if(dist > e.range) return false;
+    const ang = Math.abs(Math.atan2(dy, dx) - Math.atan2(e.dir.y, e.dir.x));
+    if(ang > 0.8 && ang < 5.5) return false;
+    for(let d=0.5; d<dist; d+=0.5) if(grid[Math.floor(e.y + (dy/dist)*d)]?.[Math.floor(e.x + (dx/dist)*d)] === WALL) return false;
+    return true;
+}
+
+function animMove(obj, tx, ty, speed, cb) {
+    const sx = obj.ax, sy = obj.ay; let p = 0;
+    if(obj !== player) obj.dir = {x: Math.sign(tx-obj.x), y: Math.sign(ty-obj.y) || obj.dir.y};
+    function step() {
+        p += speed; obj.ax = sx + (tx-sx)*p; obj.ay = sy + (ty-sy)*p;
+        if(p < 1) requestAnimationFrame(step); else { obj.x = tx; obj.y = ty; obj.ax = tx; obj.ay = ty; cb(); }
+    }
+    step();
+}
+
+function updateUI() { 
+    document.getElementById('c-trap').innerText = inv.trap; 
+    document.getElementById('c-rice').innerText = inv.rice; 
+    document.getElementById('c-bomb').innerText = inv.bomb; 
+}
+function setMode(m) { 
+    selectMode = m; 
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active')); 
+    document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active'); 
+}
+function playerWait() { if(playerTurn) { playerTurn = false; endTurn(); } }
+function varColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+</script>
 </body>
 </html>
