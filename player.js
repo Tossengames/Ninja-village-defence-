@@ -1,14 +1,32 @@
 canvas.addEventListener('pointerdown', e => {
-    if(!playerTurn || gameOver) return;
-    const scale = Math.min(canvas.width/(mapDim*TILE), canvas.height/(mapDim*TILE));
-    const ox = (canvas.width - mapDim*TILE*scale)/2, oy = (canvas.height - mapDim*TILE*scale)/2;
-    const tx = Math.floor(((e.clientX - ox)/scale)/TILE), ty = Math.floor(((e.clientY - oy)/scale)/TILE);
-    
+    isDragging = false;
+    lastMouse = { x: e.clientX, y: e.clientY };
+});
+
+canvas.addEventListener('pointermove', e => {
+    const dx = e.clientX - lastMouse.x;
+    const dy = e.clientY - lastMouse.y;
+    if (Math.hypot(dx, dy) > 5) {
+        isDragging = true;
+        camX += dx; camY += dy;
+        clampCamera();
+        lastMouse = { x: e.clientX, y: e.clientY };
+    }
+});
+
+canvas.addEventListener('pointerup', e => {
+    if (isDragging || !playerTurn || gameOver) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left - camX;
+    const my = e.clientY - rect.top - camY;
+    const tx = Math.floor(mx / TILE);
+    const ty = Math.floor(my / TILE);
+
     if (grid[ty]?.[tx] === undefined || grid[ty][tx] === WALL) return;
     const dist = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
 
     if(selectMode === 'move' && dist <= 2) {
-        if(grid[player.y + Math.sign(ty-player.y)][player.x + Math.sign(tx-player.x)] === WALL) return;
         playerTurn = false;
         animMove(player, tx, ty, 0.2, () => {
             player.isHidden = (grid[ty][tx] === HIDE);
@@ -31,6 +49,7 @@ function deployTool(tx, ty) {
 
 function setMode(m) { 
     selectMode = m; 
+    centerCamera(); // Always move camera to player position
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active')); 
     document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active'); 
 }
