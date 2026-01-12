@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Shadow Protocol: Grand Master</title>
+    <title>Shadow Protocol</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,24 +11,11 @@
 
     <div id="menu" class="overlay-screen">
         <div class="menu-card">
-            <h2 style="color:var(--accent); letter-spacing:4px; text-align:center;">MISSION START</h2>
-            <div class="config-row">Map Size: <input type="number" id="mapSize" value="30"></div>
-            <div class="config-row">Guards: <input type="number" id="guardCount" value="15"></div>
-            <button onclick="initGame()" class="btn-main">INFILTRATE</button>
+            <h2 style="color:var(--accent)">SHADOW PROTOCOL</h2>
+            Map Size: <input type="number" id="mapSize" value="30" style="width:50px"><br><br>
+            Guards: <input type="number" id="guardCount" value="10" style="width:50px"><br>
+            <button onclick="initGame()" class="btn-main">START</button>
         </div>
-    </div>
-
-    <div id="resultScreen" class="overlay-screen hidden">
-        <div class="result-scroll">
-            <div id="rankLabel" class="rank-text">Grand Master</div>
-            <div id="statsTable"></div>
-            <button onclick="location.reload()" class="btn-main" style="background:#222; color:var(--accent); border:1px solid var(--accent);">NEXT MISSION</button>
-        </div>
-    </div>
-
-    <div id="gameOverScreen" class="overlay-screen hidden">
-        <h1 style="color:var(--red); letter-spacing:10px;">TERMINATED</h1>
-        <button onclick="location.reload()" class="btn-main">RETRY</button>
     </div>
 
     <canvas id="game"></canvas>
@@ -39,9 +26,8 @@
         <div class="tool-btn" id="btnRice" onclick="setMode('rice')"><span>🍚</span>Rice</div>
         <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')"><span>💣</span>Bomb</div>
         <div class="tool-btn" onclick="playerWait()"><span>⌛</span>Wait</div>
-        <div class="tool-sep"></div>
-        <div class="tool-btn" onclick="adjustZoom(0.1)"><span>➕</span></div>
-        <div class="tool-btn" onclick="adjustZoom(-0.1)"><span>➖</span></div>
+        <div class="tool-btn" onclick="adjustZoom(0.1)"><span>➕</span>Zoom</div>
+        <div class="tool-btn" onclick="adjustZoom(-0.1)"><span>➖</span>Zoom</div>
     </div>
 
     <script src="config.js"></script>
