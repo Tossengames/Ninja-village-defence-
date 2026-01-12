@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-<title>Silent House: VFX Pro</title>
+<title>Silent House: Tactical Pro</title>
 <style>
     body { margin: 0; background: #050505; color: #eee; font-family: 'Courier New', monospace; text-align: center; touch-action: none; overflow: hidden; }
     canvas { display: block; margin: 0 auto; background: #111; border: 2px solid #333; }
@@ -14,8 +14,8 @@
     button { padding: 10px 18px; margin: 4px; background: #1a1a1a; color: #eee; border: 1px solid #444; cursor: pointer; font-size: 12px; }
     button.active { background: #0af; color: #000; border-color: #fff; box-shadow: 0 0 10px #0af; }
     #ui-layer { position: fixed; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; }
-    #info { margin-top: 10px; align-self: center; width: 90%; pointer-events: none; }
-    #controls { margin-bottom: 15px; align-self: center; pointer-events: auto; background: rgba(0,0,0,0.8); padding: 8px; border: 1px solid #333; display: flex; flex-wrap: wrap; justify-content: center; }
+    #info { margin-top: 10px; align-self: center; width: 90%; }
+    #controls { margin-bottom: 15px; align-self: center; pointer-events: auto; background: rgba(0,0,0,0.8); padding: 8px; border: 1px solid #333; display: flex; flex-wrap: wrap; justify-content: center; border-radius: 8px; }
     .message { background: rgba(0,0,0,0.7); padding: 4px 10px; border-left: 3px solid #0af; margin-bottom: 2px; font-size: 12px; color: #0af; text-align: left; }
 </style>
 </head>
@@ -24,14 +24,14 @@
 <div id="menu">
     <h1 style="color:#0af; letter-spacing: 5px;">SILENT HOUSE</h1>
     <div class="setting-group">Map: <input type="number" id="inpW" value="12">x<input type="number" id="inpH" value="12"> Guards: <input type="number" id="inpE" value="4"></div>
-    <p style="color:#f80; margin: 5px;">EQUIPMENT</p>
+    <p style="color:#f80; margin: 5px;">LOADOUT</p>
     <div class="setting-group">Traps: <input type="number" id="inpTraps" value="2"> Rice: <input type="number" id="inpRice" value="2"></div>
     <div class="setting-group">Bombs: <input type="number" id="inpBombs" value="2"> Crackers: <input type="number" id="inpCracks" value="2"></div>
     <button onclick="startGame()">START MISSION</button>
 </div>
 
 <div id="resultScreen" class="hidden">
-    <h2 style="color:#0af;">MISSION COMPLETE</h2>
+    <h2 style="color:#0af;">MISSION SUCCESS</h2>
     <div id="rankDisplay" style="font-size:30px; margin: 15px;">MASTER</div>
     <button onclick="generateLevel()">NEXT FLOOR</button>
 </div>
@@ -82,18 +82,19 @@ class Particle {
     }
 }
 
-function spawnExplosion(x, y, color="#f50", count=20) {
-    for(let i=0; i<count; i++) particles.push(new Particle(x*TILE+24, y*TILE+24, color, 4, 30));
+function spawnExplosion(x, y, color="#f50", count=25) {
+    for(let i=0; i<count; i++) particles.push(new Particle(x*TILE+24, y*TILE+24, color, 5, 30));
 }
 
 function spawnDust(x, y) {
-    particles.push(new Particle(x*TILE+24, y*TILE+35, "#543", 1, 15));
+    particles.push(new Particle(x*TILE+24, y*TILE+40, "#444", 1, 10));
 }
 
 function setMode(m) {
     selectMode = m;
     document.querySelectorAll('#controls button').forEach(b => b.classList.remove('active'));
     document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
+    draw();
 }
 
 function startGame() {
@@ -123,12 +124,10 @@ function generateLevel() {
         (x===0 || y===0 || x===mapW-1 || y===mapH-1) ? WALL : Math.random() < 0.2 ? WALL : FLOOR
     ));
 
-    // Guarantee Player Start Area is clear
-    let px = 1, py = 1;
-    player = { x: px, y: py, animX: px, animY: py, hidden: false };
-    for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(isValid(px+i, py+j)) grid[py+j][px+i] = FLOOR;
+    player = { x: 1, y: 1, animX: 1, animY: 1, hidden: false };
+    for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(isValid(1+i, 1+j)) grid[1+j][1+i] = FLOOR;
 
-    let ex, ey; do { ex = Math.floor(Math.random()*(mapW-2))+1; ey = Math.floor(Math.random()*(mapH-2))+1; } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-px, ey-py) < 6);
+    let ex, ey; do { ex = Math.floor(Math.random()*(mapW-2))+1; ey = Math.floor(Math.random()*(mapH-2))+1; } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-1, ey-1) < 6);
     grid[ey][ex] = EXIT;
 
     for(let i=0; i<3; i++) placeRandom(NOISE);
@@ -139,10 +138,10 @@ function generateLevel() {
     let countE = parseInt(document.getElementById("inpE").value);
     for(let i=0; i<countE; i++) {
         let enX, enY; do { enX = Math.floor(Math.random()*(mapW-2))+1; enY = Math.floor(Math.random()*(mapH-2))+1; }
-        while(grid[enY][enX] !== FLOOR || Math.hypot(enX-px, enY-py) < 5);
+        while(grid[enY][enX] !== FLOOR || Math.hypot(enX-1, enY-1) < 5);
         enemies.push({ x: enX, y: enY, animX: enX, animY: enY, dir: {x:1, y:0}, target: null, visionRange: 4, mark: null, alive: true });
     }
-    draw(); showMessage("MISSION START: REACH THE GREEN EXIT.");
+    draw();
 }
 
 function updateUI() {
@@ -167,47 +166,26 @@ canvas.addEventListener("pointerdown", e => {
 
     if(!isValid(tx, ty)) return;
 
+    const dist = Math.hypot(tx - player.x, ty - player.y);
+
     if(selectMode === 'move') {
-        const movable = [];
-        for(let dx=-2; dx<=2; dx++) for(let dy=-2; dy<=2; dy++) {
-            if(Math.abs(dx) + Math.abs(dy) > 2 || (dx===0 && dy===0)) continue;
-            if(isValid(player.x+dx, player.y+dy) && isValid(player.x+Math.sign(dx), player.y+Math.sign(dy))) movable.push({x:player.x+dx, y:player.y+dy});
-        }
-        if(movable.some(t => t.x === tx && t.y === ty)) {
+        if(dist > 0 && dist <= 2.2 && (tx === player.x || ty === player.y || Math.abs(tx-player.x) === Math.abs(ty-player.y))) {
             playerTurn = false; stats.turns++;
-            animateMove(player, tx, ty, () => { checkTile(); endPlayerTurn(); });
+            animateMove(player, tx, ty, () => { checkTile(); enemyTurn(); });
         }
     } else {
-        if(grid[ty][tx] !== FLOOR) return;
-        if(selectMode === 'trap' && inventory.traps > 0) { grid[ty][tx] = TRAP_SET; inventory.traps--; showMessage("TRAP SET."); }
+        // Restricted Placement: Only 1 tile away
+        if(dist > 1.5 || grid[ty][tx] !== FLOOR) return;
+        
+        if(selectMode === 'trap' && inventory.traps > 0) { grid[ty][tx] = TRAP_SET; inventory.traps--; showMessage("TRAP SET ADJACENT."); }
         else if(selectMode === 'rice' && inventory.rice > 0) { grid[ty][tx] = RICE_SET; inventory.rice--; showMessage("RICE DEPLOYED."); }
-        else if(selectMode === 'bomb' && inventory.bombs > 0) { 
-            grid[ty][tx] = BOMB_SET; inventory.bombs--; 
-            bombsOnMap.push({x:tx, y:ty, timer:1}); 
-            showMessage("BOMB ARMED."); 
-        }
-        else if(selectMode === 'crack' && inventory.crackers > 0) { 
-            inventory.crackers--; spawnExplosion(tx, ty, "#fff", 10);
-            showMessage("CRACKER POP!"); 
-            enemies.forEach(en => { if(en.alive && Math.hypot(en.x-tx, en.y-ty) < 7) { en.target = {x:tx, y:ty}; en.mark = "?"; }});
-        } else return;
-        updateUI(); playerTurn = false; endPlayerTurn();
+        else if(selectMode === 'bomb' && inventory.bombs > 0) { grid[ty][tx] = BOMB_SET; inventory.bombs--; bombsOnMap.push({x:tx, y:ty, timer:1}); showMessage("BOMB PLACED (DETONATES NEXT TURN)."); }
+        else if(selectMode === 'crack' && inventory.crackers > 0) { inventory.crackers--; spawnExplosion(tx, ty, "#fff", 10); showMessage("CRACKER DISTRACTION!"); enemies.forEach(en => { if(en.alive && Math.hypot(en.x-tx, en.y-ty) < 7) { en.target = {x:tx, y:ty}; en.mark = "?"; }}); }
+        else return;
+
+        updateUI(); playerTurn = false; enemyTurn();
     }
 });
-
-function endPlayerTurn() {
-    bombsOnMap.forEach((b, i) => {
-        b.timer--;
-        if(b.timer <= 0) {
-            spawnExplosion(b.x, b.y, "#f50", 40);
-            grid[b.y][b.x] = FLOOR;
-            showMessage("BOMB DETONATED!");
-            enemies.forEach(en => { if(en.alive && Math.hypot(en.x-b.x, en.y-b.y) < 9) { en.target = {x:b.x, y:b.y}; en.mark = "!!"; }});
-            bombsOnMap.splice(i, 1);
-        }
-    });
-    if(!gameOver) enemyTurn();
-}
 
 async function enemyTurn() {
     const activeEnemies = enemies.filter(e => e.alive);
@@ -215,38 +193,36 @@ async function enemyTurn() {
         if(!e.alive || gameOver) continue;
         await new Promise(r => setTimeout(r, 150));
         
-        if(grid[e.y][e.x] === TRAP_SET) { 
-            e.alive = false; grid[e.y][e.x] = FLOOR; spawnExplosion(e.x, e.y, "#666", 15);
-            showMessage("GUARD ELIMINATED."); continue; 
-        }
-        if(grid[e.y][e.x] === RICE_SET) { 
-            e.alive = false; grid[e.y][e.x] = FLOOR; spawnExplosion(e.x, e.y, "#fff", 10);
-            showMessage("GUARD POISONED."); continue; 
-        }
-
-        if(!e.target) {
-            for(let sy=e.y-3; sy<=e.y+3; sy++) for(let sx=e.x-3; sx<=e.x+3; sx++) {
-                if(isValid(sx, sy) && grid[sy][sx] === RICE_SET && isInVision(e, sx, sy)) {
-                    e.target = {x:sx, y:sy}; e.mark = "Rice?";
-                }
-            }
-        }
+        if(grid[e.y][e.x] === TRAP_SET) { e.alive = false; grid[e.y][e.x] = FLOOR; spawnExplosion(e.x, e.y, "#888"); showMessage("GUARD KILLED BY TRAP."); continue; }
+        if(grid[e.y][e.x] === RICE_SET) { e.alive = false; grid[e.y][e.x] = FLOOR; spawnExplosion(e.x, e.y, "#fff", 10); showMessage("GUARD POISONED."); continue; }
 
         let nx = e.x, ny = e.y;
         if(e.target) {
             let path = findPath(e.x, e.y, e.target.x, e.target.y);
             if(path && path.length > 1) { nx = path[1].x; ny = path[1].y; }
-            if(e.x === e.target.x && e.y === e.target.y) { e.target = null; e.mark = null; }
+            if(e.x === e.target.x && e.y === e.target.y) e.target = null;
         } else {
             const d = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)];
             if(isValid(e.x+d.x, e.y+d.y)) { nx += d.x; ny += d.y; }
         }
         
-        if(isValid(nx, ny) && !activeEnemies.some(o => o!==e && o.alive && o.x === nx && o.y === ny)) {
-            await new Promise(r => animateMove(e, nx, ny, r));
-        }
+        if(isValid(nx, ny) && !activeEnemies.some(o => o!==e && o.alive && o.x === nx && o.y === ny)) await new Promise(r => animateMove(e, nx, ny, r));
         if(!player.hidden && isInVision(e, player.x, player.y)) { triggerGameOver(); return; }
     }
+    
+    // Process Bombs AFTER enemy turn (Start of Player's new turn)
+    for(let i = bombsOnMap.length-1; i >= 0; i--) {
+        let b = bombsOnMap[i];
+        b.timer--;
+        if(b.timer <= 0) {
+            spawnExplosion(b.x, b.y, "#f80", 40);
+            grid[b.y][b.x] = FLOOR;
+            showMessage("BOMB EXPLODED!");
+            enemies.forEach(en => { if(en.alive && Math.hypot(en.x-b.x, en.y-b.y) < 9) { en.target = {x:b.x, y:b.y}; en.mark = "!!"; }});
+            bombsOnMap.splice(i, 1);
+        }
+    }
+
     playerTurn = true; setMode('move');
 }
 
@@ -270,7 +246,8 @@ function isInVision(e, px, py) {
     if(ang > 0.8 && ang < 5.5) return false;
     let steps = dist * 2;
     for(let i=1; i<=steps; i++) {
-        if(grid[Math.floor(e.y + dy*(i/steps))][Math.floor(e.x + dx*(i/steps))] === WALL) return false;
+        let tx = Math.floor(e.x + dx*(i/steps)), ty = Math.floor(e.y + dy*(i/steps));
+        if(grid[ty] && grid[ty][tx] === WALL) return false;
     }
     return true;
 }
@@ -280,13 +257,10 @@ function animateMove(ent, tx, ty, cb) {
     let progress = 0;
     if(ent !== player) ent.dir = {x: Math.sign(tx - ent.x), y: Math.sign(ty - ent.y)};
     function step() {
-        progress += 0.2;
+        progress += 0.15;
         ent.animX = sX + (tx - sX) * progress;
         ent.animY = sY + (ty - sY) * progress;
-        if(progress > 0.5 && progress < 0.6) spawnDust(ent.animX, ent.animY);
-        if(ent === player && !player.hidden) {
-            for(let e of enemies) if(e.alive && isInVision(e, ent.animX, ent.animY)) { triggerGameOver(); return; }
-        }
+        if(progress > 0.4 && progress < 0.5) spawnDust(ent.animX, ent.animY);
         draw();
         if(progress < 1) requestAnimationFrame(step);
         else { ent.x = tx; ent.y = ty; ent.animX = tx; ent.animY = ty; cb(); }
@@ -301,14 +275,35 @@ function draw() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.translate(ox, oy); ctx.scale(scale, scale);
 
+    // Tiles
     for(let y=0; y<mapH; y++) for(let x=0; x<mapW; x++) {
-        ctx.fillStyle = grid[y][x] === WALL ? "#333" : "#111";
+        ctx.fillStyle = grid[y][x] === WALL ? "#222" : "#0a0a0a";
         ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
-        if(grid[y][x] === EXIT) { ctx.fillStyle="#0a0"; ctx.fillRect(x*TILE+8, y*TILE+8, TILE-16, TILE-16); }
+        ctx.strokeStyle = "#1a1a1a"; ctx.strokeRect(x*TILE, y*TILE, TILE, TILE);
+        if(grid[y][x] === EXIT) { ctx.fillStyle="#060"; ctx.fillRect(x*TILE+8, y*TILE+8, TILE-16, TILE-16); }
         if(grid[y][x] === COIN) { ctx.fillStyle="#ff0"; ctx.beginPath(); ctx.arc(x*TILE+24, y*TILE+24, 6, 0, 7); ctx.fill(); }
         if(grid[y][x] === TRAP_SET) { ctx.strokeStyle="#f0f"; ctx.strokeRect(x*TILE+15, y*TILE+15, 18, 18); }
-        if(grid[y][x] === RICE_SET) { ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(x*TILE+24, y*TILE+24, 7, 0, 7); ctx.fill(); }
-        if(grid[y][x] === BOMB_SET) { ctx.fillStyle="#f50"; ctx.fillRect(x*TILE+16, y*TILE+16, 16, 16); }
+        if(grid[y][x] === RICE_SET) { ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(x*TILE+24, y*TILE+24, 6, 0, 7); ctx.fill(); }
+        if(grid[y][x] === BOMB_SET) { ctx.fillStyle="#f30"; ctx.fillRect(x*TILE+16, y*TILE+16, 16, 16); }
+        if(grid[y][x] === HIDE) { ctx.fillStyle="#001"; ctx.fillRect(x*TILE+5, y*TILE+5, TILE-10, TILE-10); }
+    }
+
+    // Highlights
+    if(playerTurn && !gameOver) {
+        if(selectMode === 'move') {
+            ctx.fillStyle = "rgba(0,180,255,0.15)";
+            for(let dx=-2; dx<=2; dx++) for(let dy=-2; dy<=2; dy++) {
+                if(Math.abs(dx)+Math.abs(dy)<=3 && (dx!==0||dy!==0)) {
+                    let tx = player.x+dx, ty = player.y+dy;
+                    if(isValid(tx, ty) && isValid(player.x+Math.sign(dx), player.y+Math.sign(dy))) ctx.fillRect(tx*TILE, ty*TILE, TILE, TILE);
+                }
+            }
+        } else {
+            ctx.fillStyle = "rgba(255,100,0,0.2)";
+            for(let dx=-1; dx<=1; dx++) for(let dy=-1; dy<=1; dy++) {
+                if((dx!==0||dy!==0) && isValid(player.x+dx, player.y+dy) && grid[player.y+dy][player.x+dx] === FLOOR) ctx.fillRect((player.x+dx)*TILE, (player.y+dy)*TILE, TILE, TILE);
+            }
+        }
     }
 
     particles.forEach((p, i) => { p.update(); p.draw(ctx); if(p.life <= 0) particles.splice(i, 1); });
@@ -331,13 +326,13 @@ function draw() {
 function checkTile() {
     const t = grid[player.y][player.x];
     player.hidden = (t === HIDE);
-    if(t === COIN) { stats.coins++; grid[player.y][player.x] = FLOOR; showMessage("COIN FOUND."); }
-    if(t === NOISE) { stats.alerts++; enemies.forEach(e => { if(e.alive && Math.hypot(e.x-player.x, e.y-player.y) < 7) { e.target = {x:player.x, y:player.y}; e.mark="?"; }}); showMessage("NOISE MADE!"); }
+    if(t === COIN) { stats.coins++; grid[player.y][player.x] = FLOOR; showMessage("COIN +1"); }
+    if(t === NOISE) { stats.alerts++; enemies.forEach(e => { if(e.alive && Math.hypot(e.x-player.x, e.y-player.y) < 7) { e.target = {x:player.x, y:player.y}; e.mark="?"; }}); showMessage("NOISE!"); }
     if(t === EXIT) { gameOver = true; document.getElementById("resultScreen").classList.remove("hidden"); }
 }
 
 function triggerGameOver() { gameOver = true; draw(); setTimeout(() => document.getElementById("gameOverScreen").classList.remove("hidden"), 300); }
-function playerWait() { if(playerTurn) { playerTurn = false; stats.turns++; endPlayerTurn(); } }
+function playerWait() { if(playerTurn) { playerTurn = false; stats.turns++; enemyTurn(); } }
 function showMessage(m) {
     const d = document.createElement("div"); d.className="message"; d.textContent=m;
     const box = document.getElementById("info"); box.prepend(d);
