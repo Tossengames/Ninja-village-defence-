@@ -111,7 +111,7 @@ function generateLevel() {
     placeRandom(CHEST, 2);
     placeRandom(COIN, 4);
     placeRandom(HIDE, 3);
-    placeRandom(NOISE, 3); // These are the invisible noise traps
+    placeRandom(NOISE, 3);
 
     enemies = [];
     let count = parseInt(document.getElementById('inpE').value);
@@ -163,21 +163,14 @@ async function endTurn() {
     for(let e of enemies.filter(en => en.alive)) {
         await new Promise(r => setTimeout(r, 100));
         
-        // Trap check
         if(grid[e.y][e.x] === TRAP || grid[e.y][e.x] === RICE) {
             let wasRice = grid[e.y][e.x] === RICE;
             e.alive = false; grid[e.y][e.x] = FLOOR; gameStats.kills++;
             spawnPart(e.x, e.y, wasRice ? "#fff" : "#f00", 30); shake=15;
-            
-            if(wasRice) { // If rice is eaten, others forget it
-                enemies.forEach(other => { if(other.target && grid[other.target.y]?.[other.target.x] !== RICE) { other.target = null; other.status = "Returning"; }});
-            }
+            if(wasRice) enemies.forEach(o => { if(o.target && o.target.x === e.x && o.target.y === e.y) { o.target = null; o.status = "Where'd it go?"; }});
             continue;
         }
 
-        // Behavior
-        if(e.target && grid[e.target.y][e.target.x] === WALL) { e.target = null; e.status = "Patrolling"; }
-        
         let nx = e.x, ny = e.y;
         if(e.target) {
             e.status = "Searching...";
@@ -187,8 +180,7 @@ async function endTurn() {
         } else {
             e.status = "Patrolling";
             e.bubble = Math.random() < 0.1 ? DIALOGUE[Math.floor(Math.random()*DIALOGUE.length)] : "";
-            const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-            const d = dirs[Math.floor(Math.random()*4)];
+            const d = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)];
             if(grid[e.y+d.y]?.[e.x+d.x] === FLOOR) { nx+=d.x; ny+=d.y; }
         }
         
@@ -200,13 +192,12 @@ async function endTurn() {
         tool.t--;
         if(tool.t <= 0) {
             if(tool.type === 'bomb') {
-                spawnPart(tool.x, tool.y, "#f50", 60); shake=25;
-                grid[tool.y][tool.x] = FLOOR;
-                enemies.forEach(en => { if(Math.hypot(en.x-tool.x, en.y-tool.y) < 8) { en.target = {x:tool.x, y:tool.y}; en.status = "INVESTIGATING!"; }});
+                spawnPart(tool.x, tool.y, "#f50", 60); shake=25; grid[tool.y][tool.x] = FLOOR;
+                enemies.forEach(en => { if(Math.hypot(en.x-tool.x, en.y-tool.y) < 8) { en.target = {x:tool.x, y:tool.y}; en.status = "BOOM?!"; }});
                 activeTools.splice(i, 1);
             } else {
                 spawnPart(tool.x, tool.y, "#fff", 20);
-                enemies.forEach(en => { if(Math.hypot(en.x-tool.x, en.y-tool.y) < 6) { en.target = {x:tool.x, y:tool.y}; en.status = "WHAT WAS THAT?"; }});
+                enemies.forEach(en => { if(Math.hypot(en.x-tool.x, en.y-tool.y) < 6) { en.target = {x:tool.x, y:tool.y}; en.status = "WHAT?!"; }});
                 tool.u--; if(tool.u <= 0) { grid[tool.y][tool.x] = FLOOR; activeTools.splice(i, 1); } else tool.t = 2;
             }
         }
@@ -219,26 +210,17 @@ function checkTile() {
     player.hidden = (t === HIDE);
     if(t === EXIT) win();
     if(t === COIN) { gameStats.coins++; grid[player.y][player.x] = FLOOR; log("Coin Collected."); }
-    if(t === NOISE) { 
-        log("!! YOU STEPPED ON A BELL !!"); 
-        shake = 10;
-        enemies.forEach(e => { if(e.alive) { e.target = {x:player.x, y:player.y}; e.status = "HEARD SOMETHING!"; }}); 
-    }
+    if(t === NOISE) { log("!! STEPPED ON BELL !!"); shake = 10; enemies.forEach(e => { if(e.alive) { e.target = {x:player.x, y:player.y}; e.status = "SOUND!!"; }}); }
     if(t === CHEST) {
         grid[player.y][player.x] = FLOOR;
         if(Math.random() < 0.6) {
-            const items = ['trap','rice','bomb','crack'];
-            inv[items[Math.floor(Math.random()*4)]] += 2; log("Chest Looted!");
-        } else { log("Chest Alarm triggered!"); enemies.forEach(e => {e.target = {x:player.x, y:player.y}; e.status="ALARM!!";}); shake=15; }
+            inv[['trap','rice','bomb','crack'][Math.floor(Math.random()*4)]] += 2; log("Chest Looted!");
+        } else { log("Chest Alarm!"); enemies.forEach(e => {e.target = {x:player.x, y:player.y}; e.status="ALARM!!";}); shake=15; }
         updateUI();
     }
 }
 
-function gameLoop() {
-    if(gameOver) return;
-    draw();
-    requestAnimationFrame(gameLoop);
-}
+function gameLoop() { if(!gameOver) { draw(); requestAnimationFrame(gameLoop); } }
 
 function draw() {
     const scale = Math.min(canvas.width/(mapDim*TILE), canvas.height/(mapDim*TILE));
@@ -250,13 +232,10 @@ function draw() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.translate(ox, oy); ctx.scale(scale, scale);
 
-    // Tiles
     for(let y=0; y<mapDim; y++) for(let x=0; x<mapDim; x++) {
         ctx.fillStyle = grid[y][x] === WALL ? "#1a1a24" : "#08080c";
         ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
         ctx.strokeStyle = "#111"; ctx.strokeRect(x*TILE, y*TILE, TILE, TILE);
-
-        // Render visible items
         if(grid[y][x] === EXIT) drawIcon(x, y, "⛩️", "#0f0");
         if(grid[y][x] === COIN) drawIcon(x, y, "🪙", "#ff0");
         if(grid[y][x] === HIDE) drawIcon(x, y, "🌿", "#05a");
@@ -265,35 +244,34 @@ function draw() {
         if(grid[y][x] === BOMB) drawIcon(x, y, "💣", "#f50");
         if(grid[y][x] === CRACK) drawIcon(x, y, "🎇", "#0af");
         if(grid[y][x] === CHEST) drawIcon(x, y, "📦", "#da0");
-        // Note: NOISE (Bell) is NOT rendered, making it invisible.
     }
 
-    // Move Highlights
     if(playerTurn) {
         ctx.fillStyle = selectMode==='move' ? "rgba(0,170,255,0.15)" : "rgba(255,170,0,0.2)";
         const r = selectMode==='move' ? 2.5 : 1.5;
-        for(let y=0; y<mapDim; y++) for(let x=0; x<mapDim; x++) {
+        for(let y=0; y<mapDim; y++) for(let x=0; x<mapDim; x++) 
             if(Math.hypot(x-player.x, y-player.y) < r && grid[y][x] === FLOOR) ctx.fillRect(x*TILE+2, y*TILE+2, TILE-4, TILE-4);
-        }
     }
 
-    // Enemies
     enemies.forEach(e => {
         if(!e.alive) return;
-        ctx.fillStyle = "rgba(255,0,0,0.1)";
-        ctx.beginPath(); ctx.moveTo(e.ax*TILE+25, e.ay*TILE+25);
-        const a = Math.atan2(e.dir.y, e.dir.x);
-        ctx.arc(e.ax*TILE+25, e.ay*TILE+25, e.range*TILE, a-0.5, a+0.5); ctx.fill();
-        drawIcon(e.ax, e.ay, "👺", "#f33");
+        ctx.fillStyle = "rgba(255,0,0,0.1)"; ctx.beginPath(); ctx.moveTo(e.ax*TILE+25, e.ay*TILE+25);
+        const baseA = Math.atan2(e.dir.y, e.dir.x);
         
-        // Status & Speech
-        ctx.font = "bold 10px Arial"; ctx.textAlign = "center";
-        ctx.fillStyle = e.status.includes("!") ? "#f00" : "#aaa";
-        ctx.fillText(e.status, e.ax*TILE+25, e.ay*TILE-5);
-        if(e.bubble) {
-            ctx.fillStyle = "#fff"; ctx.font = "italic 9px Arial";
-            ctx.fillText(`"${e.bubble}"`, e.ax*TILE+25, e.ay*TILE-15);
+        // Dynamic Vision Cone with Wall Collision
+        for(let a = baseA-0.5; a <= baseA+0.5; a += 0.05) {
+            let hitDist = e.range;
+            for(let d=0.2; d<=e.range; d+=0.2) {
+                let tx = Math.floor(e.x + Math.cos(a)*d), ty = Math.floor(e.y + Math.sin(a)*d);
+                if(grid[ty]?.[tx] === WALL) { hitDist = d; break; }
+            }
+            ctx.lineTo(e.ax*TILE+25 + Math.cos(a)*hitDist*TILE, e.ay*TILE+25 + Math.sin(a)*hitDist*TILE);
         }
+        ctx.fill();
+        drawIcon(e.ax, e.ay, "👺", "#f33");
+        ctx.font = "bold 10px Arial"; ctx.textAlign = "center"; ctx.fillStyle = e.status.includes("!") ? "#f00" : "#aaa";
+        ctx.fillText(e.status, e.ax*TILE+25, e.ay*TILE-5);
+        if(e.bubble) { ctx.fillStyle = "#fff"; ctx.font = "italic 9px Arial"; ctx.fillText(`"${e.bubble}"`, e.ax*TILE+25, e.ay*TILE-15); }
     });
 
     drawIcon(player.ax, player.ay, player.hidden ? "👤" : "🥷", "#0af");
@@ -306,68 +284,39 @@ function drawIcon(x, y, ico, color) {
 }
 
 function animMove(obj, tx, ty, cb) {
-    const sx = obj.ax, sy = obj.ay;
-    let p = 0;
+    const sx = obj.ax, sy = obj.ay; let p = 0;
     if(obj !== player) obj.dir = {x: Math.sign(tx-obj.x), y: Math.sign(ty-obj.y) || obj.dir.y};
     function step() {
-        p += 0.2;
-        obj.ax = sx + (tx-sx)*p;
-        obj.ay = sy + (ty-sy)*p;
-        if(p < 1) requestAnimationFrame(step);
-        else { obj.x = tx; obj.y = ty; obj.ax = tx; obj.ay = ty; cb(); }
+        p += 0.2; obj.ax = sx + (tx-sx)*p; obj.ay = sy + (ty-sy)*p;
+        if(p < 1) requestAnimationFrame(step); else { obj.x = tx; obj.y = ty; obj.ax = tx; obj.ay = ty; cb(); }
     }
     step();
 }
 
 function hasLineOfSight(e, px, py) {
-    const dx = px-e.x, dy = py-e.y, d = Math.hypot(dx, dy);
-    if(d > e.range) return false;
-    const a = Math.abs(Math.atan2(dy, dx) - Math.atan2(e.dir.y, e.dir.x));
-    return a < 0.6 || a > 5.6;
+    const dx = px-e.x, dy = py-e.y, dist = Math.hypot(dx, dy);
+    if(dist > e.range) return false;
+    const ang = Math.abs(Math.atan2(dy, dx) - Math.atan2(e.dir.y, e.dir.x));
+    if(ang > 0.6 && ang < 5.6) return false;
+    for(let d=0.5; d<dist; d+=0.5) {
+        if(grid[Math.floor(e.y + (dy/dist)*d)]?.[Math.floor(e.x + (dx/dist)*d)] === WALL) return false;
+    }
+    return true;
 }
 
-function spawnPart(x, y, c, count) {
-    for(let i=0; i<count; i++) particles.push(new Particle(x*TILE+25, y*TILE+25, c, 6, 35));
-}
+function spawnPart(x, y, c, count) { for(let i=0; i<count; i++) particles.push(new Particle(x*TILE+25, y*TILE+25, c, 6, 35)); }
 
 class Particle {
-    constructor(x, y, color, s, l) {
-        this.x = x; this.y = y; this.color = color;
-        this.vx = (Math.random()-0.5)*s; this.vy = (Math.random()-0.5)*s;
-        this.life = l; this.max = l;
-    }
+    constructor(x, y, color, s, l) { this.x = x; this.y = y; this.color = color; this.vx = (Math.random()-0.5)*s; this.vy = (Math.random()-0.5)*s; this.life = l; this.max = l; }
     update() { this.x += this.vx; this.y += this.vy; this.life--; }
     draw(ctx) { ctx.globalAlpha = this.life/this.max; ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, 4, 4); ctx.globalAlpha = 1; }
 }
 
-function setMode(m) {
-    selectMode = m;
-    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
-}
-
-function updateUI() {
-    document.getElementById('c-trap').innerText = inv.trap;
-    document.getElementById('c-rice').innerText = inv.rice;
-    document.getElementById('c-bomb').innerText = inv.bomb;
-    document.getElementById('c-crack').innerText = inv.crack;
-}
-
-function log(m) {
-    const el = document.getElementById('msgLog');
-    el.innerHTML = `<div class="log-msg">> ${m}</div>` + el.innerHTML;
-    if(el.childNodes.length > 3) el.removeChild(el.lastChild);
-}
-
-function triggerDeath() { gameOver = true; shake=20; document.getElementById('gameOverScreen').classList.remove('hidden'); }
-
-function win() {
-    gameOver = true;
-    const score = (gameStats.coins * 200) + (gameStats.kills * 300) - (gameStats.turns * 5);
-    document.getElementById('stats').innerHTML = `Turns: ${gameStats.turns}<br>Kills: ${gameStats.kills}<br>Coins: ${gameStats.coins}<br><b>Score: ${score}</b>`;
-    document.getElementById('resultScreen').classList.remove('hidden');
-}
-
+function setMode(m) { selectMode = m; document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active')); document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active'); }
+function updateUI() { document.getElementById('c-trap').innerText = inv.trap; document.getElementById('c-rice').innerText = inv.rice; document.getElementById('c-bomb').innerText = inv.bomb; document.getElementById('c-crack').innerText = inv.crack; }
+function log(m) { const el = document.getElementById('msgLog'); el.innerHTML = `<div class="log-msg">> ${m}</div>` + el.innerHTML; if(el.childNodes.length > 3) el.removeChild(el.lastChild); }
+function triggerDeath() { gameOver = true; shake=25; document.getElementById('gameOverScreen').classList.remove('hidden'); }
+function win() { gameOver = true; const score = (gameStats.coins * 200) + (gameStats.kills * 300) - (gameStats.turns * 5); document.getElementById('stats').innerHTML = `Turns: ${gameStats.turns}<br>Kills: ${gameStats.kills}<br>Coins: ${gameStats.coins}<br><b>Score: ${score}</b>`; document.getElementById('resultScreen').classList.remove('hidden'); }
 function playerWait() { if(playerTurn) { playerTurn = false; gameStats.turns++; endTurn(); } }
 </script>
 </body>
