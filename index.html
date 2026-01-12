@@ -3,23 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Shadow Protocol: Grand Master</title>
+    <title>Shadow Protocol</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="missionLog"></div>
 
-    <div id="ui-controls">
+    <div id="ui-controls" class="hidden">
         <button id="mapToggle" onclick="toggleMinimap()">🗺️ Map</button>
     </div>
 
     <div id="menu" class="overlay-screen">
-        <div style="background:var(--panel); border:1px solid var(--accent); padding:25px; border-radius:8px; width:300px;">
+        <div class="menu-box">
             <h2 style="color:var(--accent); text-align: center; letter-spacing: 4px;">MISSION START</h2>
             <div class="menu-item">Size: <input type="number" id="mapSize" value="12"></div>
             <div class="menu-item">Guards: <input type="number" id="guardCount" value="5"></div>
-            <div class="menu-item">Mini-map Start: <input type="checkbox" id="showMinimap" checked></div>
-            <button onclick="initGame()" style="width:100%; padding:12px; background:var(--accent); border:none; font-weight:bold; margin-top:15px; cursor:pointer; color:#000;">INFILTRATE</button>
+            <button onclick="initGame()" class="start-btn">INFILTRATE</button>
         </div>
     </div>
 
@@ -27,13 +26,13 @@
         <div class="result-scroll">
             <div id="rankLabel" class="rank-text">Grand Master</div>
             <div id="statsTable"></div>
-            <button onclick="location.reload()" style="margin-top:20px; padding:10px 20px; background:#1a1a1a; color:var(--accent); border:1px solid var(--accent); cursor:pointer;">NEXT MISSION</button>
+            <button onclick="location.reload()" class="reload-btn">NEXT MISSION</button>
         </div>
     </div>
 
     <div id="gameOverScreen" class="overlay-screen hidden">
         <h1 style="color:var(--red); letter-spacing: 8px;">YOU WERE SEEN</h1>
-        <button onclick="location.reload()" style="padding:10px 30px; background:transparent; border:1px solid var(--red); color:var(--red); cursor:pointer;">RETRY</button>
+        <button onclick="location.reload()" class="reload-btn">RETRY</button>
     </div>
 
     <canvas id="game"></canvas>
