@@ -1,20 +1,31 @@
 async function endTurn() {
+    // Process Bombs
     activeBombs.forEach((b, i) => {
         b.t--; 
         if(b.t <= 0) {
             grid[b.y][b.x] = FLOOR; shake = 30; log("BOOM!", "#f44");
-            enemies.forEach(e => { if(Math.abs(e.x-b.x) <= 1 && Math.abs(e.y-b.y) <= 1) { e.alive = false; stats.kills++; } });
+            enemies.forEach(e => { 
+                if(Math.abs(e.x-b.x) <= 1 && Math.abs(e.y-b.y) <= 1) { 
+                    e.alive = false; stats.kills++; log("Guard killed by blast");
+                } 
+            });
             activeBombs.splice(i, 1);
         }
     });
 
     for(let e of enemies.filter(en => en.alive)) {
-        await new Promise(r => setTimeout(r, 200));
-        if(grid[e.y][e.x] === TRAP) { e.alive = false; grid[e.y][e.x] = FLOOR; stats.kills++; log("Guard Neutralized", "#f44"); continue; }
-        if(e.distracted > 0) { e.distracted--; log("Guard is distracted..."); continue; }
+        await new Promise(r => setTimeout(r, 150));
+        
+        if(grid[e.y][e.x] === TRAP) { 
+            e.alive = false; grid[e.y][e.x] = FLOOR; stats.kills++; 
+            log("Guard caught in trap", "#f44"); continue; 
+        }
+        
+        if(e.distracted > 0) { e.distracted--; continue; }
 
         let nx = e.x, ny = e.y;
         let rice = null;
+        // Search for rice in range
         for(let dy=-3; dy<=3; dy++) for(let dx=-3; dx<=3; dx++) {
             if(grid[e.y+dy]?.[e.x+dx] === RICE) rice = {x:e.x+dx, y:e.y+dy};
         }
@@ -28,10 +39,14 @@ async function endTurn() {
         }
         
         await new Promise(r => animMove(e, nx, ny, 0.15, r));
-        if(!player.isHidden && hasLineOfSight(e, player.x, player.y)) { 
-            gameOver = true; 
-            document.getElementById('gameOverScreen').classList.remove('hidden'); 
-            return; 
+
+        if(!player.isHidden && hasLineOfSight(e, player.x, player.y)) {
+            e.alert = true;
+            setTimeout(() => {
+                gameOver = true;
+                document.getElementById('gameOverScreen').classList.remove('hidden');
+            }, 300);
+            return;
         }
     }
     turnCount++; playerTurn = true;
