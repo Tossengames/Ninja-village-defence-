@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Shadow Protocol: Modular</title>
+    <title>Shadow Protocol: Grand Master</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,9 +11,9 @@
 
     <div id="menu" class="overlay-screen">
         <div class="menu-card">
-            <h2 style="color:var(--accent); letter-spacing:4px;">MISSION START</h2>
-            <div class="config-row">Map Size: <input type="number" id="mapSize" value="12"></div>
-            <div class="config-row">Guards: <input type="number" id="guardCount" value="5"></div>
+            <h2 style="color:var(--accent); letter-spacing:4px; text-align:center;">MISSION START</h2>
+            <div class="config-row">Map Size: <input type="number" id="mapSize" value="30"></div>
+            <div class="config-row">Guards: <input type="number" id="guardCount" value="15"></div>
             <button onclick="initGame()" class="btn-main">INFILTRATE</button>
         </div>
     </div>
@@ -22,12 +22,12 @@
         <div class="result-scroll">
             <div id="rankLabel" class="rank-text">Grand Master</div>
             <div id="statsTable"></div>
-            <button onclick="location.reload()" class="btn-main">NEXT MISSION</button>
+            <button onclick="location.reload()" class="btn-main" style="background:#222; color:var(--accent); border:1px solid var(--accent);">NEXT MISSION</button>
         </div>
     </div>
 
     <div id="gameOverScreen" class="overlay-screen hidden">
-        <h1 style="color:var(--red);">TERMINATED</h1>
+        <h1 style="color:var(--red); letter-spacing:10px;">TERMINATED</h1>
         <button onclick="location.reload()" class="btn-main">RETRY</button>
     </div>
 
@@ -39,6 +39,9 @@
         <div class="tool-btn" id="btnRice" onclick="setMode('rice')"><span>🍚</span>Rice</div>
         <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')"><span>💣</span>Bomb</div>
         <div class="tool-btn" onclick="playerWait()"><span>⌛</span>Wait</div>
+        <div class="tool-sep"></div>
+        <div class="tool-btn" onclick="adjustZoom(0.1)"><span>➕</span></div>
+        <div class="tool-btn" onclick="adjustZoom(-0.1)"><span>➖</span></div>
     </div>
 
     <script src="config.js"></script>
