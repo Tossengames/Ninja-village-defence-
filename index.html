@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-<title>Silent House</title>
+<title>Silent House: Pro</title>
 <style>
     body { margin: 0; background: #111; color: #eee; font-family: monospace; text-align: center; touch-action: none; overflow: hidden; }
     canvas { display: block; margin: 0 auto; background: #222; border: 2px solid #333; }
@@ -23,13 +23,13 @@
 <div id="menu">
     <h2 style="color:#0af; letter-spacing: 4px;">SILENT HOUSE</h2>
     <p>Mission Level: <span id="levelText">1</span></p>
-    <div>Map Size: <input type="number" id="inpW" value="12"> x <input type="number" id="inpH" value="12"></div>
+    <div>Map: <input type="number" id="inpW" value="12"> x <input type="number" id="inpH" value="12"></div>
     <div>Enemies: <input type="number" id="inpE" value="4"></div>
     <button onclick="startGame()">START INFILTRATION</button>
 </div>
 
 <div id="gameOverScreen" class="hidden">
-    <h1 id="statusTitle" style="color:#f00;">ELIMINATED</h1>
+    <h1 id="statusTitle" style="color:#f00;">DETECTED</h1>
     <button onclick="startGame()">RETRY MISSION</button>
     <button onclick="toggleMenu(true)">MAIN MENU</button>
 </div>
@@ -72,19 +72,16 @@ function startGame() {
 function generateLevel() {
     gameOver = false; playerTurn = true;
     grid = Array.from({length: mapH}, (_, y) => Array.from({length: mapW}, (_, x) => 
-        (x===0 || y===0 || x===mapW-1 || y===mapH-1) ? WALL : Math.random() < 0.15 ? WALL : FLOOR
+        (x===0 || y===0 || x===mapW-1 || y===mapH-1) ? WALL : Math.random() < 0.18 ? WALL : FLOOR
     ));
 
     let ex, ey; 
     do { ex = Math.floor(Math.random()*(mapW-2))+1; ey = Math.floor(Math.random()*(mapH-2))+1; } while(grid[ey][ex] !== FLOOR);
     grid[ey][ex] = EXIT;
 
-    // Safe Spawn Logic
     let px, py; 
-    do { 
-        px = Math.floor(Math.random()*(mapW-2))+1; py = Math.floor(Math.random()*(mapH-2))+1; 
-    } while(grid[py][px] !== FLOOR || Math.hypot(px-ex, py-ey) < 6 || countNeighbors(px, py, WALL) > 2);
-    
+    do { px = Math.floor(Math.random()*(mapW-2))+1; py = Math.floor(Math.random()*(mapH-2))+1; } 
+    while(grid[py][px] !== FLOOR || Math.hypot(px-ex, py-ey) < 6);
     player = { x: px, y: py, animX: px, animY: py, hidden: false };
 
     for(let i=0; i<3; i++) placeRandom(NOISE);
@@ -95,21 +92,9 @@ function generateLevel() {
         let enX, enY; 
         do { enX = Math.floor(Math.random()*(mapW-2))+1; enY = Math.floor(Math.random()*(mapH-2))+1; }
         while(grid[enY][enX] !== FLOOR || Math.hypot(enX-px, enY-py) < 4);
-        
-        enemies.push({
-            x: enX, y: enY, animX: enX, animY: enY,
-            dir: {x:1, y:0}, target: null, 
-            visionRange: Math.floor(Math.random() * 2) + 2, // 2-3 tiles
-            mark: null, markTimer: 0
-        });
+        enemies.push({ x: enX, y: enY, animX: enX, animY: enY, dir: {x:1, y:0}, target: null, visionRange: 4, mark: null });
     }
     draw();
-}
-
-function countNeighbors(x, y, type) {
-    let count = 0;
-    for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(isValid(x+i, y+j) && grid[y+j][x+i] === type) count++;
-    return count;
 }
 
 function placeRandom(type) {
@@ -119,14 +104,23 @@ function placeRandom(type) {
 
 function isValid(x, y) { return x >= 0 && y >= 0 && x < mapW && y < mapH && grid[y][x] !== WALL; }
 
-function getMovableTiles() {
-    const tiles = [];
-    for(let dx=-2; dx<=2; dx++) for(let dy=-2; dy<=2; dy++) {
-        if(Math.abs(dx) + Math.abs(dy) > 2 || (dx===0 && dy===0)) continue;
-        let tx = player.x + dx, ty = player.y + dy;
-        if(isValid(tx, ty) && isValid(player.x + Math.sign(dx), player.y + Math.sign(dy))) tiles.push({x:tx, y:ty});
+/* ===== PATHFINDING (BFS for simplicity/speed) ===== */
+function findPath(startX, startY, targetX, targetY) {
+    let queue = [[{x: startX, y: startY}]];
+    let visited = new Set([startX + ',' + startY]);
+    while(queue.length > 0) {
+        let path = queue.shift();
+        let curr = path[path.length - 1];
+        if(curr.x === targetX && curr.y === targetY) return path;
+        for(let d of [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]) {
+            let next = {x: curr.x + d.x, y: curr.y + d.y};
+            if(isValid(next.x, next.y) && !visited.has(next.x + ',' + next.y)) {
+                visited.add(next.x + ',' + next.y);
+                queue.push([...path, next]);
+            }
+        }
     }
-    return tiles;
+    return null;
 }
 
 canvas.addEventListener("pointerdown", e => {
@@ -135,7 +129,13 @@ canvas.addEventListener("pointerdown", e => {
     const ox = (canvas.width - mapW*TILE*scale)/2, oy = (canvas.height - mapH*TILE*scale)/2;
     const tx = Math.floor(((e.clientX - ox) / scale) / TILE), ty = Math.floor(((e.clientY - oy) / scale) / TILE);
 
-    if(getMovableTiles().some(t => t.x === tx && t.y === ty)) {
+    const movable = [];
+    for(let dx=-2; dx<=2; dx++) for(let dy=-2; dy<=2; dy++) {
+        if(Math.abs(dx) + Math.abs(dy) > 2 || (dx===0 && dy===0)) continue;
+        if(isValid(player.x + dx, player.y + dy) && isValid(player.x + Math.sign(dx), player.y + Math.sign(dy))) movable.push({x: player.x + dx, y: player.y + dy});
+    }
+
+    if(movable.some(t => t.x === tx && t.y === ty)) {
         playerTurn = false;
         animateMove(player, tx, ty, () => { checkTile(); if(!gameOver) enemyTurn(); });
     }
@@ -144,23 +144,15 @@ canvas.addEventListener("pointerdown", e => {
 function animateMove(ent, tx, ty, cb) {
     const startX = ent.animX, startY = ent.animY;
     let progress = 0;
-    
-    // Set direction if it's an enemy
-    if(ent !== player) {
-        const dx = tx - ent.x, dy = ty - ent.y;
-        if(dx !== 0 || dy !== 0) ent.dir = {x: Math.sign(dx), y: Math.sign(dy)};
-    }
+    if(ent !== player) { ent.dir = {x: Math.sign(tx - ent.x), y: Math.sign(ty - ent.y)}; }
 
     function step() {
         progress += 0.15;
         ent.animX = startX + (tx - startX) * progress;
         ent.animY = startY + (ty - startY) * progress;
-        
-        // Instant Detection during move
         if(ent === player && !player.hidden) {
-            for(let e of enemies) if(isInVision(e, ent.animX, ent.animY)) { triggerGameOver(); return; }
+            for(let e of enemies) if(isInVision(e, ent.animX, ent.animY)) { gameOver=true; draw(); setTimeout(() => document.getElementById("gameOverScreen").classList.remove("hidden"), 300); return; }
         }
-
         draw();
         if(progress < 1) requestAnimationFrame(step);
         else { ent.x = tx; ent.y = ty; ent.animX = tx; ent.animY = ty; cb(); }
@@ -168,29 +160,27 @@ function animateMove(ent, tx, ty, cb) {
     step();
 }
 
-function triggerGameOver() {
-    gameOver = true; draw();
-    setTimeout(() => { document.getElementById("gameOverScreen").classList.remove("hidden"); }, 500);
-}
-
 async function enemyTurn() {
     if(gameOver) return;
     for(let e of enemies) {
-        if(e.markTimer > 0) { e.markTimer--; if(e.markTimer === 0) e.mark = null; }
+        await new Promise(r => setTimeout(r, 200));
         
-        await new Promise(r => setTimeout(r, 400)); // Sequential pause
-        let nx = e.x, ny = e.y;
-
-        if(e.target) {
-            nx += Math.sign(e.target.x - e.x); ny += Math.sign(e.target.y - e.y);
-            if(e.x === e.target.x && e.y === e.target.y) e.target = null;
-        } else {
-            const d = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)];
-            if(isValid(e.x+d.x, e.y+d.y)) { nx += d.x; ny += d.y; }
+        // If no target, pick a random floor tile to "patrol"
+        if(!e.target) {
+            let rx, ry; do { rx = Math.floor(Math.random()*mapW); ry = Math.floor(Math.random()*mapH); } while(!isValid(rx, ry));
+            e.target = {x: rx, y: ry}; e.mark = null;
         }
 
-        if(isValid(nx, ny)) await new Promise(r => animateMove(e, nx, ny, r));
-        if(!player.hidden && isInVision(e, player.x, player.y)) { triggerGameOver(); return; }
+        let path = findPath(e.x, e.y, e.target.x, e.target.y);
+        if(path && path.length > 1) {
+            let next = path[1];
+            // Don't walk into other enemies
+            if(!enemies.some(other => other !== e && other.x === next.x && other.y === next.y)) {
+                await new Promise(r => animateMove(e, next.x, next.y, r));
+            }
+        } else { e.target = null; } // Target reached or unreachable
+
+        if(!player.hidden && isInVision(e, player.x, player.y)) { gameOver=true; draw(); setTimeout(() => document.getElementById("gameOverScreen").classList.remove("hidden"), 300); return; }
     }
     playerTurn = true; draw();
 }
@@ -199,11 +189,22 @@ function isInVision(e, px, py) {
     const dx = px - e.x, dy = py - e.y;
     const dist = Math.hypot(dx, dy);
     if(dist > e.visionRange) return false;
+    
+    // Check Angle
     const angleToPlayer = Math.atan2(dy, dx);
     const enemyAngle = Math.atan2(e.dir.y, e.dir.x);
     let diff = Math.abs(angleToPlayer - enemyAngle);
     while (diff > Math.PI) diff -= Math.PI * 2;
-    return Math.abs(diff) < 0.7; // 40 degree cone
+    if(Math.abs(diff) > 0.7) return false;
+
+    // RAYCAST: Check if wall is in between
+    let steps = dist * 2;
+    for(let i=1; i<=steps; i++) {
+        let checkX = e.x + (dx * (i/steps));
+        let checkY = e.y + (dy * (i/steps));
+        if(grid[Math.floor(checkY)][Math.floor(checkX)] === WALL) return false;
+    }
+    return true;
 }
 
 function draw() {
@@ -214,36 +215,23 @@ function draw() {
     ctx.translate(ox, oy); ctx.scale(scale, scale);
 
     for(let y=0; y<mapH; y++) for(let x=0; x<mapW; x++) {
-        ctx.fillStyle = grid[y][x] === WALL ? "#555" : "#222";
+        ctx.fillStyle = grid[y][x] === WALL ? "#444" : "#111";
         ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
-        ctx.strokeStyle = "#111"; ctx.strokeRect(x*TILE, y*TILE, TILE, TILE);
+        ctx.strokeStyle = "#000"; ctx.strokeRect(x*TILE, y*TILE, TILE, TILE);
         if(grid[y][x] === EXIT) { ctx.fillStyle="#0a0"; ctx.fillRect(x*TILE+8, y*TILE+8, TILE-16, TILE-16); }
         if(grid[y][x] === NOISE) { ctx.strokeStyle="#f80"; ctx.strokeRect(x*TILE+10, y*TILE+10, TILE-20, TILE-20); }
-        if(grid[y][x] === HIDE) { ctx.fillStyle="#000"; ctx.fillRect(x*TILE+5, y*TILE+5, TILE-10, TILE-10); }
-    }
-
-    if(playerTurn && !gameOver) {
-        ctx.fillStyle = "rgba(0,150,255,0.2)";
-        getMovableTiles().forEach(t => ctx.fillRect(t.x*TILE, t.y*TILE, TILE, TILE));
+        if(grid[y][x] === HIDE) { ctx.fillStyle="#000"; ctx.strokeRect(x*TILE+5, y*TILE+5, TILE-10, TILE-10); }
     }
 
     enemies.forEach(e => {
-        // Vision Cone
         ctx.fillStyle = "rgba(255,0,0,0.15)";
-        ctx.beginPath();
-        ctx.moveTo(e.animX*TILE + TILE/2, e.animY*TILE + TILE/2);
+        ctx.beginPath(); ctx.moveTo(e.animX*TILE + TILE/2, e.animY*TILE + TILE/2);
         const ang = Math.atan2(e.dir.y, e.dir.x);
         ctx.arc(e.animX*TILE + TILE/2, e.animY*TILE + TILE/2, e.visionRange * TILE, ang-0.6, ang+0.6);
         ctx.fill();
 
-        // Enemy Body
-        ctx.fillStyle = "#f00";
-        ctx.fillRect(e.animX*TILE+12, e.animY*TILE+12, 24, 24);
-        
-        if(e.mark) {
-            ctx.fillStyle = "#fff"; ctx.font = "bold 20px monospace";
-            ctx.fillText(e.mark, e.animX*TILE + 18, e.animY*TILE + 5);
-        }
+        ctx.fillStyle = "#f33"; ctx.fillRect(e.animX*TILE+12, e.animY*TILE+12, 24, 24);
+        if(e.mark) { ctx.fillStyle="#fff"; ctx.fillText(e.mark, e.animX*TILE+18, e.animY*TILE+8); }
     });
 
     ctx.fillStyle = player.hidden ? "#00a" : "#0af";
@@ -254,22 +242,12 @@ function checkTile() {
     const t = grid[player.y][player.x];
     player.hidden = (t === HIDE);
     if(t === NOISE) {
-        showMessage("! NOISE !");
-        enemies.forEach(e => { 
-            if(Math.hypot(e.x-player.x, e.y-player.y) < 6) { 
-                e.target = {x: player.x, y: player.y}; e.mark = "?"; e.markTimer = 2; 
-            }
-        });
+        enemies.forEach(e => { if(Math.hypot(e.x-player.x, e.y-player.y) < 7) { e.target = {x: player.x, y: player.y}; e.mark = "?"; }});
     }
-    if(t === EXIT) { levelNumber++; showMessage("SUCCESS"); setTimeout(generateLevel, 800); }
+    if(t === EXIT) { levelNumber++; generateLevel(); }
 }
 
 function playerWait() { if(playerTurn) { playerTurn = false; enemyTurn(); } }
-function showMessage(m) {
-    const d = document.createElement("div"); d.className="message"; d.textContent=m;
-    document.getElementById("info").appendChild(d);
-    setTimeout(() => d.remove(), 2000);
-}
 </script>
 </body>
 </html>
