@@ -5,21 +5,22 @@ let grid, player, enemies, activeBombs = [], turnCount = 1;
 let selectMode = 'move', gameOver = false, playerTurn = true, shake = 0, mapDim = 12;
 let stats = { kills: 0, coins: 0, itemsUsed: 0 };
 let inv = { trap: 3, rice: 2, bomb: 1 };
-let camX = 0, camY = 0, isDragging = false, lastMouse = {x:0, y:0};
+
+// Camera & Zoom State
+let camX = 0, camY = 0, zoom = 1.0;
+const minZoom = 0.5, maxZoom = 2.0;
+let isDragging = false, lastMouse = {x:0, y:0}, lastDist = 0;
 let useMinimap = true;
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const sprites = {};
 
-// Improved Asset Loading
 const assetNames = ['player', 'guard', 'wall', 'floor', 'exit', 'trap', 'rice', 'bomb', 'coin', 'hide'];
-let loadedCount = 0;
 assetNames.forEach(n => {
     const img = new Image();
     img.src = `sprites/${n}.png`;
-    img.onload = () => { loadedCount++; sprites[n] = img; };
-    img.onerror = () => { loadedCount++; console.warn(`Sprite missing: ${n}`); };
+    img.onload = () => { sprites[n] = img; };
 });
 
 function log(msg, color="#aaa") {
@@ -27,21 +28,24 @@ function log(msg, color="#aaa") {
     div.className = 'log-entry';
     div.style.color = color;
     div.innerText = `> ${msg}`;
-    const container = document.getElementById('missionLog');
-    container.prepend(div);
+    document.getElementById('missionLog').prepend(div);
 }
 
 function centerCamera() {
-    camX = (canvas.width / 2) - (player.x * TILE + TILE / 2);
-    camY = (canvas.height / 2) - (player.y * TILE + TILE / 2);
+    // Centers the player in the middle of the screen considering current zoom
+    camX = (canvas.width / 2) - (player.x * TILE + TILE / 2) * zoom;
+    camY = (canvas.height / 2) - (player.y * TILE + TILE / 2) * zoom;
     clampCamera();
 }
 
 function clampCamera() {
-    const minX = canvas.width - (mapDim * TILE);
-    const minY = canvas.height - (mapDim * TILE);
-    camX = Math.min(0, Math.max(camX, minX));
-    camY = Math.min(0, Math.max(camY, minY));
+    const mapSizePxl = mapDim * TILE * zoom;
+    const minX = canvas.width - mapSizePxl;
+    const minY = canvas.height - mapSizePxl;
+
+    // If map is smaller than screen, center it; otherwise clamp to edges
+    camX = mapSizePxl < canvas.width ? (canvas.width - mapSizePxl) / 2 : Math.min(0, Math.max(camX, minX));
+    camY = mapSizePxl < canvas.height ? (canvas.height - mapSizePxl) / 2 : Math.min(0, Math.max(camY, minY));
 }
 
 function initGame() {
@@ -79,16 +83,7 @@ function rand(max) { return Math.floor(Math.random() * (max-2)) + 1; }
 
 function drawSprite(n, x, y) {
     const px = x*TILE, py = y*TILE;
-    if(sprites[n]) {
-        ctx.drawImage(sprites[n], px, py, TILE, TILE);
-    } else {
-        // Fallback shapes if sprites are missing
-        ctx.beginPath();
-        if(n === 'player') { ctx.fillStyle="#00d2ff"; ctx.arc(px+30, py+30, 16, 0, 7); ctx.fill(); }
-        else if(n === 'guard') { ctx.fillStyle="#ff3333"; ctx.fillRect(px+15, py+15, 30, 30); }
-        else if(n === 'wall') { ctx.fillStyle="#1a1a1a"; ctx.fillRect(px,py,TILE,TILE); }
-        else if(n === 'floor') { ctx.fillStyle="#080808"; ctx.fillRect(px,py,TILE,TILE); }
-    }
+    if(sprites[n]) ctx.drawImage(sprites[n], px, py, TILE, TILE);
 }
 
 function gameLoop() {
@@ -98,15 +93,14 @@ function gameLoop() {
 
     const s = (Math.random()-0.5)*shake;
     ctx.translate(camX + s, camY + s);
+    ctx.scale(zoom, zoom); // Apply the hand-touch zoom
 
-    // Draw Floor & World
     for(let y=0; y<mapDim; y++) for(let x=0; x<mapDim; x++) {
         drawSprite('floor', x, y);
         const cell = grid[y][x];
         if(cell !== FLOOR) drawSprite(['','wall','hide','exit','','coin','trap','rice','bomb'][cell], x, y);
     }
 
-    // Highlighting Move/Items
     if(playerTurn) {
         ctx.lineWidth = 2;
         ctx.strokeStyle = (selectMode === 'move') ? "rgba(0, 210, 255, 0.5)" : "rgba(255, 50, 50, 0.5)";
@@ -118,13 +112,17 @@ function gameLoop() {
         }
     }
 
-    // Enemies
     enemies.forEach(e => {
         if(!e.alive) return;
         drawSprite('guard', e.ax, e.ay);
-        if(e.alert) { ctx.fillStyle="#fff"; ctx.font="bold 20px Arial"; ctx.fillText("!", e.ax*TILE+25, e.ay*TILE-5); }
+        if(e.alert) { 
+            ctx.setTransform(1,0,0,1,0,0); // Draw UI "!" without scaling
+            const screenX = camX + (e.ax * TILE + 25) * zoom;
+            const screenY = camY + (e.ay * TILE - 10) * zoom;
+            ctx.fillStyle="#fff"; ctx.font="bold 24px Arial"; ctx.fillText("!", screenX, screenY);
+            ctx.setTransform(1,0,0,1,camX+s,camY+s); ctx.scale(zoom, zoom);
+        }
         
-        // Vision Cone
         ctx.fillStyle = "rgba(255, 0, 0, 0.1)";
         ctx.beginPath(); ctx.moveTo(e.ax*TILE+30, e.ay*TILE+30);
         const baseA = Math.atan2(e.dir.y, e.dir.x);
@@ -137,11 +135,10 @@ function gameLoop() {
 
     drawSprite('player', player.ax, player.ay);
 
-    // Mini-map
     if(useMinimap) {
         ctx.setTransform(1,0,0,1,0,0);
-        const ms = 4; // Mini-map scale
-        ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(10, 70, mapDim*ms, mapDim*ms);
+        const ms = 4;
+        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(10, 70, mapDim*ms, mapDim*ms);
         for(let y=0; y<mapDim; y++) for(let x=0; x<mapDim; x++) {
             if(grid[y][x] === WALL) { ctx.fillStyle="#444"; ctx.fillRect(10+x*ms, 70+y*ms, ms, ms); }
         }
@@ -151,3 +148,5 @@ function gameLoop() {
     shake *= 0.8;
     requestAnimationFrame(gameLoop);
 }
+
+window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; clampCamera(); });
