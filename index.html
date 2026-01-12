@@ -3,37 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Shadow Protocol</title>
+    <title>Shadow Protocol: Grand Master</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="missionLog"></div>
 
-    <div id="menu" class="overlay-screen">
-        <div class="menu-card">
-            <h2 style="color:var(--accent)">SHADOW PROTOCOL</h2>
-            Map Size: <input type="number" id="mapSize" value="30" style="width:50px"><br><br>
-            Guards: <input type="number" id="guardCount" value="10" style="width:50px"><br>
-            <button onclick="initGame()" class="btn-main">START</button>
-        </div>
+<div id="missionLog"></div>
+
+<div id="menu" class="overlay-screen">
+    <div style="background:var(--panel); border:1px solid var(--accent); padding:25px; border-radius:8px; width:300px;">
+        <h2 style="color:var(--accent); text-align: center; letter-spacing: 4px;">MISSION START</h2>
+        <div style="font-size:12px; margin:10px 0;">Size: <input type="number" id="mapSize" value="12" style="width:40px; float:right"></div>
+        <div style="font-size:12px; margin:10px 0;">Guards: <input type="number" id="guardCount" value="5" style="width:40px; float:right"></div>
+        <button onclick="initGame()" style="width:100%; padding:12px; background:var(--accent); border:none; font-weight:bold; margin-top:15px; cursor:pointer;">INFILTRATE</button>
     </div>
+</div>
 
-    <canvas id="game"></canvas>
-
-    <div id="toolbar" class="hidden">
-        <div class="tool-btn active" id="btnMove" onclick="setMode('move')"><span>👣</span>Move</div>
-        <div class="tool-btn" id="btnTrap" onclick="setMode('trap')"><span>⚙️</span>Trap</div>
-        <div class="tool-btn" id="btnRice" onclick="setMode('rice')"><span>🍚</span>Rice</div>
-        <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')"><span>💣</span>Bomb</div>
-        <div class="tool-btn" onclick="playerWait()"><span>⌛</span>Wait</div>
-        <div class="tool-btn" onclick="adjustZoom(0.1)"><span>➕</span>Zoom</div>
-        <div class="tool-btn" onclick="adjustZoom(-0.1)"><span>➖</span>Zoom</div>
+<div id="resultScreen" class="overlay-screen hidden">
+    <div class="result-scroll">
+        <div id="rankLabel" class="rank-text">Grand Master</div>
+        <div id="statsTable"></div>
+        <button onclick="location.reload()" style="margin-top:20px; padding:10px 20px; background:#1a1a1a; color:var(--accent); border:1px solid var(--accent); cursor:pointer;">NEXT MISSION</button>
     </div>
+</div>
 
-    <script src="config.js"></script>
-    <script src="ui.js"></script>
-    <script src="player.js"></script>
-    <script src="enemy.js"></script>
-    <script src="engine.js"></script>
+<div id="gameOverScreen" class="overlay-screen hidden">
+    <h1 style="color:var(--red); letter-spacing: 8px;">YOU WERE SEEN</h1>
+    <button onclick="location.reload()" style="padding:10px 30px; background:transparent; border:1px solid var(--red); color:var(--red); cursor:pointer;">RETRY</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<div id="toolbar" class="hidden">
+    <div class="tool-btn active" id="btnMove" onclick="setMode('move')"><span>👣</span>Move</div>
+    <div class="tool-btn" id="btnTrap" onclick="setMode('trap')"><span>⚙️</span>Trap</div>
+    <div class="tool-btn" id="btnRice" onclick="setMode('rice')"><span>🍚</span>Rice</div>
+    <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')"><span>💣</span>Bomb</div>
+    <div class="tool-btn" onclick="playerWait()"><span>⌛</span>Wait</div>
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
