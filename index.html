@@ -3,117 +3,131 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-<title>Silent House: Ninja Rank</title>
+<title>Silent House: Deadly Decoys</title>
 <style>
     body { margin: 0; background: #000; color: #eee; font-family: 'Courier New', monospace; text-align: center; touch-action: none; overflow: hidden; }
     canvas { display: block; margin: 0 auto; background: #111; border: 2px solid #333; }
     #menu, #gameOverScreen, #resultScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 20; display: flex; flex-direction: column; justify-content: center; align-items: center; }
     .hidden { display: none !important; }
-    input { background: #222; color: #0af; border: 1px solid #444; padding: 8px; width: 60px; text-align: center; margin: 5px; font-size: 18px; }
-    button { padding: 15px 30px; margin: 10px; background: #222; color: #eee; border: 1px solid #555; cursor: pointer; font-size: 16px; }
-    button:hover { border-color: #0af; color: #0af; }
-    
-    /* Result Screen Styling */
-    .stat-row { width: 300px; display: flex; justify-content: space-between; margin: 5px; border-bottom: 1px solid #333; padding: 5px; }
-    #rankDisplay { font-size: 40px; color: #f00; letter-spacing: 5px; margin-top: 20px; text-shadow: 0 0 10px #f00; }
+    .setting-group { margin: 8px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    input { background: #222; color: #0af; border: 1px solid #444; padding: 5px; width: 50px; text-align: center; font-size: 16px; }
+    button { padding: 12px 20px; margin: 5px; background: #222; color: #eee; border: 1px solid #555; cursor: pointer; font-size: 13px; text-transform: uppercase; }
+    button.active { background: #0af; color: #000; border-color: #fff; font-weight: bold; }
     #ui-layer { position: fixed; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; }
-    #info { margin-top: 10px; align-self: center; width: 90%; }
-    .score-popup { position: absolute; color: #ff0; animation: fadeUp 1s forwards; pointer-events: none; }
-    @keyframes fadeUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-30px); } }
+    #info { margin-top: 10px; align-self: center; width: 90%; max-height: 100px; overflow: hidden; }
+    #controls { margin-bottom: 20px; align-self: center; pointer-events: auto; background: rgba(0,0,0,0.85); padding: 10px; border: 1px solid #333; border-radius: 5px; display: flex; flex-wrap: wrap; justify-content: center; }
+    .message { background: rgba(0,170,255,0.1); padding: 4px 10px; border-left: 3px solid #0af; margin-bottom: 3px; font-size: 13px; color: #0af; text-align: left; animation: slideIn 0.2s ease-out; }
+    @keyframes slideIn { from { transform: translateX(-10px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 </style>
 </head>
 <body>
 
 <div id="menu">
-    <h1 style="color:#0af; letter-spacing: 8px;">SILENT HOUSE</h1>
-    <p>Level: <span id="levelText">1</span></p>
-    <div>Map Size: <input type="number" id="inpW" value="12"> x <input type="number" id="inpH" value="12"></div>
-    <div>Enemies: <input type="number" id="inpE" value="4"></div>
-    <button onclick="startGame()">START MISSION</button>
+    <h1 style="color:#0af; letter-spacing: 5px;">SILENT HOUSE</h1>
+    <div class="setting-group">Map Size: <input type="number" id="inpW" value="12">x<input type="number" id="inpH" value="12"></div>
+    <div class="setting-group">Guards: <input type="number" id="inpE" value="4"></div>
+    <p style="color:#f80; margin: 10px 0 5px 0;">LOADOUT</p>
+    <div class="setting-group">Traps: <input type="number" id="inpTraps" value="2"> | Rice: <input type="number" id="inpRice" value="2"></div>
+    <div class="setting-group">Bombs: <input type="number" id="inpBombs" value="2"> | Crackers: <input type="number" id="inpCracks" value="2"></div>
+    <button onclick="startGame()">BEGIN INFILTRATION</button>
 </div>
 
 <div id="resultScreen" class="hidden">
-    <h2 style="color:#0af; letter-spacing: 4px;">MISSION COMPLETE</h2>
-    <div class="stat-row"><span>Turns Taken:</span><span id="resTurns">0</span></div>
-    <div class="stat-row"><span>Alerts Triggered:</span><span id="resAlerts">0</span></div>
-    <div class="stat-row"><span>Coins Found:</span><span id="resCoins">0</span></div>
-    <div id="rankDisplay">MASTER</div>
-    <button onclick="generateLevel()">NEXT MISSION</button>
-    <button onclick="toggleMenu(true)">MAIN MENU</button>
+    <h2 style="color:#0af;">MISSION SUCCESS</h2>
+    <div id="rankDisplay" style="font-size:32px; margin: 15px; color: #0af;">MASTER</div>
+    <button onclick="generateLevel()">NEXT FLOOR</button>
+    <button onclick="location.reload()">ABANDON</button>
 </div>
 
 <div id="gameOverScreen" class="hidden">
-    <h1 style="color:#f00; letter-spacing: 5px;">ELIMINATED</h1>
-    <button onclick="startGame()">RETRY</button>
-    <button onclick="toggleMenu(true)">MENU</button>
+    <h1 style="color:#f00; letter-spacing: 3px;">DETECTED & KILLED</h1>
+    <button onclick="startGame()">RETRY MISSION</button>
 </div>
 
 <div id="ui-layer">
     <div id="info"></div>
+    <div id="controls" class="hidden">
+        <button id="btnMove" class="active" onclick="setMode('move')">MOVE</button>
+        <button id="btnTrap" onclick="setMode('trap')">TRAP (<span id="countTrap">0</span>)</button>
+        <button id="btnRice" onclick="setMode('rice')">RICE (<span id="countRice">0</span>)</button>
+        <button id="btnBomb" onclick="setMode('bomb')">BOMB (<span id="countBomb">0</span>)</button>
+        <button id="btnCrack" onclick="setMode('crack')">CRACKER (<span id="countCrack">0</span>)</button>
+        <button onclick="playerWait()">WAIT</button>
+    </div>
 </div>
 
 <canvas id="game" class="hidden"></canvas>
 
 <script>
 const TILE = 48;
-const FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4, COIN=5;
-let levelNumber = 1, grid, player, enemies, gameOver = false, playerTurn = true;
-let mapW, mapH, enemyCount;
-
-// Score Tracking
+const FLOOR=0, WALL=1, NOISE=2, EXIT=3, HIDE=4, COIN=5, TRAP_SET=6, RICE_SET=7, BOMB_SET=8;
+let grid, player, enemies, gameOver = false, playerTurn = true;
+let mapW, mapH, enemyCount, inventory = {}, selectMode = 'move';
 let stats = { turns: 0, alerts: 0, coins: 0 };
+let bombsOnMap = [];
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-function toggleMenu(show) {
-    document.getElementById("menu").classList.toggle("hidden", !show);
-    document.getElementById("resultScreen").classList.add("hidden");
-    document.getElementById("gameOverScreen").classList.add("hidden");
-    canvas.classList.toggle("hidden", show);
+function setMode(m) {
+    selectMode = m;
+    document.querySelectorAll('#controls button').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
 }
 
 function startGame() {
     mapW = parseInt(document.getElementById("inpW").value);
     mapH = parseInt(document.getElementById("inpH").value);
     enemyCount = parseInt(document.getElementById("inpE").value);
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    toggleMenu(false);
+    inventory = {
+        traps: parseInt(document.getElementById("inpTraps").value),
+        rice: parseInt(document.getElementById("inpRice").value),
+        bombs: parseInt(document.getElementById("inpBombs").value),
+        crackers: parseInt(document.getElementById("inpCracks").value)
+    };
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    document.getElementById("menu").classList.add("hidden");
+    document.getElementById("gameOverScreen").classList.add("hidden");
+    canvas.classList.remove("hidden");
+    document.getElementById("controls").classList.remove("hidden");
     generateLevel();
 }
 
 function generateLevel() {
     document.getElementById("resultScreen").classList.add("hidden");
-    gameOver = false; playerTurn = true;
+    gameOver = false; playerTurn = true; bombsOnMap = [];
     stats = { turns: 0, alerts: 0, coins: 0 };
+    updateUI();
 
     grid = Array.from({length: mapH}, (_, y) => Array.from({length: mapW}, (_, x) => 
         (x===0 || y===0 || x===mapW-1 || y===mapH-1) ? WALL : Math.random() < 0.18 ? WALL : FLOOR
     ));
 
-    let ex, ey; 
-    do { ex = Math.floor(Math.random()*(mapW-2))+1; ey = Math.floor(Math.random()*(mapH-2))+1; } while(grid[ey][ex] !== FLOOR);
+    let ex, ey; do { ex = Math.floor(Math.random()*(mapW-2))+1; ey = Math.floor(Math.random()*(mapH-2))+1; } while(grid[ey][ex] !== FLOOR);
     grid[ey][ex] = EXIT;
 
-    let px, py; 
-    do { px = Math.floor(Math.random()*(mapW-2))+1; py = Math.floor(Math.random()*(mapH-2))+1; } 
+    let px, py; do { px = Math.floor(Math.random()*(mapW-2))+1; py = Math.floor(Math.random()*(mapH-2))+1; } 
     while(grid[py][px] !== FLOOR || Math.hypot(px-ex, py-ey) < 6);
     player = { x: px, y: py, animX: px, animY: py, hidden: false };
 
-    // Place challenge items
     for(let i=0; i<3; i++) placeRandom(NOISE);
     for(let i=0; i<3; i++) placeRandom(HIDE);
     for(let i=0; i<5; i++) placeRandom(COIN);
 
     enemies = [];
     for(let i=0; i<enemyCount; i++) {
-        let enX, enY; 
-        do { enX = Math.floor(Math.random()*(mapW-2))+1; enY = Math.floor(Math.random()*(mapH-2))+1; }
+        let enX, enY; do { enX = Math.floor(Math.random()*(mapW-2))+1; enY = Math.floor(Math.random()*(mapH-2))+1; }
         while(grid[enY][enX] !== FLOOR || Math.hypot(enX-px, enY-py) < 4);
-        enemies.push({ x: enX, y: enY, animX: enX, animY: enY, dir: {x:1, y:0}, target: null, visionRange: 4, mark: null });
+        enemies.push({ x: enX, y: enY, animX: enX, animY: enY, dir: {x:1, y:0}, target: null, visionRange: 4, mark: null, alive: true });
     }
-    draw();
+    draw(); showMessage("INFILTRATION STARTED. STAY QUIET.");
+}
+
+function updateUI() {
+    document.getElementById('countTrap').innerText = inventory.traps;
+    document.getElementById('countRice').innerText = inventory.rice;
+    document.getElementById('countBomb').innerText = inventory.bombs;
+    document.getElementById('countCrack').innerText = inventory.crackers;
 }
 
 function placeRandom(type) {
@@ -123,77 +137,72 @@ function placeRandom(type) {
 
 function isValid(x, y) { return x >= 0 && y >= 0 && x < mapW && y < mapH && grid[y][x] !== WALL; }
 
-function getMovableTiles() {
-    const movable = [];
-    for(let dx=-2; dx<=2; dx++) for(let dy=-2; dy<=2; dy++) {
-        if(Math.abs(dx) + Math.abs(dy) > 2 || (dx===0 && dy===0)) continue;
-        if(isValid(player.x + dx, player.y + dy) && isValid(player.x + Math.sign(dx), player.y + Math.sign(dy)))
-            movable.push({x: player.x + dx, y: player.y + dy});
-    }
-    return movable;
-}
-
 canvas.addEventListener("pointerdown", e => {
     if(!playerTurn || gameOver) return;
     const scale = Math.min(canvas.width/(mapW*TILE), canvas.height/(mapH*TILE));
     const ox = (canvas.width - mapW*TILE*scale)/2, oy = (canvas.height - mapH*TILE*scale)/2;
     const tx = Math.floor(((e.clientX - ox) / scale) / TILE), ty = Math.floor(((e.clientY - oy) / scale) / TILE);
 
-    if(getMovableTiles().some(t => t.x === tx && t.y === ty)) {
-        playerTurn = false;
-        stats.turns++;
-        animateMove(player, tx, ty, () => { checkTile(); if(!gameOver) enemyTurn(); });
+    if(!isValid(tx, ty)) return;
+
+    if(selectMode === 'move') {
+        const movable = [];
+        for(let dx=-2; dx<=2; dx++) for(let dy=-2; dy<=2; dy++) {
+            if(Math.abs(dx) + Math.abs(dy) > 2 || (dx===0 && dy===0)) continue;
+            if(isValid(player.x+dx, player.y+dy) && isValid(player.x+Math.sign(dx), player.y+Math.sign(dy))) movable.push({x:player.x+dx, y:player.y+dy});
+        }
+        if(movable.some(t => t.x === tx && t.y === ty)) {
+            playerTurn = false; stats.turns++;
+            animateMove(player, tx, ty, () => { checkTile(); if(!gameOver) endPlayerTurn(); });
+        }
+    } else {
+        // Tool placement logic
+        if(grid[ty][tx] !== FLOOR) return;
+        if(selectMode === 'trap' && inventory.traps > 0) { grid[ty][tx] = TRAP_SET; inventory.traps--; showMessage("TRAP PLACED."); }
+        else if(selectMode === 'rice' && inventory.rice > 0) { grid[ty][tx] = RICE_SET; inventory.rice--; showMessage("POISON RICE DEPLOYED."); }
+        else if(selectMode === 'bomb' && inventory.bomb > 0) { grid[ty][tx] = BOMB_SET; inventory.bombs--; bombsOnMap.push({x:tx, y:ty, timer:1}); showMessage("BOMB SET. 1 TURN TO DETONATION."); }
+        else if(selectMode === 'crack' && inventory.crackers > 0) { 
+            inventory.crackers--; showMessage("FIRECRACKER THROWN!"); 
+            enemies.forEach(en => { if(en.alive && Math.hypot(en.x-tx, en.y-ty) < 7) { en.target = {x:tx, y:ty}; en.mark = "?"; }});
+        } else return;
+        
+        updateUI(); playerTurn = false; endPlayerTurn();
     }
 });
 
-function animateMove(ent, tx, ty, cb) {
-    const startX = ent.animX, startY = ent.animY;
-    let progress = 0;
-    if(ent !== player) { ent.dir = {x: Math.sign(tx - ent.x), y: Math.sign(ty - ent.y)}; }
-
-    function step() {
-        progress += 0.15;
-        ent.animX = startX + (tx - startX) * progress;
-        ent.animY = startY + (ty - startY) * progress;
-        if(ent === player && !player.hidden) {
-            for(let e of enemies) if(isInVision(e, ent.animX, ent.animY)) { triggerGameOver(); return; }
+function endPlayerTurn() {
+    // Process Bombs at the end of player turn before enemies move
+    bombsOnMap.forEach((b, index) => {
+        b.timer--;
+        if(b.timer <= 0) {
+            grid[b.y][b.x] = FLOOR;
+            showMessage("BOMB EXPLODED!");
+            enemies.forEach(en => { if(en.alive && Math.hypot(en.x-b.x, en.y-b.y) < 10) { en.target = {x:b.x, y:b.y}; en.mark = "!"; }});
+            bombsOnMap.splice(index, 1);
         }
-        draw();
-        if(progress < 1) requestAnimationFrame(step);
-        else { ent.x = tx; ent.y = ty; ent.animX = tx; ent.animY = ty; cb(); }
-    }
-    step();
-}
-
-function triggerGameOver() {
-    gameOver = true; draw();
-    setTimeout(() => document.getElementById("gameOverScreen").classList.remove("hidden"), 300);
-}
-
-function showResults() {
-    gameOver = true;
-    document.getElementById("resultScreen").classList.remove("hidden");
-    document.getElementById("resTurns").innerText = stats.turns;
-    document.getElementById("resAlerts").innerText = stats.alerts;
-    document.getElementById("resCoins").innerText = stats.coins;
-    
-    // Rank calculation logic
-    let score = (stats.coins * 100) - (stats.turns * 2) - (stats.alerts * 50);
-    let rank = "THUG";
-    if(score > 400) rank = "GRAND MASTER";
-    else if(score > 250) rank = "MASTER NINJA";
-    else if(score > 100) rank = "EXPERT";
-    else if(score > 0) rank = "NOVICE";
-    
-    const display = document.getElementById("rankDisplay");
-    display.innerText = rank;
-    display.style.color = (rank.includes("MASTER")) ? "#0af" : "#f00";
+    });
+    enemyTurn();
 }
 
 async function enemyTurn() {
     if(gameOver) return;
-    for(let e of enemies) {
-        await new Promise(r => setTimeout(r, 200));
+    const activeEnemies = enemies.filter(e => e.alive);
+    for(let e of activeEnemies) {
+        await new Promise(r => setTimeout(r, 150));
+        
+        // 1. Check for traps or rice at current position
+        if(grid[e.y][e.x] === TRAP_SET) { e.alive = false; grid[e.y][e.x] = FLOOR; showMessage("GUARD KILLED BY TRAP."); continue; }
+        if(grid[e.y][e.x] === RICE_SET) { e.alive = false; grid[e.y][e.x] = FLOOR; showMessage("GUARD ATE POISON RICE."); continue; }
+
+        // 2. Look for rice in vision
+        if(!e.target) {
+            for(let scanY=e.y-3; scanY<=e.y+3; scanY++) for(let scanX=e.x-3; scanX<=e.x+3; scanX++) {
+                if(isValid(scanX, scanY) && grid[scanY][scanX] === RICE_SET) {
+                    if(isInVision(e, scanX, scanY)) { e.target = {x:scanX, y:scanY}; e.mark = "Rice?"; showMessage("GUARD NOTICED RICE."); }
+                }
+            }
+        }
+
         let nx = e.x, ny = e.y;
         if(e.target) {
             let path = findPath(e.x, e.y, e.target.x, e.target.y);
@@ -203,12 +212,17 @@ async function enemyTurn() {
             const d = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)];
             if(isValid(e.x+d.x, e.y+d.y)) { nx += d.x; ny += d.y; }
         }
-        if(isValid(nx, ny) && !enemies.some(o => o!==e && o.x === nx && o.y === ny)) await new Promise(r => animateMove(e, nx, ny, r));
+        
+        if(isValid(nx, ny) && !activeEnemies.some(o => o!==e && o.alive && o.x === nx && o.y === ny)) {
+            await new Promise(r => animateMove(e, nx, ny, r));
+        }
+
         if(!player.hidden && isInVision(e, player.x, player.y)) { triggerGameOver(); return; }
     }
-    playerTurn = true; draw();
+    playerTurn = true; setMode('move'); draw();
 }
 
+// Logic functions (findPath, isInVision, animateMove, checkTile, showResults) remain similar but with tool interaction
 function findPath(sx, sy, tx, ty) {
     let q = [[{x:sx, y:sy}]], v = new Set([sx+','+sy]);
     while(q.length > 0) {
@@ -234,6 +248,24 @@ function isInVision(e, px, py) {
     return true;
 }
 
+function animateMove(ent, tx, ty, cb) {
+    const startX = ent.animX, startY = ent.animY;
+    let progress = 0;
+    if(ent !== player) ent.dir = {x: Math.sign(tx - ent.x), y: Math.sign(ty - ent.y)};
+    function step() {
+        progress += 0.2;
+        ent.animX = startX + (tx - startX) * progress;
+        ent.animY = startY + (ty - startY) * progress;
+        if(ent === player && !player.hidden) {
+            for(let e of enemies) if(e.alive && isInVision(e, ent.animX, ent.animY)) { triggerGameOver(); return; }
+        }
+        draw();
+        if(progress < 1) requestAnimationFrame(step);
+        else { ent.x = tx; ent.y = ty; ent.animX = tx; ent.animY = ty; cb(); }
+    }
+    step();
+}
+
 function draw() {
     const scale = Math.min(canvas.width/(mapW*TILE), canvas.height/(mapH*TILE));
     const ox = (canvas.width - mapW*TILE*scale)/2, oy = (canvas.height - mapH*TILE*scale)/2;
@@ -246,24 +278,31 @@ function draw() {
         ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
         ctx.strokeStyle = "#000"; ctx.strokeRect(x*TILE, y*TILE, TILE, TILE);
         if(grid[y][x] === EXIT) { ctx.fillStyle="#0a0"; ctx.fillRect(x*TILE+8, y*TILE+8, TILE-16, TILE-16); }
-        if(grid[y][x] === NOISE) { ctx.strokeStyle="#f80"; ctx.strokeRect(x*TILE+10, y*TILE+10, TILE-20, TILE-20); }
         if(grid[y][x] === HIDE) { ctx.fillStyle="#000"; ctx.fillRect(x*TILE+5, y*TILE+5, TILE-10, TILE-10); }
-        if(grid[y][x] === COIN) { ctx.fillStyle="#ff0"; ctx.beginPath(); ctx.arc(x*TILE+TILE/2, y*TILE+TILE/2, 6, 0, 7); ctx.fill(); }
+        if(grid[y][x] === COIN) { ctx.fillStyle="#ff0"; ctx.beginPath(); ctx.arc(x*TILE+24, y*TILE+24, 6, 0, 7); ctx.fill(); }
+        if(grid[y][x] === TRAP_SET) { ctx.strokeStyle="#f0f"; ctx.strokeRect(x*TILE+15, y*TILE+15, 18, 18); }
+        if(grid[y][x] === RICE_SET) { ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(x*TILE+24, y*TILE+24, 8, 0, 7); ctx.fill(); }
+        if(grid[y][x] === BOMB_SET) { ctx.fillStyle="#f50"; ctx.fillRect(x*TILE+16, y*TILE+16, 16, 16); }
+        if(grid[y][x] === NOISE) { ctx.strokeStyle="#f80"; ctx.strokeRect(x*TILE+12, y*TILE+12, 24, 24); }
     }
 
     if(playerTurn && !gameOver) {
-        ctx.fillStyle = "rgba(0,150,255,0.15)";
-        getMovableTiles().forEach(t => ctx.fillRect(t.x*TILE, t.y*TILE, TILE, TILE));
+        ctx.fillStyle = "rgba(0,150,255,0.1)";
+        if(selectMode === 'move') {
+            for(let dx=-2; dx<=2; dx++) for(let dy=-2; dy<=2; dy++) {
+                if(Math.abs(dx)+Math.abs(dy)<=2 && isValid(player.x+dx, player.y+dy)) ctx.fillRect((player.x+dx)*TILE, (player.y+dy)*TILE, TILE, TILE);
+            }
+        }
     }
 
     enemies.forEach(e => {
+        if(!e.alive) return;
         ctx.fillStyle = "rgba(255,0,0,0.15)";
         ctx.beginPath(); ctx.moveTo(e.animX*TILE+24, e.animY*TILE+24);
         const a = Math.atan2(e.dir.y, e.dir.x);
-        ctx.arc(e.animX*TILE+24, e.animY*TILE+24, e.visionRange*TILE, a-0.6, a+0.6);
-        ctx.fill();
+        ctx.arc(e.animX*TILE+24, e.animY*TILE+24, e.visionRange*TILE, a-0.6, a+0.6); ctx.fill();
         ctx.fillStyle = "#f33"; ctx.fillRect(e.animX*TILE+12, e.animY*TILE+12, 24, 24);
-        if(e.mark) { ctx.fillStyle="#fff"; ctx.font="20px Arial"; ctx.fillText(e.mark, e.animX*TILE+18, e.animY*TILE+8); }
+        if(e.mark) { ctx.fillStyle="#fff"; ctx.font="bold 12px Arial"; ctx.fillText(e.mark, e.animX*TILE+10, e.animY*TILE+8); }
     });
 
     ctx.fillStyle = player.hidden ? "#006" : "#0af";
@@ -273,15 +312,25 @@ function draw() {
 function checkTile() {
     const t = grid[player.y][player.x];
     player.hidden = (t === HIDE);
-    if(t === COIN) { stats.coins++; grid[player.y][player.x] = FLOOR; }
-    if(t === NOISE) {
-        stats.alerts++;
-        enemies.forEach(e => { if(Math.hypot(e.x-player.x, e.y-player.y) < 7) { e.target = {x:player.x, y:player.y}; e.mark="?"; }});
-    }
-    if(t === EXIT) { showResults(); }
+    if(t === COIN) { stats.coins++; grid[player.y][player.x] = FLOOR; showMessage("COIN COLLECTED."); }
+    if(t === NOISE) { stats.alerts++; enemies.forEach(e => { if(e.alive && Math.hypot(e.x-player.x, e.y-player.y) < 7) { e.target = {x:player.x, y:player.y}; e.mark="?"; }}); showMessage("STEPPED ON NOISE!"); }
+    if(t === EXIT) showResults();
 }
 
-function playerWait() { if(playerTurn) { playerTurn = false; stats.turns++; enemyTurn(); } }
+function showResults() {
+    gameOver = true; document.getElementById("resultScreen").classList.remove("hidden");
+    let score = (stats.coins * 100) - (stats.turns * 2) - (stats.alerts * 50);
+    let rank = score > 400 ? "GRAND MASTER" : score > 250 ? "MASTER NINJA" : "EXPERT";
+    document.getElementById("rankDisplay").innerText = rank;
+}
+
+function triggerGameOver() { gameOver = true; draw(); setTimeout(() => document.getElementById("gameOverScreen").classList.remove("hidden"), 300); }
+function playerWait() { if(playerTurn) { playerTurn = false; stats.turns++; endPlayerTurn(); } }
+function showMessage(m) {
+    const d = document.createElement("div"); d.className="message"; d.textContent=m;
+    const box = document.getElementById("info"); box.prepend(d);
+    if(box.childNodes.length > 4) box.removeChild(box.lastChild);
+}
 </script>
 </body>
 </html>
