@@ -3,41 +3,51 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Silent House: Shadow Protocol</title>
+<title>Shadow Protocol: Tactical Stealth</title>
 <style>
-    :root { --accent: #d4af37; --bg: #050505; --red: #ff4444; --blue: #00d2ff; --panel: rgba(20, 20, 20, 0.95); }
-    body { margin: 0; background: var(--bg); color: #eee; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; touch-action: none; }
+    :root { --accent: #d4af37; --bg: #050505; --red: #ff4444; --blue: #00d2ff; --panel: rgba(15, 15, 15, 0.9); }
+    body { margin: 0; background: var(--bg); color: #eee; font-family: 'Segoe UI', sans-serif; overflow: hidden; touch-action: none; }
     canvas { display: block; margin: 0 auto; background: #000; }
     
+    /* Log System */
+    #missionLog { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; height: 60px; background: rgba(0,0,0,0.7); border-left: 3px solid var(--accent); padding: 5px 10px; font-size: 11px; overflow-y: hidden; z-index: 15; pointer-events: none; color: #aaa; display: flex; flex-direction: column-reverse; }
+    .log-entry { margin-bottom: 2px; animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+
     .overlay-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.98); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; }
     .hidden { display: none !important; }
 
     /* Tactical Menu */
-    .menu-card { background: var(--panel); border: 1px solid var(--accent); padding: 30px; border-radius: 4px; box-shadow: 0 0 40px rgba(0,0,0,1); width: 320px; }
+    .menu-card { background: var(--panel); border: 1px solid var(--accent); padding: 30px; border-radius: 8px; width: 320px; box-shadow: 0 0 50px #000; }
     .config-row { display: flex; justify-content: space-between; align-items: center; margin: 12px 0; border-bottom: 1px solid #333; padding-bottom: 8px; }
-    .config-row label { font-size: 12px; text-transform: uppercase; color: #888; }
-    .config-row input { background: #000; border: 1px solid #444; color: var(--accent); width: 50px; text-align: center; font-weight: bold; }
+    .config-row input { background: #000; border: 1px solid #444; color: var(--accent); width: 50px; text-align: center; }
 
-    /* Buttons & Toolbar */
-    #toolbar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 5px; z-index: 10; background: var(--panel); padding: 8px; border: 1px solid #333; border-radius: 4px; }
-    .tool-btn { width: 60px; height: 75px; background: #111; border: 1px solid #222; color: #666; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 10px; cursor: pointer; transition: 0.2s; border-radius: 2px; }
-    .tool-btn.active { border-color: var(--blue); color: var(--blue); background: #001520; box-shadow: inset 0 0 10px rgba(0,210,255,0.2); }
+    /* Modern Buttons */
+    #toolbar { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; z-index: 10; padding: 10px; }
+    .tool-btn { 
+        width: 65px; height: 65px; background: rgba(30,30,30,0.8); border: 1px solid #444; 
+        color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; 
+        font-size: 10px; cursor: pointer; transition: 0.3s; border-radius: 12px; backdrop-filter: blur(10px);
+    }
+    .tool-btn.active { border-color: var(--blue); background: rgba(0, 210, 255, 0.2); box-shadow: 0 0 15px var(--blue); }
+    .tool-btn span { font-size: 18px; margin-bottom: 4px; }
     
-    .btn-main { width: 100%; padding: 15px; background: var(--accent); color: #000; border: none; cursor: pointer; font-weight: bold; font-size: 1rem; margin-top: 20px; text-transform: uppercase; letter-spacing: 2px; }
-    .btn-main:hover { filter: brightness(1.2); }
+    .btn-main { width: 100%; padding: 15px; background: var(--accent); color: #000; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; border-radius: 4px; }
 </style>
 </head>
 <body>
 
+<div id="missionLog"></div>
+
 <div id="menu" class="overlay-screen">
     <div class="menu-card">
-        <h2 style="color:var(--accent); text-align: center; letter-spacing: 5px; margin-top:0;">MISSION CONFIG</h2>
-        <div class="config-row"><label>Map Size</label><input type="number" id="mapSize" value="12" max="15"></div>
-        <div class="config-row"><label>Guard Count</label><input type="number" id="guardCount" value="4" max="15"></div>
+        <h2 style="color:var(--accent); text-align: center; letter-spacing: 5px; margin-top:0;">SHADOW PROTOCOL</h2>
+        <div class="config-row"><label>Map Size (Max 15)</label><input type="number" id="mapSize" value="12" max="15"></div>
+        <div class="config-row"><label>Guards (Max 15)</label><input type="number" id="guardCount" value="4" max="15"></div>
         <div class="config-row"><label>Steel Traps</label><input type="number" id="setTrap" value="3"></div>
         <div class="config-row"><label>Rice Lures</label><input type="number" id="setRice" value="2"></div>
         <div class="config-row"><label>Smoke Bombs</label><input type="number" id="setBomb" value="1"></div>
-        <button class="btn-main" onclick="initGame()">Infiltrate</button>
+        <button class="btn-main" onclick="initGame()">Deploy</button>
     </div>
 </div>
 
@@ -49,18 +59,18 @@
 <canvas id="game"></canvas>
 
 <div id="toolbar" class="hidden">
-    <div class="tool-btn active" id="btnMove" onclick="setMode('move')">👣<br>Move</div>
-    <div class="tool-btn" id="btnTrap" onclick="setMode('trap')">⚙️<br>Trap (<span id="c-trap">0</span>)</div>
-    <div class="tool-btn" id="btnRice" onclick="setMode('rice')">🍚<br>Rice (<span id="c-rice">0</span>)</div>
-    <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')">💣<br>Bomb (<span id="c-bomb">0</span>)</div>
-    <div class="tool-btn" onclick="playerWait()">⌛<br>Wait</div>
+    <div class="tool-btn active" id="btnMove" onclick="setMode('move')"><span>👣</span>Move</div>
+    <div class="tool-btn" id="btnTrap" onclick="setMode('trap')"><span>⚙️</span>Trap (<span id="c-trap">0</span>)</div>
+    <div class="tool-btn" id="btnRice" onclick="setMode('rice')"><span>🍚</span>Rice (<span id="c-rice">0</span>)</div>
+    <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')"><span>💣</span>Bomb (<span id="c-bomb">0</span>)</div>
+    <div class="tool-btn" onclick="playerWait()"><span>⌛</span>Wait</div>
 </div>
 
 <script>
 const TILE = 60;
 const FLOOR=0, WALL=1, HIDE=2, EXIT=3, COIN=5, TRAP=6, RICE=7, BOMB=8;
 
-let grid, player, enemies, activeBombs = [], fTexts = [];
+let grid, player, enemies, activeBombs = [], turnCount = 1;
 let selectMode = 'move', gameOver = false, playerTurn = true, shake = 0, mapDim = 12;
 let inv = { trap: 0, rice: 0, bomb: 0 };
 
@@ -68,11 +78,19 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const sprites = {};
 
-// Asset Loader
 ['player', 'guard', 'wall', 'floor', 'exit', 'trap', 'rice', 'bomb', 'coin', 'hide'].forEach(n => {
     const img = new Image(); img.src = `sprites/${n}.png`;
     img.onload = () => sprites[n] = img;
 });
+
+function log(msg, color="#eee") {
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.style.color = color;
+    div.innerText = `> ${msg}`;
+    const container = document.getElementById('missionLog');
+    container.prepend(div);
+}
 
 function initGame() {
     mapDim = Math.min(15, parseInt(document.getElementById('mapSize').value));
@@ -84,6 +102,7 @@ function initGame() {
     document.getElementById('toolbar').classList.remove('hidden');
     generateLevel();
     updateUI();
+    log("Mission started. Infiltrate the facility.", "var(--accent)");
     requestAnimationFrame(gameLoop);
 }
 
@@ -110,17 +129,28 @@ function drawSprite(n, x, y) {
         ctx.drawImage(sprites[n], px, py, TILE, TILE);
     } else {
         ctx.beginPath();
-        if(n === 'player') { ctx.fillStyle=player.isHidden?"rgba(0,210,255,0.3)":"#00d2ff"; ctx.arc(px+30, py+30, 15, 0, 7); ctx.fill(); }
-        else if(n === 'guard') { ctx.fillStyle="#ff4444"; ctx.fillRect(px+20, py+20, 20, 20); }
-        else if(n === 'wall') { ctx.fillStyle="#1a1a1a"; ctx.fillRect(px,py,TILE,TILE); ctx.strokeStyle="#333"; ctx.strokeRect(px+2,py+2,TILE-4,TILE-4); }
-        else if(n === 'floor') { ctx.fillStyle="#050505"; ctx.fillRect(px,py,TILE,TILE); }
-        else if(n === 'hide') { ctx.strokeStyle="#444"; ctx.strokeRect(px+10, py+10, TILE-20, TILE-20); ctx.strokeRect(px+15, py+15, TILE-30, TILE-30); }
-        else if(n === 'trap') { ctx.strokeStyle="#f0f"; ctx.strokeRect(px+20, py+20, 20, 20); }
+        if(n === 'player') { 
+            ctx.fillStyle = player.isHidden ? "rgba(0,210,255,0.4)" : "#00d2ff";
+            ctx.arc(px+30, py+30, 16, 0, 7); ctx.fill(); 
+        } else if(n === 'guard') { 
+            ctx.fillStyle="#ff4444"; ctx.fillRect(px+15, py+15, 30, 30); 
+        } else if(n === 'wall') { 
+            ctx.fillStyle="#1a1a1a"; ctx.fillRect(px,py,TILE,TILE); 
+            ctx.strokeStyle="#333"; ctx.strokeRect(px+4,py+4,TILE-8,TILE-8);
+        } else if(n === 'floor') { 
+            ctx.fillStyle="#080808"; ctx.fillRect(px,py,TILE,TILE); 
+        } else if(n === 'hide') { 
+            ctx.strokeStyle=varColor('--accent'); ctx.lineWidth=2;
+            ctx.strokeRect(px+12, py+12, TILE-24, TILE-24);
+            ctx.lineWidth=1;
+        } else if(n === 'exit') { 
+            ctx.strokeStyle="#0f0"; ctx.lineWidth=3;
+            ctx.strokeRect(px+5, py+5, TILE-10, TILE-10);
+            ctx.shadowBlur = 10; ctx.shadowColor = "#0f0";
+            ctx.strokeRect(px+15, py+15, TILE-30, TILE-30);
+            ctx.shadowBlur = 0;
+        }
     }
-}
-
-function spawnText(x, y, txt, color="#fff") {
-    fTexts.push({ x: x*TILE+15, y: y*TILE+30, txt, life: 1, color });
 }
 
 function gameLoop() {
@@ -134,7 +164,6 @@ function gameLoop() {
     ctx.fillStyle = "#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.translate(ox, oy); ctx.scale(scale, scale);
 
-    // Grid Base
     for(let y=0; y<mapDim; y++) for(let x=0; x<mapDim; x++) {
         drawSprite('floor', x, y);
         const cell = grid[y][x];
@@ -146,23 +175,26 @@ function gameLoop() {
         else if(cell === BOMB) drawSprite('bomb', x, y);
     }
 
-    // High Vis Placement/Move Highlight
-    ctx.strokeStyle = selectMode === 'move' ? "rgba(0, 210, 255, 0.4)" : "rgba(212, 175, 55, 0.4)";
-    ctx.lineWidth = 2;
-    for(let dy=-2; dy<=2; dy++) for(let dx=-2; dx<=2; dx++) {
-        let tx = player.x + dx, ty = player.y + dy;
-        if(tx > 0 && tx < mapDim-1 && ty > 0 && ty < mapDim-1 && grid[ty][tx] !== WALL) {
-            // Block jump over walls
-            if(grid[player.y + Math.sign(dy)][player.x + Math.sign(dx)] !== WALL)
-                ctx.strokeRect(tx*TILE+4, ty*TILE+4, TILE-8, TILE-8);
+    // Highlights
+    if(playerTurn) {
+        ctx.strokeStyle = selectMode === 'move' ? "var(--blue)" : "var(--accent)";
+        ctx.shadowBlur = 8; ctx.shadowColor = ctx.strokeStyle;
+        ctx.lineWidth = 2;
+        for(let dy=-2; dy<=2; dy++) for(let dx=-2; dx<=2; dx++) {
+            let tx = player.x + dx, ty = player.y + dy;
+            if(tx > 0 && tx < mapDim-1 && ty > 0 && ty < mapDim-1 && grid[ty][tx] !== WALL) {
+                if(grid[player.y + Math.sign(dy)][player.x + Math.sign(dx)] !== WALL)
+                    ctx.strokeRect(tx*TILE+6, ty*TILE+6, TILE-12, TILE-12);
+            }
         }
+        ctx.shadowBlur = 0;
     }
 
     enemies.forEach(e => {
         if(!e.alive) return;
         drawSprite('guard', e.ax, e.ay);
         // Vision
-        ctx.fillStyle = "rgba(255, 0, 0, 0.1)";
+        ctx.fillStyle = "rgba(255, 0, 0, 0.15)";
         ctx.beginPath(); ctx.moveTo(e.ax*TILE+30, e.ay*TILE+30);
         const baseA = Math.atan2(e.dir.y, e.dir.x);
         for(let a = baseA-0.7; a <= baseA+0.7; a += 0.05) {
@@ -175,16 +207,6 @@ function gameLoop() {
     });
 
     drawSprite('player', player.ax, player.ay);
-
-    // Text Feedback
-    fTexts = fTexts.filter(t => t.life > 0);
-    fTexts.forEach(t => {
-        t.y -= 0.5; t.life -= 0.015;
-        ctx.globalAlpha = t.life; ctx.fillStyle = t.color; ctx.font = "bold 12px monospace";
-        ctx.fillText(t.txt, t.x, t.y);
-    });
-    ctx.globalAlpha = 1;
-
     requestAnimationFrame(gameLoop);
 }
 
@@ -204,8 +226,8 @@ canvas.addEventListener('pointerdown', e => {
         playerTurn = false;
         animMove(player, tx, ty, 0.1, () => {
             player.isHidden = (grid[ty][tx] === HIDE);
-            if(player.isHidden) spawnText(tx, ty, "HIDDEN", varColor('--blue'));
-            if(grid[ty][tx] === EXIT) { alert("INFILTRATED"); location.reload(); }
+            if(player.isHidden) log("Player hidden in shadows", "var(--blue)");
+            if(grid[ty][tx] === EXIT) { log("Extraction successful!", "#0f0"); setTimeout(()=>location.reload(), 2000); }
             endTurn();
         });
     } else if(selectMode !== 'move' && dist <= 2 && grid[ty][tx] === FLOOR) {
@@ -214,42 +236,43 @@ canvas.addEventListener('pointerdown', e => {
 });
 
 function deployTool(tx, ty) {
-    if(selectMode === 'trap' && inv.trap > 0) { grid[ty][tx] = TRAP; inv.trap--; spawnText(tx,ty,"TRAP SET","#f0f"); }
-    else if(selectMode === 'rice' && inv.rice > 0) { grid[ty][tx] = RICE; inv.rice--; spawnText(tx,ty,"LURE SET","#fff"); }
-    else if(selectMode === 'bomb' && inv.bomb > 0) { grid[ty][tx] = BOMB; inv.bomb--; activeBombs.push({x:tx, y:ty, t:3}); spawnText(tx,ty,"ARMED","#f00"); }
+    if(selectMode === 'trap' && inv.trap > 0) { grid[ty][tx] = TRAP; inv.trap--; log("Trap deployed"); }
+    else if(selectMode === 'rice' && inv.rice > 0) { grid[ty][tx] = RICE; inv.rice--; log("Rice lure placed"); }
+    else if(selectMode === 'bomb' && inv.bomb > 0) { grid[ty][tx] = BOMB; inv.bomb--; activeBombs.push({x:tx, y:ty, t:3}); log("Bomb armed: 3 turns", "var(--red)"); }
     else return;
     updateUI(); playerTurn = false; endTurn();
 }
 
 async function endTurn() {
-    // Bomb Logic
+    log(`--- Turn ${turnCount} ---`, "#555");
     activeBombs.forEach((b, i) => {
         b.t--; 
         if(b.t <= 0) {
-            grid[b.y][b.x] = FLOOR; shake = 30; spawnText(b.x, b.y, "BOOM!", "#ff4400");
+            grid[b.y][b.x] = FLOOR; shake = 30; log("SMOKE BOMB DETONATED!", "var(--red)");
             enemies.forEach(e => { if(Math.abs(e.x-b.x) <= 1 && Math.abs(e.y-b.y) <= 1) e.alive = false; });
             activeBombs.splice(i, 1);
-        } else spawnText(b.x, b.y, b.t + "...", "#f00");
+        }
     });
 
-    // Slow Enemy Sequence
-    for(let e of enemies.filter(en => en.alive)) {
-        await new Promise(r => setTimeout(r, 400)); // Delay between each guard
+    for(let i=0; i<enemies.length; i++) {
+        const e = enemies[i];
+        if(!e.alive) continue;
+        await new Promise(r => setTimeout(r, 400));
         
-        if(grid[e.y][e.x] === TRAP) { e.alive = false; grid[e.y][e.x] = FLOOR; spawnText(e.x, e.y, "DEAD", "#f00"); continue; }
+        if(grid[e.y][e.x] === TRAP) { e.alive = false; grid[e.y][e.x] = FLOOR; log(`Guard ${i+1} neutralized by trap`, "var(--red)"); continue; }
         
         let nx = e.x, ny = e.y;
         const d = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}][Math.floor(Math.random()*4)];
         if(grid[e.y+d.y]?.[e.x+d.x] === FLOOR) { nx+=d.x; ny+=d.y; }
         
-        await new Promise(r => animMove(e, nx, ny, 0.08, r)); // Slower movement anim
+        await new Promise(r => animMove(e, nx, ny, 0.08, r));
         
         if(!player.isHidden && hasLineOfSight(e, player.x, player.y)) {
-            spawnText(player.x, player.y, "SPOTTED!", "#f00");
-            await new Promise(r => setTimeout(r, 500));
+            log("SPOTTED! Security alerted.", "var(--red)");
             gameOver = true; document.getElementById('gameOverScreen').classList.remove('hidden'); return;
         }
     }
+    turnCount++;
     playerTurn = true;
 }
 
@@ -282,7 +305,7 @@ function setMode(m) {
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active')); 
     document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active'); 
 }
-function playerWait() { if(playerTurn) { playerTurn = false; endTurn(); } }
+function playerWait() { if(playerTurn) { playerTurn = false; log("Waiting..."); endTurn(); } }
 function varColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
 </script>
