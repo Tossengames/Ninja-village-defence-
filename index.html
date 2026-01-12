@@ -12,9 +12,10 @@
     <div id="menu" class="overlay-screen">
         <div style="background:var(--panel); border:1px solid var(--accent); padding:25px; border-radius:8px; width:300px;">
             <h2 style="color:var(--accent); text-align: center; letter-spacing: 4px;">MISSION START</h2>
-            <div style="font-size:12px; margin:10px 0;">Size: <input type="number" id="mapSize" value="12" style="width:40px; float:right"></div>
-            <div style="font-size:12px; margin:10px 0;">Guards: <input type="number" id="guardCount" value="5" style="width:40px; float:right"></div>
-            <button onclick="initGame()" style="width:100%; padding:12px; background:var(--accent); border:none; font-weight:bold; margin-top:15px; cursor:pointer;">INFILTRATE</button>
+            <div class="menu-item">Size: <input type="number" id="mapSize" value="12"></div>
+            <div class="menu-item">Guards: <input type="number" id="guardCount" value="5"></div>
+            <div class="menu-item">Show Mini-map: <input type="checkbox" id="showMinimap" checked></div>
+            <button onclick="initGame()" style="width:100%; padding:12px; background:var(--accent); border:none; font-weight:bold; margin-top:15px; cursor:pointer; color:#000;">INFILTRATE</button>
         </div>
     </div>
 
