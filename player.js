@@ -2,21 +2,6 @@
 // PLAYER MODULE - PLAYER LOGIC & ACTIONS
 // ============================================
 
-// Import globals from core (they're shared)
-const TILE = 60;
-const FLOOR = 0, WALL = 1, HIDE = 2, EXIT = 3, COIN = 5;
-
-function initPlayer(x, y) {
-    return {
-        x: x,
-        y: y,
-        ax: x,
-        ay: y,
-        isHidden: false,
-        dir: {x: 0, y: 0}
-    };
-}
-
 function handlePlayerMove(tx, ty) {
     player.isHidden = (grid[ty][tx] === HIDE);
     
@@ -60,6 +45,5 @@ function handleItemPlacement(tx, ty, mode) {
 }
 
 // Export player functions
-window.initPlayer = initPlayer;
 window.handlePlayerMove = handlePlayerMove;
 window.handleItemPlacement = handleItemPlacement;
