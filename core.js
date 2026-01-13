@@ -12,8 +12,7 @@ let stats = { kills: 0, coins: 0, itemsUsed: 0 };
 let inv = { trap: 3, rice: 2, bomb: 1 };
 let camX = 0, camY = 0, zoom = 1.0;
 let showMinimap = false;
-let showHighlights = true;
-let lastHighlightTime = 0;
+let showHighlights = true; // Always true now
 let highlightedTiles = [];
 
 // Canvas and rendering
@@ -35,15 +34,15 @@ const modeColors = {
 
 function initGame() {
     mapDim = Math.min(20, Math.max(8, parseInt(document.getElementById('mapSize').value) || 12));
-    showHighlights = document.getElementById('showHighlights').checked;
+    
+    // Remove highlight toggle from menu and always show highlights
+    showHighlights = true;
+    
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('toolbar').classList.remove('hidden');
     document.getElementById('ui-controls').classList.remove('hidden');
-    
-    if(showHighlights) {
-        document.getElementById('modeIndicator').classList.remove('hidden');
-        document.getElementById('rangeIndicator').classList.remove('hidden');
-    }
+    document.getElementById('modeIndicator').classList.remove('hidden');
+    document.getElementById('rangeIndicator').classList.remove('hidden');
     
     generateLevel();
     centerCamera();
@@ -65,8 +64,8 @@ function generateLevel() {
         )
     );
     
-    // Initialize player (delegated to player.js)
-    player = initPlayer(1, 1);
+    // Initialize player
+    player = { x: 1, y: 1, ax: 1, ay: 1, isHidden: false, dir: {x: 0, y: 0} };
     grid[mapDim-2][mapDim-2] = EXIT;
     
     // Add some coins
@@ -79,15 +78,39 @@ function generateLevel() {
         grid[cy][cx] = COIN;
     }
     
-    // Initialize enemies (delegated to enemy.js)
+    // Initialize enemies
     const gc = Math.min(15, Math.max(1, parseInt(document.getElementById('guardCount').value) || 5));
-    enemies = initEnemies(gc, grid, mapDim, player);
+    enemies = [];
+    for(let i=0; i<gc; i++){
+        let ex, ey; 
+        do { 
+            ex = rand(mapDim); 
+            ey = rand(mapDim); 
+        } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
+        
+        enemies.push({
+            x: ex, y: ey, 
+            ax: ex, ay: ey, 
+            dir: {x: 1, y: 0}, 
+            alive: true,
+            range: 4,
+            state: 'patrolling',
+            investigationTarget: null,
+            investigationTurns: 0,
+            thought: '',
+            thoughtTimer: 0,
+            hearingRange: 6,
+            hasHeardSound: false,
+            soundLocation: null,
+            returnToPatrolPos: {x: ex, y: ey}
+        });
+    }
 }
 
 function rand(m) { return Math.floor(Math.random()*(m-2))+1; }
 
 // ============================================
-// RENDERING ENGINE
+// SPRITE LOADING
 // ============================================
 
 function loadSprites() {
@@ -96,11 +119,23 @@ function loadSprites() {
         const img = new Image();
         img.src = `sprites/${n}.png`;
         img.onload = () => { sprites[n] = img; };
+        // Fallback if image fails to load
+        img.onerror = () => { console.warn(`Failed to load sprite: ${n}.png`); };
     });
 }
 
+// ============================================
+// RENDERING ENGINE
+// ============================================
+
 function drawSprite(n, x, y) { 
-    if(sprites[n]) ctx.drawImage(sprites[n], x*TILE, y*TILE, TILE, TILE); 
+    if(sprites[n]) {
+        ctx.drawImage(sprites[n], x*TILE, y*TILE, TILE, TILE);
+    } else {
+        // Fallback colored squares
+        ctx.fillStyle = '#666';
+        ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
+    }
 }
 
 function drawTileHighlight(x, y, colorSet, pulse = true) {
@@ -144,7 +179,7 @@ function drawTileHighlight(x, y, colorSet, pulse = true) {
 
 function calculateHighlightedTiles() {
     highlightedTiles = [];
-    if(!showHighlights || !playerTurn) return;
+    if(!playerTurn) return;
     
     const range = 2;
     const colorSet = modeColors[selectMode];
@@ -208,7 +243,7 @@ function gameLoop() {
     }
 
     // Calculate and draw highlights
-    if(showHighlights && playerTurn) {
+    if(playerTurn) {
         calculateHighlightedTiles();
         highlightedTiles.forEach(tile => {
             drawTileHighlight(tile.x, tile.y, tile.color);
@@ -226,10 +261,34 @@ function gameLoop() {
         });
     }
 
-    // Draw enemies (using enemy.js functions)
+    // Draw enemies
     enemies.forEach(e => {
         if(!e.alive) return;
-        drawEnemy(e, ctx, grid, mapDim, player);
+        
+        // Draw guard with state-based tint
+        if(e.state === 'alerted') {
+            ctx.fillStyle = "rgba(255, 50, 50, 0.3)";
+            ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+        } else if(e.state === 'investigating') {
+            ctx.fillStyle = "rgba(255, 200, 50, 0.3)";
+            ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+        } else if(e.state === 'eating') {
+            ctx.fillStyle = "rgba(50, 255, 50, 0.3)";
+            ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+        }
+        
+        drawSprite('guard', e.ax, e.ay);
+        
+        // Draw thought bubble
+        if(e.thought && e.thoughtTimer > 0) {
+            drawThoughtBubble(e);
+            e.thoughtTimer--;
+        }
+        
+        // Draw vision cone
+        if(!player.isHidden && e.state !== 'dead') {
+            drawVisionCone(e);
+        }
     });
 
     // Draw player with shadow
@@ -254,6 +313,70 @@ function gameLoop() {
     
     shake *= 0.8;
     requestAnimationFrame(gameLoop);
+}
+
+function drawThoughtBubble(e) {
+    // Draw bubble background
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.beginPath();
+    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 10, 12, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw bubble border
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 10, 12, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Draw thought emoji
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#000';
+    ctx.fillText(e.thought, e.ax * TILE + TILE/2, e.ay * TILE - 10);
+}
+
+function drawVisionCone(e) {
+    const gradient = ctx.createRadialGradient(
+        e.ax * TILE + 30, e.ay * TILE + 30, 10,
+        e.ax * TILE + 30, e.ay * TILE + 30, e.range * TILE
+    );
+    gradient.addColorStop(0, 'rgba(255, 50, 50, 0.2)');
+    gradient.addColorStop(0.5, 'rgba(255, 0, 0, 0.1)');
+    gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(e.ax * TILE + 30, e.ay * TILE + 30);
+    
+    const baseA = Math.atan2(e.dir.y, e.dir.x);
+    const visionAngle = e.state === 'alerted' ? 1.0 : 0.7;
+    
+    for(let a = baseA - visionAngle; a <= baseA + visionAngle; a += 0.1) {
+        let d = 0;
+        let hitWall = false;
+        while(d < e.range && !hitWall) { 
+            d += 0.2; 
+            const checkX = Math.floor(e.x + Math.cos(a) * d);
+            const checkY = Math.floor(e.y + Math.sin(a) * d);
+            
+            if(checkX < 0 || checkX >= mapDim || checkY < 0 || checkY >= mapDim) {
+                hitWall = true;
+            } else if(grid[checkY][checkX] === WALL) {
+                hitWall = true;
+            }
+            
+            if(!hitWall) {
+                ctx.lineTo(
+                    e.ax * TILE + 30 + Math.cos(a) * d * TILE, 
+                    e.ay * TILE + 30 + Math.sin(a) * d * TILE
+                );
+            }
+        }
+    }
+    ctx.closePath();
+    ctx.fill();
 }
 
 function drawMinimap() {
@@ -318,13 +441,6 @@ function toggleMinimap() {
     log(showMinimap ? "Minimap ON" : "Minimap OFF", "#aaa");
 }
 
-function toggleHighlights() { 
-    showHighlights = !showHighlights; 
-    document.getElementById('modeIndicator').classList.toggle('hidden', !showHighlights);
-    document.getElementById('rangeIndicator').classList.toggle('hidden', !showHighlights);
-    log(showHighlights ? "Highlights ON" : "Highlights OFF", showHighlights ? "#0f0" : "#f00");
-}
-
 function updateModeIndicator() {
     const indicator = document.getElementById('modeIndicator');
     const modeName = selectMode.toUpperCase();
@@ -376,7 +492,8 @@ async function endTurn() {
                     e.soundLocation = {x: b.x, y: b.y};
                     e.investigationTurns = 5;
                     e.state = 'investigating';
-                    setEnemyThought(e, '👂', 3);
+                    e.thought = '👂';
+                    e.thoughtTimer = 3;
                     log("Guard heard explosion!", "#ff9900");
                 }
             }
@@ -395,12 +512,11 @@ async function endTurn() {
 
     // Process all enemies
     for(let e of enemies.filter(g => g.alive)) {
-        await processEnemyTurn(e, grid, player, mapDim);
+        await processEnemyTurn(e);
     }
     
     turnCount++; 
     playerTurn = true;
-    if(showHighlights) calculateHighlightedTiles();
 }
 
 function checkGameOver() {
@@ -520,7 +636,6 @@ function setMode(m) {
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
     updateModeIndicator();
-    if(showHighlights) calculateHighlightedTiles();
 }
 
 function playerWait() { 
@@ -559,14 +674,9 @@ function showVictoryStats() {
 
 window.addEventListener('load', () => {
     loadSprites();
-    
-    // Add highlight toggle button
-    const uiControls = document.getElementById('ui-controls');
-    if(!document.getElementById('highlightToggle')) {
-        const btn = document.createElement('button');
-        btn.id = 'highlightToggle';
-        btn.onclick = toggleHighlights;
-        btn.textContent = '✨ Highlights';
-        uiControls.appendChild(btn);
-    }
 });
+
+// Export functions that other scripts need
+window.animMove = animMove;
+window.log = log;
+window.checkGameOver = checkGameOver;
