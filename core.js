@@ -1,7 +1,8 @@
 const TILE = 60;
 const FLOOR=0, WALL=1, HIDE=2, EXIT=3, COIN=5, TRAP=6, RICE=7, BOMB=8;
+const ENEMY_STATE = { PATROL: 0, DISTRACTED: 1, INVESTIGATING: 2 };
 
-let grid, player, enemies, activeBombs = [], turnCount = 1;
+let grid, player, enemies = [], activeBombs = [], turnCount = 1;
 let selectMode = 'move', gameOver = false, playerTurn = true, shake = 0, mapDim = 12;
 let stats = { kills: 0, coins: 0, itemsUsed: 0 };
 let inv = { trap: 3, rice: 2, bomb: 1 };
@@ -13,6 +14,7 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const sprites = {};
 
+// Asset Loader
 const assetNames = ['player', 'guard', 'wall', 'floor', 'exit', 'trap', 'rice', 'bomb', 'coin', 'hide'];
 assetNames.forEach(n => {
     const img = new Image();
@@ -53,11 +55,14 @@ function generateLevel() {
     ));
     player = { x: 1, y: 1, ax: 1, ay: 1, isHidden: false };
     grid[mapDim-2][mapDim-2] = EXIT;
+    
     enemies = [];
     const gc = Math.min(15, parseInt(document.getElementById('guardCount').value) || 5);
     for(let i=0; i<gc; i++){
         let ex, ey; do { ex = rand(mapDim); ey = rand(mapDim); } while(grid[ey][ex]!==FLOOR || Math.hypot(ex-player.x, ey-player.y)<4);
-        enemies.push({x:ex, y:ey, ax:ex, ay:ey, dir:{x:1, y:0}, alive:true, range:4, distracted:0});
+        // Randomize vision range between 2 and 5
+        let range = Math.floor(Math.random() * 4) + 2;
+        enemies.push(new Enemy(ex, ey, range));
     }
 }
 
@@ -74,14 +79,12 @@ function gameLoop() {
     const s = (Math.random()-0.5)*shake;
     ctx.translate(camX+s, camY+s); ctx.scale(zoom, zoom);
 
-    // Draw Map
     for(let y=0; y<mapDim; y++) for(let x=0; x<mapDim; x++) {
         drawSprite('floor', x, y);
         const c = grid[y][x];
         if(c!==FLOOR) drawSprite(['','wall','hide','exit','','coin','trap','rice','bomb'][c], x, y);
     }
 
-    // --- ENHANCED TARGETING HIGHLIGHTS ---
     if(playerTurn) {
         const isMove = selectMode === 'move';
         ctx.lineWidth = 3;
@@ -96,26 +99,17 @@ function gameLoop() {
         }
     }
 
-    enemies.forEach(e => {
-        if(!e.alive) return;
-        drawSprite('guard', e.ax, e.ay);
-        ctx.fillStyle = "rgba(255,0,0,0.1)"; ctx.beginPath(); ctx.moveTo(e.ax*TILE+30, e.ay*TILE+30);
-        const baseA = Math.atan2(e.dir.y, e.dir.x);
-        for(let a=baseA-0.7; a<=baseA+0.7; a+=0.1) {
-            let d=0; while(d<e.range) { d+=0.2; if(grid[Math.floor(e.y+Math.sin(a)*d)]?.[Math.floor(e.x+Math.cos(a)*d)]===WALL) break; }
-            ctx.lineTo(e.ax*TILE+30 + Math.cos(a)*d*TILE, e.ay*TILE+30 + Math.sin(a)*d*TILE);
-        }
-        ctx.fill();
-    });
-
+    enemies.forEach(e => e.draw(ctx));
     drawSprite('player', player.ax, player.ay);
+    
     shake *= 0.8; 
     requestAnimationFrame(gameLoop);
 }
 
-// Interaction & Movement
 async function endTurn() {
     updateUI();
+    
+    // 1. Process Bombs
     let exploding = [];
     activeBombs = activeBombs.filter(b => {
         b.t--; if(b.t <= 0) { exploding.push(b); return false; } return true;
@@ -123,30 +117,39 @@ async function endTurn() {
 
     exploding.forEach(b => {
         grid[b.y][b.x] = FLOOR; shake = 20; log("BOOM!", "#f44");
-        enemies.forEach(e => { if(Math.abs(e.x-b.x)<=1 && Math.abs(e.y-b.y)<=1) { e.alive=false; stats.kills++; }});
+        // Kill nearby
+        enemies.forEach(e => { 
+            if(Math.abs(e.x-b.x)<=1 && Math.abs(e.y-b.y)<=1) { e.alive=false; stats.kills++; }
+            // Investigate if heard (within 7 tiles)
+            else if(Math.hypot(e.x-b.x, e.y-b.y) < 7) {
+                e.state = ENEMY_STATE.INVESTIGATING;
+                e.target = {x: b.x, y: b.y};
+            }
+        });
     });
 
-    for(let e of enemies.filter(g => g.alive)) {
-        if(grid[e.y][e.x] === TRAP) { e.alive=false; grid[e.y][e.x]=FLOOR; log("Guard Trapped", "#f44"); continue; }
-        if(e.distracted > 0) { e.distracted--; continue; }
-
-        let nx=e.x, ny=e.y;
-        const moves = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-        const d = moves[Math.floor(Math.random()*4)];
-        if(grid[e.y+d.y]?.[e.x+d.x] === FLOOR) { nx+=d.x; ny+=d.y; }
-
-        await new Promise(r => animMove(e, nx, ny, 0.2, r));
-
+    // 2. Process Enemies
+    for(let e of enemies) {
+        if(!e.alive) continue;
+        await e.takeTurn();
+        
+        // Check LOS on player after moving
         if(!player.isHidden && hasLineOfSight(e, player.x, player.y)) {
-            gameOver=true; document.getElementById('gameOverScreen').classList.remove('hidden'); return;
+            gameOver=true; 
+            document.getElementById('gameOverScreen').classList.remove('hidden'); 
+            return;
         }
     }
+    
     turnCount++; playerTurn = true;
 }
 
 function animMove(obj, tx, ty, speed, cb) {
     const sx=obj.ax, sy=obj.ay; let p=0;
-    if(obj!==player) obj.dir = {x:Math.sign(tx-obj.x)||obj.dir.x, y:Math.sign(ty-obj.y)||obj.dir.y};
+    // Set direction vector for vision cone
+    if(tx !== obj.x || ty !== obj.y) {
+        obj.dir = {x: Math.sign(tx-obj.x) || obj.dir.x, y: Math.sign(ty-obj.y) || obj.dir.y};
+    }
     function step() {
         p+=speed; obj.ax=sx+(tx-sx)*p; obj.ay=sy+(ty-sy)*p;
         if(p<1) requestAnimationFrame(step); else { obj.x=tx; obj.y=ty; obj.ax=tx; obj.ay=ty; cb(); }
@@ -157,13 +160,14 @@ function animMove(obj, tx, ty, speed, cb) {
 function hasLineOfSight(e, px, py) {
     const dx=px-e.x, dy=py-e.y, dist=Math.hypot(dx,dy);
     if(dist > e.range) return false;
-    for(let d=0.5; d<dist; d+=0.5) if(grid[Math.floor(e.y+(dy/dist)*d)]?.[Math.floor(e.x+(dx/dist)*d)]===WALL) return false;
+    for(let d=0.5; d<dist; d+=0.5) {
+        if(grid[Math.floor(e.y+(dy/dist)*d)]?.[Math.floor(e.x+(dx/dist)*d)]===WALL) return false;
+    }
     return true;
 }
 
-// Camera & Touch Setup
+// Camera & Input (Keep Existing)
 let lastDist = 0, isDragging = false, lastTouch = {x:0, y:0};
-
 canvas.addEventListener('touchstart', e => {
     if(e.touches.length === 2) lastDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
     else { isDragging = false; lastTouch = {x: e.touches[0].pageX, y: e.touches[0].pageY}; }
@@ -201,7 +205,7 @@ canvas.addEventListener('touchend', e => {
             if(selectMode==='trap') grid[ty][tx]=TRAP;
             if(selectMode==='rice') grid[ty][tx]=RICE;
             if(selectMode==='bomb') activeBombs.push({x:tx, y:ty, t:3});
-            inv[selectMode]--;
+            inv[selectMode]--; stats.itemsUsed++;
             log(`Deployed ${selectMode}`, "#00d2ff");
             playerTurn = false; endTurn();
         } else { log(`No ${selectMode}s left!`, "#f44"); }
@@ -215,7 +219,6 @@ function setMode(m) {
 }
 
 function playerWait() { if(playerTurn) { playerTurn = false; endTurn(); } }
-
 function centerCamera() {
     camX = (canvas.width/2) - (player.x*TILE + TILE/2)*zoom;
     camY = (canvas.height/2) - (player.y*TILE + TILE/2)*zoom;
