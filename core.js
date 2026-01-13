@@ -1,7 +1,12 @@
+// ============================================
+// CORE GAME ENGINE - MAIN LOGIC & RENDERING
+// ============================================
+
 const TILE = 60;
 const FLOOR = 0, WALL = 1, HIDE = 2, EXIT = 3, COIN = 5, TRAP = 6, RICE = 7, BOMB = 8;
 
-let grid, player, enemies, activeBombs = [], turnCount = 1;
+// Global game state
+let grid, player, enemies = [], activeBombs = [], turnCount = 1;
 let selectMode = 'move', gameOver = false, playerTurn = true, shake = 0, mapDim = 12;
 let stats = { kills: 0, coins: 0, itemsUsed: 0 };
 let inv = { trap: 3, rice: 2, bomb: 1 };
@@ -11,16 +16,10 @@ let showHighlights = true;
 let lastHighlightTime = 0;
 let highlightedTiles = [];
 
+// Canvas and rendering
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const sprites = {};
-
-const assetNames = ['player', 'guard', 'wall', 'floor', 'exit', 'trap', 'rice', 'bomb', 'coin', 'hide'];
-assetNames.forEach(n => {
-    const img = new Image();
-    img.src = `sprites/${n}.png`;
-    img.onload = () => { sprites[n] = img; };
-});
 
 // Mode colors for highlighting
 const modeColors = {
@@ -30,27 +29,9 @@ const modeColors = {
     'bomb': { fill: 'rgba(255, 50, 150, 0.15)', border: 'rgba(255, 50, 150, 0.7)', glow: 'rgba(255, 50, 150, 0.3)' }
 };
 
-function log(msg, color="#aaa") {
-    const logDiv = document.getElementById('missionLog');
-    const d = document.createElement('div');
-    d.style.color = color;
-    d.innerText = `> ${msg}`;
-    logDiv.prepend(d);
-    if(logDiv.children.length > 5) logDiv.lastChild.remove();
-}
-
-function centerCamera() {
-    camX = (canvas.width/2) - (player.x*TILE + TILE/2)*zoom;
-    camY = (canvas.height/2) - (player.y*TILE + TILE/2)*zoom;
-    clampCamera();
-}
-
-function clampCamera() {
-    const mapSize = mapDim * TILE * zoom;
-    const pad = 100;
-    camX = Math.min(pad, Math.max(camX, canvas.width - mapSize - pad));
-    camY = Math.min(pad, Math.max(camY, canvas.height - mapSize - pad));
-}
+// ============================================
+// INITIALIZATION
+// ============================================
 
 function initGame() {
     mapDim = Math.min(20, Math.max(8, parseInt(document.getElementById('mapSize').value) || 12));
@@ -75,6 +56,7 @@ function generateLevel() {
     canvas.width = window.innerWidth; 
     canvas.height = window.innerHeight;
     
+    // Generate grid
     grid = Array.from({length: mapDim}, (_, y) => 
         Array.from({length: mapDim}, (_, x) => 
             (x==0 || y==0 || x==mapDim-1 || y==mapDim-1) ? WALL : 
@@ -83,7 +65,8 @@ function generateLevel() {
         )
     );
     
-    player = { x: 1, y: 1, ax: 1, ay: 1, isHidden: false };
+    // Initialize player (delegated to player.js)
+    player = initPlayer(1, 1);
     grid[mapDim-2][mapDim-2] = EXIT;
     
     // Add some coins
@@ -96,27 +79,25 @@ function generateLevel() {
         grid[cy][cx] = COIN;
     }
     
-    enemies = [];
+    // Initialize enemies (delegated to enemy.js)
     const gc = Math.min(15, Math.max(1, parseInt(document.getElementById('guardCount').value) || 5));
-    for(let i=0; i<gc; i++){
-        let ex, ey; 
-        do { 
-            ex = rand(mapDim); 
-            ey = rand(mapDim); 
-        } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
-        enemies.push({
-            x: ex, y: ey, 
-            ax: ex, ay: ey, 
-            dir: {x: 1, y: 0}, 
-            alive: true, 
-            range: 4, 
-            distracted: 0, 
-            alert: false
-        });
-    }
+    enemies = initEnemies(gc, grid, mapDim, player);
 }
 
 function rand(m) { return Math.floor(Math.random()*(m-2))+1; }
+
+// ============================================
+// RENDERING ENGINE
+// ============================================
+
+function loadSprites() {
+    const assetNames = ['player', 'guard', 'wall', 'floor', 'exit', 'trap', 'rice', 'bomb', 'coin', 'hide'];
+    assetNames.forEach(n => {
+        const img = new Image();
+        img.src = `sprites/${n}.png`;
+        img.onload = () => { sprites[n] = img; };
+    });
+}
 
 function drawSprite(n, x, y) { 
     if(sprites[n]) ctx.drawImage(sprites[n], x*TILE, y*TILE, TILE, TILE); 
@@ -245,44 +226,10 @@ function gameLoop() {
         });
     }
 
-    // Draw enemies
+    // Draw enemies (using enemy.js functions)
     enemies.forEach(e => {
         if(!e.alive) return;
-        
-        // Draw guard
-        drawSprite('guard', e.ax, e.ay);
-        
-        // Draw vision cone with gradient
-        if(!player.isHidden) {
-            const gradient = ctx.createRadialGradient(
-                e.ax*TILE + 30, e.ay*TILE + 30, 10,
-                e.ax*TILE + 30, e.ay*TILE + 30, e.range * TILE
-            );
-            gradient.addColorStop(0, 'rgba(255, 50, 50, 0.2)');
-            gradient.addColorStop(0.5, 'rgba(255, 0, 0, 0.1)');
-            gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
-            
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.moveTo(e.ax*TILE + 30, e.ay*TILE + 30);
-            
-            const baseA = Math.atan2(e.dir.y, e.dir.x);
-            for(let a = baseA - 0.7; a <= baseA + 0.7; a += 0.1) {
-                let d = 0;
-                while(d < e.range) { 
-                    d += 0.2; 
-                    const checkX = Math.floor(e.x + Math.cos(a) * d);
-                    const checkY = Math.floor(e.y + Math.sin(a) * d);
-                    if(grid[checkY]?.[checkX] === WALL) break;
-                }
-                ctx.lineTo(
-                    e.ax*TILE + 30 + Math.cos(a) * d * TILE, 
-                    e.ay*TILE + 30 + Math.sin(a) * d * TILE
-                );
-            }
-            ctx.closePath();
-            ctx.fill();
-        }
+        drawEnemy(e, ctx, grid, mapDim, player);
     });
 
     // Draw player with shadow
@@ -294,7 +241,7 @@ function gameLoop() {
     // Draw active bombs with timer
     activeBombs.forEach(b => {
         drawSprite('bomb', b.x, b.y);
-        ctx.fillStyle = "#fff";
+        ctx.fillStyle = b.t <= 1 ? "#ff0000" : "#ffffff";
         ctx.font = "bold 20px monospace";
         ctx.textAlign = "center";
         ctx.fillText(b.t.toString(), b.x*TILE + TILE/2, b.y*TILE + TILE/2 + 7);
@@ -302,44 +249,68 @@ function gameLoop() {
 
     // Draw minimap
     if(showMinimap) {
-        ctx.setTransform(1,0,0,1,0,0);
-        const ms = 5;
-        const mx = canvas.width - mapDim * ms - 20;
-        const my = 75;
-        
-        ctx.fillStyle = "rgba(0,0,0,0.85)";
-        ctx.fillRect(mx-5, my, mapDim*ms+10, mapDim*ms+10);
-        ctx.strokeStyle = "#444";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(mx-5, my, mapDim*ms+10, mapDim*ms+10);
-        
-        for(let y=0; y<mapDim; y++) {
-            for(let x=0; x<mapDim; x++) {
-                if(grid[y][x] === WALL) {
-                    ctx.fillStyle = "#666";
-                    ctx.fillRect(mx + x*ms, my + 5 + y*ms, ms, ms);
-                } else if(grid[y][x] === EXIT) {
-                    ctx.fillStyle = "#0f0";
-                    ctx.fillRect(mx + x*ms, my + 5 + y*ms, ms, ms);
-                }
-            }
-        }
-        
-        // Player on minimap
-        ctx.fillStyle = "#00d2ff";
-        ctx.beginPath();
-        ctx.arc(mx + player.x*ms + ms/2, my + 5 + player.y*ms + ms/2, ms/2, 0, Math.PI*2);
-        ctx.fill();
-        
-        // Enemies on minimap
-        enemies.filter(e => e.alive).forEach(e => {
-            ctx.fillStyle = "#ff3333";
-            ctx.fillRect(mx + e.x*ms, my + 5 + e.y*ms, ms, ms);
-        });
+        drawMinimap();
     }
     
     shake *= 0.8;
     requestAnimationFrame(gameLoop);
+}
+
+function drawMinimap() {
+    ctx.setTransform(1,0,0,1,0,0);
+    const ms = 5;
+    const mx = canvas.width - mapDim * ms - 20;
+    const my = 75;
+    
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.fillRect(mx-5, my, mapDim*ms+10, mapDim*ms+10);
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mx-5, my, mapDim*ms+10, mapDim*ms+10);
+    
+    for(let y=0; y<mapDim; y++) {
+        for(let x=0; x<mapDim; x++) {
+            if(grid[y][x] === WALL) {
+                ctx.fillStyle = "#666";
+                ctx.fillRect(mx + x*ms, my + 5 + y*ms, ms, ms);
+            } else if(grid[y][x] === EXIT) {
+                ctx.fillStyle = "#0f0";
+                ctx.fillRect(mx + x*ms, my + 5 + y*ms, ms, ms);
+            }
+        }
+    }
+    
+    // Player on minimap
+    ctx.fillStyle = "#00d2ff";
+    ctx.beginPath();
+    ctx.arc(mx + player.x*ms + ms/2, my + 5 + player.y*ms + ms/2, ms/2, 0, Math.PI*2);
+    ctx.fill();
+    
+    // Enemies on minimap
+    enemies.filter(e => e.alive).forEach(e => {
+        const enemyColor = e.state === 'alerted' ? "#ff0000" :
+                          e.state === 'investigating' ? "#ff9900" :
+                          e.state === 'eating' ? "#00ff00" : "#ff3333";
+        ctx.fillStyle = enemyColor;
+        ctx.fillRect(mx + e.x*ms, my + 5 + e.y*ms, ms, ms);
+    });
+}
+
+// ============================================
+// CAMERA & UI FUNCTIONS
+// ============================================
+
+function centerCamera() {
+    camX = (canvas.width/2) - (player.x*TILE + TILE/2)*zoom;
+    camY = (canvas.height/2) - (player.y*TILE + TILE/2)*zoom;
+    clampCamera();
+}
+
+function clampCamera() {
+    const mapSize = mapDim * TILE * zoom;
+    const pad = 100;
+    camX = Math.min(pad, Math.max(camX, canvas.width - mapSize - pad));
+    camY = Math.min(pad, Math.max(camY, canvas.height - mapSize - pad));
 }
 
 function toggleMinimap() { 
@@ -359,7 +330,6 @@ function updateModeIndicator() {
     const modeName = selectMode.toUpperCase();
     indicator.innerHTML = `Mode: <span class="mode-name">${modeName}</span>`;
     
-    // Update color based on mode
     const colors = {
         'move': '#00d2ff',
         'trap': '#ff6464',
@@ -375,6 +345,10 @@ function updateToolCounts() {
     document.getElementById('bombCount').textContent = inv.bomb;
 }
 
+// ============================================
+// TURN PROCESSING
+// ============================================
+
 async function endTurn() {
     // Process Bombs
     let exploding = [];
@@ -387,60 +361,41 @@ async function endTurn() {
         return true;
     });
 
+    // Handle bomb explosions
     exploding.forEach(b => {
         grid[b.y][b.x] = FLOOR; 
         shake = 20; 
         log("BOOM!", "#f44");
+        
+        // Alert nearby enemies to the sound
+        enemies.forEach(e => {
+            if(e.alive && e.state !== 'dead') {
+                const dist = Math.hypot(e.x - b.x, e.y - b.y);
+                if(dist <= e.hearingRange) {
+                    e.hasHeardSound = true;
+                    e.soundLocation = {x: b.x, y: b.y};
+                    e.investigationTurns = 5;
+                    e.state = 'investigating';
+                    setEnemyThought(e, '👂', 3);
+                    log("Guard heard explosion!", "#ff9900");
+                }
+            }
+        });
+        
+        // Kill enemies in blast radius
         enemies.forEach(e => { 
-            if(Math.abs(e.x-b.x)<=1 && Math.abs(e.y-b.y)<=1) { 
-                e.alive=false; 
+            if(e.alive && Math.abs(e.x-b.x)<=1 && Math.abs(e.y-b.y)<=1) { 
+                e.alive = false; 
+                e.state = 'dead';
                 stats.kills++;
-                log("Guard eliminated!", "#0f0");
+                log("Guard eliminated by explosion!", "#0f0");
             }
         });
     });
 
-    // Process Guards
+    // Process all enemies
     for(let e of enemies.filter(g => g.alive)) {
-        if(grid[e.y][e.x] === TRAP) { 
-            e.alive=false; 
-            grid[e.y][e.x]=FLOOR; 
-            log("Guard Trapped!", "#ff0");
-            stats.kills++;
-            continue; 
-        }
-        
-        if(e.distracted > 0) { 
-            e.distracted--; 
-            if(e.distracted === 0) log("Guard no longer distracted", "#aaa");
-            continue; 
-        }
-
-        // Check for rice distraction
-        if(grid[e.y][e.x] === RICE) {
-            e.distracted = 3;
-            grid[e.y][e.x] = FLOOR;
-            log("Guard distracted by rice!", "#ff0");
-            stats.itemsUsed++;
-            continue;
-        }
-
-        let nx = e.x, ny = e.y;
-        const moves = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-        const d = moves[Math.floor(Math.random()*4)];
-        if(grid[e.y+d.y]?.[e.x+d.x] === FLOOR) { 
-            nx += d.x; 
-            ny += d.y; 
-        }
-
-        await new Promise(r => animMove(e, nx, ny, 0.2, r));
-
-        if(!player.isHidden && hasLineOfSight(e, player.x, player.y)) {
-            gameOver = true; 
-            document.getElementById('gameOverScreen').classList.remove('hidden');
-            log("YOU WERE SPOTTED!", "#f00");
-            return;
-        }
+        await processEnemyTurn(e, grid, player, mapDim);
     }
     
     turnCount++; 
@@ -448,45 +403,15 @@ async function endTurn() {
     if(showHighlights) calculateHighlightedTiles();
 }
 
-function animMove(obj, tx, ty, speed, cb) {
-    const sx = obj.ax, sy = obj.ay; 
-    let p = 0;
-    
-    if(obj !== player) {
-        obj.dir = {
-            x: Math.sign(tx-obj.x) || obj.dir.x, 
-            y: Math.sign(ty-obj.y) || obj.dir.y
-        };
-    }
-    
-    function step() {
-        p += speed; 
-        obj.ax = sx + (tx - sx) * p; 
-        obj.ay = sy + (ty - sy) * p;
-        if(p < 1) {
-            requestAnimationFrame(step);
-        } else { 
-            obj.x = tx; 
-            obj.y = ty; 
-            obj.ax = tx; 
-            obj.ay = ty; 
-            cb(); 
-        }
-    }
-    step();
+function checkGameOver() {
+    gameOver = true; 
+    document.getElementById('gameOverScreen').classList.remove('hidden');
+    log("YOU WERE SPOTTED!", "#f00");
 }
 
-function hasLineOfSight(e, px, py) {
-    const dx = px - e.x, dy = py - e.y, dist = Math.hypot(dx, dy);
-    if(dist > e.range) return false;
-    
-    for(let d = 0.5; d < dist; d += 0.5) {
-        const checkX = Math.floor(e.x + (dx/dist) * d);
-        const checkY = Math.floor(e.y + (dy/dist) * d);
-        if(grid[checkY]?.[checkX] === WALL) return false;
-    }
-    return true;
-}
+// ============================================
+// INPUT HANDLING
+// ============================================
 
 let lastDist = 0, isDragging = false, lastTouch = {x:0, y:0};
 
@@ -539,49 +464,56 @@ canvas.addEventListener('touchend', e => {
     if(selectMode === 'move' && dist <= 2 && isValidMove) {
         playerTurn = false;
         animMove(player, tx, ty, 0.2, () => {
-            player.isHidden = (grid[ty][tx] === HIDE);
-            
-            if(grid[ty][tx] === COIN) { 
-                stats.coins++; 
-                grid[ty][tx] = FLOOR; 
-                log("Found Gold!", "#ff0");
-            }
-            
-            if(grid[ty][tx] === EXIT) { 
-                gameOver = true; 
-                document.getElementById('resultScreen').classList.remove('hidden');
-                showVictoryStats();
-            }
+            handlePlayerMove(tx, ty);
             endTurn();
         });
     } else if(selectMode !== 'move' && dist <= 2 && grid[ty][tx] === FLOOR && isValidMove) {
-        if(selectMode === 'trap' && inv.trap > 0) {
-            grid[ty][tx] = TRAP;
-            inv.trap--;
-            stats.itemsUsed++;
-            log("Trap set!", "#0f0");
-        } else if(selectMode === 'rice' && inv.rice > 0) {
-            grid[ty][tx] = RICE;
-            inv.rice--;
-            stats.itemsUsed++;
-            log("Rice scattered!", "#ff0");
-        } else if(selectMode === 'bomb' && inv.bomb > 0) {
-            activeBombs.push({x: tx, y: ty, t: 3});
-            inv.bomb--;
-            stats.itemsUsed++;
-            log("Bomb placed! (3 turns)", "#f00");
-        } else {
-            log("No more items!", "#f00");
-            return;
-        }
-        
-        updateToolCounts();
-        playerTurn = false; 
-        endTurn();
+        handleItemPlacement(tx, ty, selectMode);
     } else if(!isValidMove) {
         log("Out of range!", "#f00");
     }
 });
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+
+function log(msg, color="#aaa") {
+    const logDiv = document.getElementById('missionLog');
+    const d = document.createElement('div');
+    d.style.color = color;
+    d.innerText = `> ${msg}`;
+    logDiv.prepend(d);
+    if(logDiv.children.length > 5) logDiv.lastChild.remove();
+}
+
+function animMove(obj, tx, ty, speed, cb) {
+    const sx = obj.ax, sy = obj.ay; 
+    let p = 0;
+    
+    if(obj !== player) {
+        obj.dir = {
+            x: Math.sign(tx-obj.x) || obj.dir.x, 
+            y: Math.sign(ty-obj.y) || obj.dir.y
+        };
+    }
+    
+    function step() {
+        p += speed; 
+        obj.ax = sx + (tx - sx) * p; 
+        obj.ay = sy + (ty - sy) * p;
+        if(p < 1) {
+            requestAnimationFrame(step);
+        } else { 
+            obj.x = tx; 
+            obj.y = ty; 
+            obj.ax = tx; 
+            obj.ay = ty; 
+            cb(); 
+        }
+    }
+    step();
+}
 
 function setMode(m) {
     selectMode = m;
@@ -603,7 +535,6 @@ function showVictoryStats() {
     const statsTable = document.getElementById('statsTable');
     const rankLabel = document.getElementById('rankLabel');
     
-    // Calculate rank
     let rank = "Novice";
     let score = stats.kills * 100 + stats.coins * 50 - turnCount * 5 - stats.itemsUsed * 10;
     
@@ -622,8 +553,13 @@ function showVictoryStats() {
     `;
 }
 
-// Initialize UI on load
+// ============================================
+// INITIALIZATION ON LOAD
+// ============================================
+
 window.addEventListener('load', () => {
+    loadSprites();
+    
     // Add highlight toggle button
     const uiControls = document.getElementById('ui-controls');
     if(!document.getElementById('highlightToggle')) {
