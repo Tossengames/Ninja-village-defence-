@@ -1,62 +1,133 @@
-async function endTurn() {
-    let exploding = [];
-    activeBombs = activeBombs.filter(b => {
-        b.t--;
-        if(b.t <= 0) { exploding.push(b); return false; }
-        return true;
-    });
+/**
+ * Enemy Logic: Shadow Protocol
+ * Features: Directional facing, Dynamic Vision Cones, Item Interaction
+ */
 
-    exploding.forEach(b => {
-        grid[b.y][b.x] = FLOOR; shake = 25; log("BOMB DETONATED", "#f44");
-        enemies.forEach(e => { if(Math.abs(e.x-b.x)<=1 && Math.abs(e.y-b.y)<=1) { e.alive=false; stats.kills++; }});
-    });
+const ENEMY_STATE = { PATROL: 0, DISTRACTED: 1, INVESTIGATING: 2 };
 
-    for(let e of enemies.filter(g => g.alive)) {
-        if(grid[e.y][e.x] === TRAP) { e.alive=false; grid[e.y][e.x]=FLOOR; log("Guard eliminated"); continue; }
-        if(e.distracted > 0) { e.distracted--; continue; }
+class Enemy {
+    constructor(x, y, range) {
+        this.x = x;
+        this.y = y;
+        this.ax = x; // Animation X
+        this.ay = y; // Animation Y
+        this.dir = { x: 1, y: 0 };
+        this.alive = true;
+        this.range = range || 3; // Custom vision depth
+        this.state = ENEMY_STATE.PATROL;
+        this.target = null; // Coordinates for Rice or Bomb
+        this.waitTurns = 0;
+    }
 
-        let nx=e.x, ny=e.y;
-        const moves = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-        const d = moves[Math.floor(Math.random()*4)];
-        if(grid[e.y+d.y]?.[e.x+d.x] === FLOOR) { nx+=d.x; ny+=d.y; }
+    async takeTurn() {
+        if (!this.alive) return;
 
-        await new Promise(r => animMove(e, nx, ny, 0.2, r));
-
-        if(!player.isHidden && hasLineOfSight(e, player.x, player.y)) {
-            gameOver=true; 
-            document.getElementById('gameOverScreen').classList.remove('hidden'); 
+        // 1. Check for immediate hazards (Traps)
+        if (grid[this.y][this.x] === TRAP) {
+            this.alive = false;
+            grid[this.y][this.x] = FLOOR;
+            log("Guard eliminated by trap!", "#f44");
             return;
         }
+
+        // 2. Scan for Rice (Prioritize distraction)
+        this.scanForRice();
+
+        // 3. Decision Tree based on State
+        if (this.state === ENEMY_STATE.DISTRACTED && this.target) {
+            await this.moveTowards(this.target.x, this.target.y);
+            // If reached rice
+            if (this.x === this.target.x && this.y === this.target.y) {
+                log("Guard ate poisoned rice...", "#f44");
+                grid[this.y][this.x] = FLOOR;
+                this.alive = false;
+            }
+        } 
+        else if (this.state === ENEMY_STATE.INVESTIGATING && this.target) {
+            await this.moveTowards(this.target.x, this.target.y);
+            if (this.x === this.target.x && this.y === this.target.y) {
+                log("Guard found nothing at bomb site.", "#aaa");
+                this.state = ENEMY_STATE.PATROL;
+                this.target = null;
+            }
+        } 
+        else {
+            // Standard Patrol
+            await this.patrol();
+        }
     }
-    turnCount++; playerTurn = true;
-}
 
-function animMove(obj, tx, ty, speed, cb) {
-    const sx=obj.ax, sy=obj.ay; let p=0;
-    if(obj!==player) obj.dir = {x:Math.sign(tx-obj.x)||obj.dir.x, y:Math.sign(ty-obj.y)||obj.dir.y};
-    function step() {
-        p+=speed; obj.ax=sx+(tx-sx)*p; obj.ay=sy+(ty-sy)*p;
-        if(p<1) requestAnimationFrame(step); else { obj.x=tx; obj.y=ty; obj.ax=tx; obj.ay=ty; cb(); }
+    scanForRice() {
+        // Look for rice within range and LOS
+        for (let dy = -this.range; dy <= this.range; dy++) {
+            for (let dx = -this.range; dx <= this.range; dx++) {
+                let tx = this.x + dx, ty = this.y + dy;
+                if (grid[ty]?.[tx] === RICE) {
+                    if (hasLineOfSight(this, tx, ty)) {
+                        this.state = ENEMY_STATE.DISTRACTED;
+                        this.target = { x: tx, y: ty };
+                        return;
+                    }
+                }
+            }
+        }
     }
-    step();
-}
 
-function hasLineOfSight(e, px, py) {
-    const dx = px - e.x, dy = py - e.y, dist = Math.hypot(dx, dy);
-    if (dist > e.range) return false;
+    async moveTowards(tx, ty) {
+        let dx = Math.sign(tx - this.x);
+        let dy = Math.sign(ty - this.y);
+        
+        // Move horizontal first, then vertical (simple pathing)
+        let nextX = this.x, nextY = this.y;
+        if (dx !== 0 && grid[this.y][this.x + dx] !== WALL) nextX += dx;
+        else if (dy !== 0 && grid[this.y + dy][this.x] !== WALL) nextY += dy;
 
-    const viewA = Math.atan2(e.dir.y, e.dir.x);
-    const targetA = Math.atan2(dy, dx);
-    let diff = Math.abs(targetA - viewA);
-    if (diff > Math.PI) diff = Math.PI * 2 - diff;
-    if (diff > 0.8) return false;
-
-    // Precise Wall Check: Check every 0.2 tiles along the path
-    const steps = dist * 5;
-    for (let i = 1; i < steps; i++) {
-        const tx = e.x + (dx * (i / steps));
-        const ty = e.y + (dy * (i / steps));
-        if (grid[Math.floor(ty)]?.[Math.floor(tx)] === WALL) return false;
+        await new Promise(r => animMove(this, nextX, nextY, 0.2, r));
     }
-    return true;
+
+    async patrol() {
+        const moves = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+        // Try to keep moving in current direction, or pick new one
+        if (Math.random() > 0.7 || grid[this.y + this.dir.y]?.[this.x + this.dir.x] === WALL) {
+            this.dir = moves[Math.floor(Math.random() * 4)];
+        }
+        
+        let nx = this.x + this.dir.x;
+        let ny = this.y + this.dir.y;
+
+        if (grid[ny]?.[nx] !== WALL) {
+            await new Promise(r => animMove(this, nx, ny, 0.2, r));
+        }
+    }
+
+    draw(ctx) {
+        if (!this.alive) return;
+        
+        // 1. Draw Guard Sprite
+        drawSprite('guard', this.ax, this.ay);
+
+        // 2. Draw Vision Cone (Dynamic Length based on this.range)
+        ctx.fillStyle = "rgba(255, 50, 50, 0.15)";
+        ctx.beginPath();
+        ctx.moveTo(this.ax * TILE + 30, this.ay * TILE + 30);
+        
+        // Calculate angle based on movement direction
+        const baseA = Math.atan2(this.dir.y, this.dir.x);
+        const FOV = 0.8; // Width of vision
+
+        for (let a = baseA - FOV; a <= baseA + FOV; a += 0.1) {
+            let d = 0;
+            while (d < this.range) {
+                d += 0.2;
+                let checkX = Math.floor(this.x + Math.cos(a) * d);
+                let checkY = Math.floor(this.y + Math.sin(a) * d);
+                if (grid[checkY]?.[checkX] === WALL) break;
+            }
+            ctx.lineTo(
+                this.ax * TILE + 30 + Math.cos(a) * d * TILE, 
+                this.ay * TILE + 30 + Math.sin(a) * d * TILE
+            );
+        }
+        ctx.fill();
+    }
 }
