@@ -9,15 +9,26 @@
 <body>
     <div id="missionLog"></div>
 
+    <!-- New UI Elements -->
+    <div id="modeIndicator" class="hidden">
+        Mode: <span class="mode-name">MOVE</span>
+    </div>
+    
+    <div id="rangeIndicator" class="hidden">
+        Range: 2 tiles
+    </div>
+
     <div id="ui-controls" class="hidden">
         <button id="mapToggle" onclick="toggleMinimap()">🗺️ Map</button>
+        <button id="highlightToggle" onclick="toggleHighlights()">✨ Highlights</button>
     </div>
 
     <div id="menu" class="overlay-screen">
         <div class="menu-box">
             <h2 style="color:var(--accent); text-align: center; letter-spacing: 4px;">MISSION START</h2>
-            <div class="menu-item">Size: <input type="number" id="mapSize" value="12"></div>
-            <div class="menu-item">Guards: <input type="number" id="guardCount" value="5"></div>
+            <div class="menu-item">Size: <input type="number" id="mapSize" value="12" min="8" max="20"></div>
+            <div class="menu-item">Guards: <input type="number" id="guardCount" value="5" min="1" max="15"></div>
+            <div class="menu-item">Highlights: <input type="checkbox" id="showHighlights" checked></div>
             <button onclick="initGame()" class="start-btn">INFILTRATE</button>
         </div>
     </div>
@@ -38,13 +49,29 @@
     <canvas id="game"></canvas>
 
     <div id="toolbar" class="hidden">
-        <div class="tool-btn active" id="btnMove" onclick="setMode('move')"><span>👣</span>Move</div>
-        <div class="tool-btn" id="btnTrap" onclick="setMode('trap')"><span id="countTrap">3</span>⚙️ Trap</div>
-        <div class="tool-btn" id="btnRice" onclick="setMode('rice')"><span id="countRice">2</span>🍚 Rice</div>
-        <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')"><span id="countBomb">1</span>💣 Bomb</div>
-        <div class="tool-btn" onclick="playerWait()"><span>⌛</span>Wait</div>
+        <div class="tool-btn active" id="btnMove" onclick="setMode('move')">
+            <span>👣</span>Move
+            <div class="tool-count" id="moveCount">∞</div>
+        </div>
+        <div class="tool-btn" id="btnTrap" onclick="setMode('trap')">
+            <span>⚙️</span>Trap
+            <div class="tool-count" id="trapCount">3</div>
+        </div>
+        <div class="tool-btn" id="btnRice" onclick="setMode('rice')">
+            <span>🍚</span>Rice
+            <div class="tool-count" id="riceCount">2</div>
+        </div>
+        <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')">
+            <span>💣</span>Bomb
+            <div class="tool-count" id="bombCount">1</div>
+        </div>
+        <div class="tool-btn" onclick="playerWait()">
+            <span>⌛</span>Wait
+        </div>
     </div>
 
     <script src="core.js"></script>
-    </body>
+    <script src="enemy.js"></script>
+    <script src="player.js"></script>
+</body>
 </html>
