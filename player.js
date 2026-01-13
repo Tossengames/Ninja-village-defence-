@@ -1,25 +1,65 @@
-// Player-specific functions (already integrated in core.js)
-// This file can be kept for future expansion
+// ============================================
+// PLAYER MODULE - PLAYER LOGIC & ACTIONS
+// ============================================
 
-class PlayerAbilities {
-    constructor() {
-        this.abilities = {
-            doubleMove: false,
-            silentStep: false,
-            throwStone: false
-        };
+// Import globals from core (they're shared)
+const TILE = 60;
+const FLOOR = 0, WALL = 1, HIDE = 2, EXIT = 3, COIN = 5;
+
+function initPlayer(x, y) {
+    return {
+        x: x,
+        y: y,
+        ax: x,
+        ay: y,
+        isHidden: false,
+        dir: {x: 0, y: 0}
+    };
+}
+
+function handlePlayerMove(tx, ty) {
+    player.isHidden = (grid[ty][tx] === HIDE);
+    
+    if(grid[ty][tx] === COIN) { 
+        stats.coins++; 
+        grid[ty][tx] = FLOOR; 
+        log("Found Gold!", "#ff0");
     }
     
-    // Future: Special abilities can be added here
-    useDoubleMove() {
-        if(this.abilities.doubleMove) {
-            // Allow two moves in one turn
-        }
-    }
-    
-    useSilentStep() {
-        if(this.abilities.silentStep) {
-            // Move without alerting guards
-        }
+    if(grid[ty][tx] === EXIT) { 
+        gameOver = true; 
+        document.getElementById('resultScreen').classList.remove('hidden');
+        showVictoryStats();
     }
 }
+
+function handleItemPlacement(tx, ty, mode) {
+    if(mode === 'trap' && inv.trap > 0) {
+        grid[ty][tx] = TRAP;
+        inv.trap--;
+        stats.itemsUsed++;
+        log("Trap set!", "#0f0");
+    } else if(mode === 'rice' && inv.rice > 0) {
+        grid[ty][tx] = RICE;
+        inv.rice--;
+        stats.itemsUsed++;
+        log("Rice scattered!", "#ff0");
+    } else if(mode === 'bomb' && inv.bomb > 0) {
+        activeBombs.push({x: tx, y: ty, t: 3});
+        inv.bomb--;
+        stats.itemsUsed++;
+        log("Bomb placed! (3 turns)", "#f00");
+    } else {
+        log("No more items!", "#f00");
+        return;
+    }
+    
+    updateToolCounts();
+    playerTurn = false; 
+    endTurn();
+}
+
+// Export player functions
+window.initPlayer = initPlayer;
+window.handlePlayerMove = handlePlayerMove;
+window.handleItemPlacement = handleItemPlacement;
