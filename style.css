@@ -1,91 +1,256 @@
 :root {
-    --accent: #d4af37; /* Gold */
+    --accent: #d4af37;
     --bg: #050505;
     --red: #ff3333;
     --blue: #00d2ff;
-    --panel: rgba(10, 10, 10, 0.9);
-    --border: #333;
+    --green: #33ff33;
+    --yellow: #ffff33;
+    --purple: #cc33ff;
+    --panel: rgba(15, 15, 15, 0.95);
 }
-
-* { box-sizing: border-box; }
 
 body {
     margin: 0;
     background: var(--bg);
     color: #eee;
-    font-family: 'Courier New', Courier, monospace; /* More 'tech' feel */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     overflow: hidden;
     touch-action: none;
     user-select: none;
 }
 
-canvas { 
-    display: block; 
-    image-rendering: pixelated; 
+canvas {
+    display: block;
+    image-rendering: pixelated;
 }
 
-/* --- MISSION LOG --- */
+/* --- MISSION LOG (Top Left) --- */
 #missionLog {
     position: fixed;
-    top: 20px;
-    left: 20px;
-    width: 250px;
-    height: 100px;
-    background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
-    border-left: 4px solid var(--accent);
+    top: 15px;
+    left: 15px;
+    width: 220px;
+    height: 90px;
+    background: rgba(0, 0, 0, 0.7);
+    border-left: 3px solid var(--accent);
     padding: 10px;
-    font-size: 12px;
+    font-size: 11px;
     pointer-events: none;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     z-index: 100;
+    border-radius: 0 8px 8px 0;
+    backdrop-filter: blur(5px);
 }
 
-#missionLog div { margin-bottom: 5px; text-shadow: 1px 1px 2px #000; }
+#missionLog div {
+    margin-bottom: 4px;
+    text-shadow: 1px 1px 2px #000;
+    animation: slideIn 0.2s ease-out;
+}
 
-/* --- UI CONTROLS (Map Button) --- */
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* Enhanced highlight animations */
+@keyframes pulse-highlight {
+    0% { transform: scale(1); opacity: 0.6; }
+    50% { transform: scale(1.02); opacity: 0.9; }
+    100% { transform: scale(1); opacity: 0.6; }
+}
+
+@keyframes glow {
+    0% { box-shadow: 0 0 5px currentColor; }
+    50% { box-shadow: 0 0 15px currentColor; }
+    100% { box-shadow: 0 0 5px currentColor; }
+}
+
+@keyframes ripple {
+    0% { transform: scale(1); opacity: 0.8; }
+    100% { transform: scale(1.2); opacity: 0; }
+}
+
+/* Mode Indicator */
+#modeIndicator {
+    position: fixed;
+    top: 80px;
+    left: 15px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 10px 15px;
+    border-radius: 8px;
+    border-left: 4px solid var(--blue);
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 100;
+    pointer-events: none;
+    backdrop-filter: blur(5px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+#modeIndicator .mode-name {
+    color: var(--blue);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Range Indicator */
+#rangeIndicator {
+    position: fixed;
+    bottom: 100px;
+    left: 15px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-size: 11px;
+    color: #aaa;
+    z-index: 100;
+    pointer-events: none;
+    backdrop-filter: blur(5px);
+    border: 1px solid #333;
+}
+
+/* --- UI CONTROLS (Top Right) --- */
 #ui-controls {
     position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 500; /* Ensure it stays above everything */
+    top: 15px;
+    right: 15px;
+    z-index: 110;
+    display: flex;
+    gap: 10px;
 }
 
 #mapToggle {
-    background: var(--panel);
+    background: #222;
     color: var(--accent);
-    border: 2px solid var(--accent);
-    padding: 12px 20px;
-    border-radius: 4px;
+    border: 1px solid var(--accent);
+    padding: 10px 15px;
+    border-radius: 8px;
     font-weight: bold;
     cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    transition: 0.2s;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    transition: all 0.2s;
+}
+
+#mapToggle:hover {
+    background: #2a2a2a;
 }
 
 #mapToggle:active {
     background: var(--accent);
     color: #000;
+    transform: translateY(2px);
 }
 
-/* --- OVERLAY SCREENS (Menu/Result/Game Over) --- */
+#highlightToggle {
+    background: #222;
+    color: var(--green);
+    border: 1px solid var(--green);
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    transition: all 0.2s;
+}
+
+#highlightToggle:active {
+    background: var(--green);
+    color: #000;
+    transform: translateY(2px);
+}
+
+/* --- TOOLBAR (Bottom Center) --- */
+#toolbar {
+    position: fixed;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    background: var(--panel);
+    padding: 15px;
+    border-radius: 20px;
+    border: 1px solid #333;
+    z-index: 100;
+    box-shadow: 0 -5px 25px rgba(0,0,0,0.5);
+    backdrop-filter: blur(10px);
+}
+
+.tool-btn {
+    width: 70px;
+    height: 70px;
+    background: linear-gradient(145deg, #1a1a1a, #222);
+    border: 2px solid #444;
+    border-radius: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: #888;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+}
+
+.tool-btn span {
+    font-size: 28px;
+    margin-bottom: 5px;
+}
+
+.tool-btn.active {
+    border-color: var(--blue);
+    color: #fff;
+    background: linear-gradient(145deg, #1e2a30, #2a3a42);
+    box-shadow: 0 0 20px rgba(0, 210, 255, 0.6), 
+                inset 0 0 10px rgba(0, 210, 255, 0.2);
+    transform: translateY(-5px) scale(1.05);
+}
+
+.tool-btn:hover:not(.active) {
+    border-color: #666;
+    color: #ccc;
+    transform: translateY(-2px);
+}
+
+.tool-btn .tool-count {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: var(--accent);
+    color: #000;
+    font-size: 9px;
+    font-weight: bold;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* --- OVERLAY SCREENS --- */
 .overlay-screen {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(8px);
+    background: rgba(0,0,0,0.95);
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    z-index: 1000;
+    z-index: 200;
+    text-align: center;
 }
 
-.menu-box, .result-scroll {
+.menu-box {
     background: #111;
-    border: 1px solid var(--accent);
+    border: 2px solid var(--accent);
     padding: 40px;
-    border-radius: 4px;
+    border-radius: 20px;
     width: 320px;
-    box-shadow: 0 0 30px rgba(212, 175, 55, 0.2);
+    box-shadow: 0 0 40px rgba(212, 175, 55, 0.2);
 }
 
 .menu-item {
@@ -98,90 +263,70 @@ canvas {
 
 input[type="number"] {
     width: 70px;
-    background: #000;
-    border: 1px solid var(--border);
-    color: var(--accent);
+    background: #222;
+    border: 1px solid #444;
+    color: #fff;
     padding: 8px;
     text-align: center;
-    outline: none;
+    border-radius: 4px;
+    font-size: 14px;
 }
 
 .start-btn, .reload-btn {
     width: 100%;
-    padding: 15px;
-    background: var(--accent);
+    padding: 18px;
+    background: linear-gradient(to bottom, var(--accent), #b8941f);
     color: #000;
     border: none;
     font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 3px;
+    border-radius: 8px;
     cursor: pointer;
     margin-top: 20px;
-    transition: 0.3s;
+    font-size: 18px;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+    box-shadow: 0 4px 0 #b8941f;
 }
 
-.start-btn:hover { background: #fff; }
-
-/* --- TOOLBAR --- */
-#toolbar {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 10px;
-    background: var(--panel);
-    padding: 15px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    z-index: 500;
+.start-btn:active, .reload-btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 #b8941f;
 }
 
-.tool-btn {
-    width: 70px;
-    height: 75px;
-    background: #0a0a0a;
-    border: 1px solid #222;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    color: #555;
-    transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.hidden {
+    display: none !important;
 }
 
-.tool-btn span:first-child { 
-    font-size: 22px; 
-    margin-bottom: 5px; 
-}
-
-/* Inventory Counts */
-.tool-btn span[id^="count"] {
-    font-size: 9px;
+/* --- RANKING TEXT --- */
+.rank-text {
+    font-size: 42px;
     color: var(--accent);
-    position: absolute;
-    top: 5px;
-    right: 8px;
+    letter-spacing: 8px;
+    margin-bottom: 30px;
+    text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+    animation: glow 2s infinite;
 }
 
-.tool-btn.active {
-    color: #fff;
-    background: #151515;
-    transform: translateY(-12px);
-    border-color: var(--blue);
-    box-shadow: 0 10px 20px rgba(0, 210, 255, 0.3);
+/* Result Screen Stats */
+#statsTable {
+    background: rgba(255,255,255,0.05);
+    padding: 20px;
+    border-radius: 10px;
+    margin: 20px 0;
+    font-size: 14px;
 }
 
-#btnTrap.active, #btnBomb.active { 
-    border-color: var(--red); 
-    box-shadow: 0 10px 20px rgba(255, 51, 51, 0.3);
+#statsTable div {
+    margin: 10px 0;
+    display: flex;
+    justify-content: space-between;
 }
 
-.hidden { display: none !important; }
-
-/* Game Over Text */
+/* Game Over Screen */
 #gameOverScreen h1 {
-    text-shadow: 0 0 10px var(--red);
-    font-size: 40px;
+    color: var(--red);
+    letter-spacing: 10px;
+    font-size: 48px;
+    text-shadow: 0 0 20px rgba(255, 50, 50, 0.5);
+    animation: pulse-highlight 1s infinite;
 }
