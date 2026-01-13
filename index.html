@@ -20,7 +20,6 @@
 
     <div id="ui-controls" class="hidden">
         <button id="mapToggle" onclick="toggleMinimap()">🗺️ Map</button>
-        <button id="highlightToggle" onclick="toggleHighlights()">✨ Highlights</button>
     </div>
 
     <div id="menu" class="overlay-screen">
@@ -28,7 +27,6 @@
             <h2 style="color:var(--accent); text-align: center; letter-spacing: 4px;">MISSION START</h2>
             <div class="menu-item">Size: <input type="number" id="mapSize" value="12" min="8" max="20"></div>
             <div class="menu-item">Guards: <input type="number" id="guardCount" value="5" min="1" max="15"></div>
-            <div class="menu-item">Highlights: <input type="checkbox" id="showHighlights" checked></div>
             <button onclick="initGame()" class="start-btn">INFILTRATE</button>
         </div>
     </div>
