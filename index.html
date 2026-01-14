@@ -71,26 +71,9 @@
         </div>
     </div>
     
-    <!-- Game Over Screen (SIMPLIFIED - Only mission failed) -->
-    <div id="gameOverScreen" class="overlay-screen hidden">
-        <div class="result-scroll">
-            <h1>MISSION FAILED</h1>
-            <div id="statsTable"></div>
-            <button class="reload-btn" onclick="window.location.reload()">TRY AGAIN</button>
-        </div>
-    </div>
-    
-    <!-- Victory Screen (WITH STATS) -->
-    <div id="resultScreen" class="overlay-screen hidden">
-        <div class="result-scroll">
-            <h1>MISSION COMPLETE</h1>
-            <div class="rank-text" id="rankLabel">RANK</div>
-            <div id="statsTable"></div>
-            <button class="reload-btn" onclick="window.location.reload()">NEW MISSION</button>
-        </div>
-    </div>
-    
-    <script src="core.js"></script>
+    <script src="core_main.js"></script>
+    <script src="core_vfx.js"></script>
+    <script src="core_highlight.js"></script>
     <script src="player.js"></script>
     <script src="enemy.js"></script>
 </body>
