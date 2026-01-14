@@ -24,17 +24,17 @@ canvas {
     image-rendering: pixelated;
 }
 
-/* --- MISSION LOG (Top Left) - SMALLER --- */
+/* --- MISSION LOG (Top Left) --- */
 #missionLog {
     position: fixed;
     top: 15px;
     left: 15px;
-    width: 220px; /* Original size */
-    height: 90px; /* Original size */
+    width: 220px;
+    height: 90px;
     background: rgba(0, 0, 0, 0.7);
     border-left: 3px solid var(--accent);
     padding: 10px;
-    font-size: 11px; /* Smaller font */
+    font-size: 11px;
     pointer-events: none;
     overflow: hidden;
     display: flex;
@@ -55,6 +55,59 @@ canvas {
     to { opacity: 1; transform: translateX(0); }
 }
 
+/* --- UI CONTROLS (Top Right) --- */
+#ui-controls {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    z-index: 110;
+    display: flex;
+    gap: 10px;
+}
+
+#mapToggle, #logToggle {
+    background: #222;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    transition: all 0.2s;
+}
+
+#mapToggle:hover, #logToggle:hover {
+    background: #2a2a2a;
+}
+
+#mapToggle:active, #logToggle:active {
+    background: var(--accent);
+    color: #000;
+    transform: translateY(2px);
+}
+
+/* --- HP DISPLAY --- */
+#hpDisplay {
+    position: fixed;
+    top: 70px;
+    left: 15px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #fff;
+    z-index: 100;
+    pointer-events: none;
+    backdrop-filter: blur(5px);
+    border: 1px solid #333;
+}
+
+#hpDisplay span {
+    color: #ff6666;
+    font-weight: bold;
+}
+
 /* Range Indicator */
 #rangeIndicator {
     position: fixed;
@@ -69,38 +122,6 @@ canvas {
     pointer-events: none;
     backdrop-filter: blur(5px);
     border: 1px solid #333;
-}
-
-/* --- UI CONTROLS (Top Right) --- */
-#ui-controls {
-    position: fixed;
-    top: 15px;
-    right: 15px;
-    z-index: 110;
-    display: flex;
-    gap: 10px;
-}
-
-#mapToggle {
-    background: #222;
-    color: var(--accent);
-    border: 1px solid var(--accent);
-    padding: 10px 15px;
-    border-radius: 8px;
-    font-weight: bold;
-    cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    transition: all 0.2s;
-}
-
-#mapToggle:hover {
-    background: #2a2a2a;
-}
-
-#mapToggle:active {
-    background: var(--accent);
-    color: #000;
-    transform: translateY(2px);
 }
 
 /* --- TOOLBAR (Bottom Center) --- */
@@ -173,6 +194,18 @@ canvas {
     justify-content: center;
 }
 
+/* Attack button specific styling */
+#btnAttack {
+    border-color: #ff3333;
+}
+
+#btnAttack.active {
+    border-color: #ff0000;
+    background: linear-gradient(145deg, #3a1e1e, #422a2a);
+    box-shadow: 0 0 20px rgba(255, 0, 0, 0.6), 
+                inset 0 0 10px rgba(255, 0, 0, 0.2);
+}
+
 /* --- OVERLAY SCREENS --- */
 .overlay-screen {
     position: fixed;
@@ -239,7 +272,26 @@ input[type="number"] {
     display: none !important;
 }
 
-/* --- RANKING TEXT --- */
+/* --- VICTORY SCREEN --- */
+#resultScreen .result-scroll {
+    background: rgba(20, 20, 20, 0.95);
+    border: 2px solid var(--accent);
+    padding: 40px;
+    border-radius: 20px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 0 50px rgba(212, 175, 55, 0.3);
+    animation: fadeIn 0.5s ease-out;
+}
+
+#resultScreen h1 {
+    color: var(--accent);
+    letter-spacing: 8px;
+    font-size: 36px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+}
+
 .rank-text {
     font-size: 48px;
     color: var(--accent);
@@ -249,6 +301,26 @@ input[type="number"] {
     animation: glow 2s infinite;
     text-transform: uppercase;
     font-weight: bold;
+}
+
+/* --- GAME OVER SCREEN --- */
+#gameOverScreen .result-scroll {
+    background: rgba(20, 20, 20, 0.95);
+    border: 2px solid var(--red);
+    padding: 40px;
+    border-radius: 20px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 0 50px rgba(255, 50, 50, 0.3);
+    animation: fadeIn 0.5s ease-out;
+}
+
+#gameOverScreen h1 {
+    color: var(--red);
+    letter-spacing: 10px;
+    font-size: 48px;
+    text-shadow: 0 0 20px rgba(255, 50, 50, 0.5);
+    animation: pulse-highlight 1s infinite;
 }
 
 /* Result Screen Stats */
@@ -280,27 +352,6 @@ input[type="number"] {
 #statsTable div span:last-child {
     color: #fff;
     font-weight: bold;
-}
-
-/* Game Over Screen - ORIGINAL STYLE */
-#gameOverScreen h1 {
-    color: var(--red);
-    letter-spacing: 10px;
-    font-size: 48px;
-    text-shadow: 0 0 20px rgba(255, 50, 50, 0.5);
-    animation: pulse-highlight 1s infinite;
-}
-
-/* Result Screen Improvements - ORIGINAL */
-.result-scroll {
-    background: rgba(20, 20, 20, 0.95);
-    border: 2px solid var(--accent);
-    padding: 40px;
-    border-radius: 20px;
-    max-width: 500px;
-    width: 90%;
-    box-shadow: 0 0 50px rgba(212, 175, 55, 0.3);
-    animation: fadeIn 0.5s ease-out;
 }
 
 .reload-btn {
