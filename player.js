@@ -54,15 +54,14 @@ async function handlePlayerMove(targetX, targetY) {
         if(tile === COIN) {
             stats.coins++;
             grid[step.y][step.x] = FLOOR;
-            createSpeechBubble(step.x, step.y, "💰 +1 GOLD", "#ffd700", 2);
+            createCoinPickupEffect(step.x, step.y);
         }
         
         // Check for hide spot
         const wasHidden = player.isHidden;
         player.isHidden = (tile === HIDE);
         if(player.isHidden !== wasHidden) {
-            createSpeechBubble(step.x, step.y, player.isHidden ? "🕶️ HIDING" : "👀 VISIBLE", 
-                              player.isHidden ? "#00d2ff" : "#ffffff", 2);
+            createHideEffect(step.x, step.y, player.isHidden);
         }
         
         // Normal move - ALWAYS MOVE even if enemy nearby
@@ -112,6 +111,7 @@ async function handleAttack(targetX, targetY) {
                 await new Promise(resolve => setTimeout(resolve, 500));
                 
                 enemy.hp -= 2;
+                createDamageEffect(enemy.x, enemy.y, 2);
                 createSpeechBubble(enemy.x, enemy.y, `-2`, "#ff0000", 2);
                 
                 await new Promise(resolve => setTimeout(resolve, 800));
@@ -120,7 +120,7 @@ async function handleAttack(targetX, targetY) {
                     enemy.alive = false;
                     enemy.state = 'dead';
                     stats.kills++;
-                    createSpeechBubble(enemy.x, enemy.y, "💀", "#ff0000", 2.5);
+                    createDeathEffect(enemy.x, enemy.y);
                 }
             }
             
@@ -141,7 +141,7 @@ async function handleAttack(targetX, targetY) {
         enemy.alive = false;
         enemy.state = 'dead';
         stats.kills++;
-        createSpeechBubble(enemy.x, enemy.y, "💀", "#ff0000", 2.5);
+        createDeathEffect(targetX, targetY);
         
         await new Promise(resolve => setTimeout(resolve, 800));
         
@@ -169,6 +169,7 @@ async function checkEnemyAttacks() {
         await new Promise(resolve => setTimeout(resolve, 500));
         
         playerHP -= e.damage;
+        createDamageEffect(player.x, player.y, e.damage, true);
         createSpeechBubble(player.x, player.y, `-${e.damage} HP`, "#ff66ff", 2);
         updateHPDisplay();
         
@@ -195,6 +196,16 @@ function handleItemPlacement(x, y, type) {
         return;
     }
     
+    // Check if tile is empty (no enemy, no existing item)
+    const enemyAtTile = enemies.find(e => e.alive && e.x === x && e.y === y);
+    const hasItem = grid[y][x] === TRAP || grid[y][x] === RICE || grid[y][x] === BOMB || 
+                    grid[y][x] === COIN || grid[y][x] === HIDE || grid[y][x] === EXIT;
+    
+    if(enemyAtTile || hasItem) {
+        createSpeechBubble(player.x, player.y, "❌ Tile occupied!", "#f00", 2);
+        return;
+    }
+    
     inv[type]--;
     stats.itemsUsed++;
     updateToolCounts();
@@ -203,6 +214,7 @@ function handleItemPlacement(x, y, type) {
         case 'trap':
             grid[y][x] = TRAP;
             createSpeechBubble(x, y, "⚠️ TRAP SET", "#ff6464", 2);
+            createTrapEffect(x, y);
             break;
         case 'rice':
             grid[y][x] = RICE;
