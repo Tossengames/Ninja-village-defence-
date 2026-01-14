@@ -10,28 +10,25 @@ async function processEnemyTurn(e) {
         return;
     }
     
-    // Check if guard is standing on rice
-    if(grid[e.y][e.x] === RICE && e.state !== 'eating') {
-        startEating(e);
-        grid[e.y][e.x] = FLOOR;
-        return;
-    }
-    
-    // Handle eating rice
-    if(e.state === 'eating') {
-        e.investigationTurns--;
-        if(e.investigationTurns <= 0) {
-            killEnemy(e, 'poisoned');
-        }
-        return;
-    }
-    
     // Check if guard sees player (with wall obstruction and limited range)
     if(!player.isHidden && canSeePlayer(e)) {
         e.state = 'alerted';
         e.thought = '❗';
         e.thoughtTimer = 3;
         checkGameOver();
+        return;
+    }
+    
+    // Check if guard is standing on rice (AND NOT ALREADY EATING)
+    if(grid[e.y][e.x] === RICE && e.state !== 'eating' && e.state !== 'poisoned') {
+        startEating(e);
+        grid[e.y][e.x] = FLOOR;
+        return;
+    }
+    
+    // Handle eating rice and poison effects
+    if(e.state === 'eating' || e.state === 'poisoned') {
+        await handlePoisonEffect(e);
         return;
     }
     
@@ -67,7 +64,7 @@ function killEnemy(e, cause) {
     e.state = 'dead';
     
     e.thought = cause === 'trapped' ? '⚙️' : '💀';
-    e.thoughtTimer = 2;
+    e.thoughtTimer = 5; // Show thought longer
     
     stats.kills++;
     const message = cause === 'trapped' ? "Guard Trapped!" : "Guard died from poisoned rice!";
@@ -76,14 +73,46 @@ function killEnemy(e, cause) {
 
 function startEating(e) {
     e.state = 'eating';
-    e.investigationTurns = 3; // Eat for 3 turns then die
     e.thought = '🍚';
     e.thoughtTimer = 3;
-    log("Guard found rice and is eating!", "#ff9900");
+    
+    // Set random poison effect turns (1-5 turns until death)
+    e.poisonTimer = Math.floor(Math.random() * 5) + 1;
+    e.poisonCounter = 0;
+    
+    log("Guard is eating rice! (Poison in " + e.poisonTimer + " turns)", "#ff9900");
     stats.itemsUsed++;
 }
 
-// FIXED: Check line of sight with walls and limited range (1-3 tiles)
+async function handlePoisonEffect(e) {
+    e.poisonCounter++;
+    
+    // Update thought to show poison countdown
+    if(e.state === 'eating') {
+        e.thought = '🍚'; // Eating emoji
+    } else if(e.state === 'poisoned') {
+        e.thought = '🤢'; // Sick emoji
+    }
+    e.thoughtTimer = 2;
+    
+    // Check if poison takes effect
+    if(e.poisonCounter >= e.poisonTimer) {
+        killEnemy(e, 'poisoned');
+        return;
+    }
+    
+    // If still alive, move normally (but show they're poisoned)
+    if(e.poisonCounter >= e.poisonTimer - 1) {
+        // About to die - change state to poisoned
+        e.state = 'poisoned';
+        log("Guard looks sick from the poison!", "#ff6600");
+    }
+    
+    // Guard can still move while poisoned
+    await patrolMovement(e);
+}
+
+// FIXED: Better angle checking with wall awareness
 function canSeePlayer(e) {
     const px = player.x;
     const py = player.y;
@@ -96,7 +125,7 @@ function canSeePlayer(e) {
     // Can't see beyond their vision range (1-3 tiles)
     if(distance > e.visionRange) return false;
     
-    // Also check if player is within vision cone angle (not just distance)
+    // Check if player is within vision cone angle
     const angleToPlayer = Math.atan2(dy, dx);
     const enemyAngle = Math.atan2(e.dir.y, e.dir.x);
     let angleDiff = Math.abs(angleToPlayer - enemyAngle);
@@ -105,43 +134,47 @@ function canSeePlayer(e) {
     if(angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
     
     // Vision cone is 140 degrees (0.7 radians each side = 1.4 total = ~80 degrees)
-    // Actually make it narrower - about 90 degrees total (0.8 radians each side)
-    if(angleDiff > 0.8) return false;
+    if(angleDiff > 0.7) return false;
     
-    // Now check line of sight with Bresenham's algorithm
-    let x0 = e.x;
-    let y0 = e.y;
-    let x1 = px;
-    let y1 = py;
-    
-    const dx2 = Math.abs(x1 - x0);
-    const dy2 = Math.abs(y1 - y0);
+    // Now check line of sight with ray casting
+    return checkLineOfSightRay(e.x, e.y, px, py);
+}
+
+function checkLineOfSightRay(x0, y0, x1, y1) {
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
     const sx = (x0 < x1) ? 1 : -1;
     const sy = (y0 < y1) ? 1 : -1;
-    let err = dx2 - dy2;
+    let err = dx - dy;
+    
+    let currentX = x0;
+    let currentY = y0;
+    
+    // Don't check starting position
+    let firstStep = true;
     
     while(true) {
-        // Don't check the starting point (enemy's position)
-        if(x0 !== e.x || y0 !== e.y) {
-            // If we hit a wall before reaching player, can't see
-            if(grid[y0][x0] === WALL) {
+        if(!firstStep) {
+            // If we hit a wall, line of sight is blocked
+            if(grid[currentY][currentX] === WALL) {
                 return false;
             }
         }
+        firstStep = false;
         
-        // If we reached the player's position
-        if(x0 === x1 && y0 === y1) {
+        // If we reached the target
+        if(currentX === x1 && currentY === y1) {
             return true;
         }
         
         const e2 = 2 * err;
-        if(e2 > -dy2) {
-            err -= dy2;
-            x0 += sx;
+        if(e2 > -dy) {
+            err -= dy;
+            currentX += sx;
         }
-        if(e2 < dx2) {
-            err += dx2;
-            y0 += sy;
+        if(e2 < dx) {
+            err += dx;
+            currentY += sy;
         }
     }
 }
@@ -160,7 +193,7 @@ function checkForNearbyItems(e) {
         
         // Make sure tile is within bounds
         if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim) {
-            if(grid[ny][nx] === RICE && e.state !== 'investigating' && e.state !== 'eating') {
+            if(grid[ny][nx] === RICE && e.state !== 'investigating' && e.state !== 'eating' && e.state !== 'poisoned') {
                 e.state = 'investigating';
                 e.investigationTarget = {x: nx, y: ny};
                 e.investigationTurns = 8;
@@ -181,7 +214,7 @@ async function handleInvestigation(e) {
     // If reached investigation target
     if(e.investigationTarget && (e.x === e.investigationTarget.x && e.y === e.investigationTarget.y)) {
         // If it was rice, start eating
-        if(grid[e.y][e.x] === RICE) {
+        if(grid[e.y][e.x] === RICE && e.state !== 'eating' && e.state !== 'poisoned') {
             startEating(e);
         } else {
             // If it was a sound location (bomb), look around
