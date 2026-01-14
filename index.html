@@ -12,11 +12,15 @@
     <!-- Mission Log (Top Left) -->
     <div id="missionLog"></div>
     
+    <!-- HP Display -->
+    <div id="hpDisplay" class="hidden">HP: <span id="playerHP">10/10</span></div>
+    
     <!-- Range Indicator (Bottom Left) -->
     <div id="rangeIndicator" class="hidden">Tap highlighted tiles to move (2 tile range)</div>
     
     <!-- UI Controls (Top Right) -->
     <div id="ui-controls" class="hidden">
+        <button id="logToggle" onclick="toggleLog()">Toggle Log</button>
         <button id="mapToggle" onclick="toggleMinimap()">Toggle Map</button>
     </div>
     
@@ -25,6 +29,10 @@
         <div class="tool-btn" id="btnMove" onclick="setMode('move')">
             <span>👣</span>
             Move
+        </div>
+        <div class="tool-btn" id="btnAttack" onclick="setMode('attack')">
+            <span>⚔️</span>
+            Attack
         </div>
         <div class="tool-btn" id="btnTrap" onclick="setMode('trap')">
             <span>⚠️</span>
@@ -72,10 +80,10 @@
         </div>
     </div>
     
-    <!-- Victory Screen - ORIGINAL TENCHU STYLE -->
+    <!-- Victory Screen -->
     <div id="resultScreen" class="overlay-screen hidden">
         <div class="result-scroll">
-            <h1 style="color: var(--accent); margin-bottom: 20px;">MISSION COMPLETE</h1>
+            <h1>MISSION COMPLETE</h1>
             <div class="rank-text" id="rankLabel">RANK</div>
             <div id="statsTable"></div>
             <button class="reload-btn" onclick="window.location.reload()">NEW MISSION</button>
