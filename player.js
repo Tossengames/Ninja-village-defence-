@@ -24,12 +24,10 @@ function handlePlayerMove(targetX, targetY) {
         hasReachedExit = true;
         playerTurn = false;
         
-        // Show victory screen after delay (ORIGINAL TIMING)
-        setTimeout(() => {
-            document.getElementById('resultScreen').classList.remove('hidden');
-            document.getElementById('gameOverScreen').classList.add('hidden');
-            showVictoryStats();
-        }, 1000);
+        // Show victory screen immediately (ORIGINAL BEHAVIOR)
+        document.getElementById('resultScreen').classList.remove('hidden');
+        document.getElementById('gameOverScreen').classList.add('hidden');
+        showVictoryStats();
         
         // Move player to exit
         animMove(player, targetX, targetY, 0.15, () => {
