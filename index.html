@@ -9,17 +9,9 @@
 <body>
     <div id="missionLog"></div>
 
-    <!-- New UI Elements -->
-    <div id="modeIndicator" class="hidden">
-        Mode: <span class="mode-name">MOVE</span>
-    </div>
-    
-    <div id="rangeIndicator" class="hidden">
-        Range: 2 tiles
-    </div>
-
     <div id="ui-controls" class="hidden">
         <button id="mapToggle" onclick="toggleMinimap()">🗺️ Map</button>
+        <button id="sfxToggle" onclick="toggleSFX()">🔇 SFX</button>
     </div>
 
     <div id="menu" class="overlay-screen">
@@ -27,6 +19,7 @@
             <h2 style="color:var(--accent); text-align: center; letter-spacing: 4px;">MISSION START</h2>
             <div class="menu-item">Size: <input type="number" id="mapSize" value="12" min="8" max="20"></div>
             <div class="menu-item">Guards: <input type="number" id="guardCount" value="5" min="1" max="15"></div>
+            <div class="menu-item">SFX: <input type="checkbox" id="sfxCheckbox" checked></div>
             <button onclick="initGame()" class="start-btn">INFILTRATE</button>
         </div>
     </div>
