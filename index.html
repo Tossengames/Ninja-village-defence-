@@ -10,7 +10,7 @@
     <canvas id="game"></canvas>
     
     <!-- Mission Log (Top Left) -->
-    <div id="missionLog"></div>
+    <div id="missionLog" style="display: flex;"></div>
     
     <!-- HP Display -->
     <div id="hpDisplay" class="hidden">HP: <span id="playerHP">10/10</span></div>
@@ -20,8 +20,8 @@
     
     <!-- UI Controls (Top Right) -->
     <div id="ui-controls" class="hidden">
-        <button id="logToggle" onclick="toggleLog()">Toggle Log</button>
         <button id="mapToggle" onclick="toggleMinimap()">Toggle Map</button>
+        <button id="logToggle" onclick="toggleLog()">Toggle Log</button>
     </div>
     
     <!-- Toolbar (Bottom Center) -->
@@ -71,7 +71,7 @@
         </div>
     </div>
     
-    <!-- Game Over Screen -->
+    <!-- Game Over Screen (SIMPLIFIED - Only mission failed) -->
     <div id="gameOverScreen" class="overlay-screen hidden">
         <div class="result-scroll">
             <h1>MISSION FAILED</h1>
@@ -80,7 +80,7 @@
         </div>
     </div>
     
-    <!-- Victory Screen -->
+    <!-- Victory Screen (WITH STATS) -->
     <div id="resultScreen" class="overlay-screen hidden">
         <div class="result-scroll">
             <h1>MISSION COMPLETE</h1>
