@@ -144,24 +144,6 @@ canvas {
     transform: translateY(2px);
 }
 
-#highlightToggle {
-    background: #222;
-    color: var(--green);
-    border: 1px solid var(--green);
-    padding: 10px 15px;
-    border-radius: 8px;
-    font-weight: bold;
-    cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    transition: all 0.2s;
-}
-
-#highlightToggle:active {
-    background: var(--green);
-    color: #000;
-    transform: translateY(2px);
-}
-
 /* --- TOOLBAR (Bottom Center) --- */
 #toolbar {
     position: fixed;
@@ -193,6 +175,7 @@ canvas {
     color: #888;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
+    position: relative;
 }
 
 .tool-btn span {
@@ -299,27 +282,45 @@ input[type="number"] {
 
 /* --- RANKING TEXT --- */
 .rank-text {
-    font-size: 42px;
+    font-size: 48px;
     color: var(--accent);
     letter-spacing: 8px;
     margin-bottom: 30px;
     text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
     animation: glow 2s infinite;
+    text-transform: uppercase;
+    font-weight: bold;
 }
 
 /* Result Screen Stats */
 #statsTable {
     background: rgba(255,255,255,0.05);
-    padding: 20px;
-    border-radius: 10px;
-    margin: 20px 0;
-    font-size: 14px;
+    padding: 25px;
+    border-radius: 15px;
+    margin: 25px 0;
+    font-size: 16px;
+    border: 1px solid rgba(255,255,255,0.1);
 }
 
 #statsTable div {
-    margin: 10px 0;
+    margin: 12px 0;
     display: flex;
     justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+#statsTable div:last-child {
+    border-bottom: none;
+}
+
+#statsTable div span:first-child {
+    color: #aaa;
+}
+
+#statsTable div span:last-child {
+    color: #fff;
+    font-weight: bold;
 }
 
 /* Game Over Screen */
@@ -329,4 +330,93 @@ input[type="number"] {
     font-size: 48px;
     text-shadow: 0 0 20px rgba(255, 50, 50, 0.5);
     animation: pulse-highlight 1s infinite;
+}
+
+/* Result Screen Improvements */
+.result-scroll {
+    background: rgba(20, 20, 20, 0.95);
+    border: 2px solid var(--accent);
+    padding: 40px;
+    border-radius: 20px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 0 50px rgba(212, 175, 55, 0.3);
+    animation: fadeIn 0.5s ease-out;
+}
+
+.reload-btn {
+    width: 100%;
+    padding: 20px;
+    background: linear-gradient(to bottom, var(--accent), #b8941f);
+    color: #000;
+    border: none;
+    font-weight: bold;
+    border-radius: 10px;
+    cursor: pointer;
+    margin-top: 30px;
+    font-size: 20px;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+    box-shadow: 0 6px 0 #b8941f;
+    text-transform: uppercase;
+}
+
+.reload-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 0 #b8941f;
+}
+
+.reload-btn:active {
+    transform: translateY(6px);
+    box-shadow: 0 0 0 #b8941f;
+}
+
+/* Rank-specific colors */
+.rank-text[data-rank="Grand Master"] {
+    color: #ffd700;
+    text-shadow: 0 0 30px rgba(255, 215, 0, 0.7);
+}
+
+.rank-text[data-rank="Shadow Master"] {
+    color: #c0c0c0;
+    text-shadow: 0 0 25px rgba(192, 192, 192, 0.7);
+}
+
+.rank-text[data-rank="Master Ninja"] {
+    color: #cd7f32;
+    text-shadow: 0 0 25px rgba(205, 127, 50, 0.7);
+}
+
+.rank-text[data-rank="Expert"] {
+    color: #00ff00;
+    text-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+}
+
+.rank-text[data-rank="Adept"] {
+    color: #00ccff;
+    text-shadow: 0 0 20px rgba(0, 204, 255, 0.5);
+}
+
+.rank-text[data-rank="Assassin"] {
+    color: #ff4444;
+    text-shadow: 0 0 20px rgba(255, 68, 68, 0.5);
+}
+
+.rank-text[data-rank="Initiate"] {
+    color: #aaa;
+}
+
+.rank-text[data-rank="Novice"] {
+    color: #888;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glow {
+    0% { text-shadow: 0 0 10px currentColor; }
+    50% { text-shadow: 0 0 25px currentColor; }
+    100% { text-shadow: 0 0 10px currentColor; }
 }
