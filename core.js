@@ -78,7 +78,7 @@ function generateLevel() {
         grid[cy][cx] = COIN;
     }
     
-    // Initialize enemies
+    // Initialize enemies with random vision range (1-3 tiles)
     const gc = Math.min(15, Math.max(1, parseInt(document.getElementById('guardCount').value) || 5));
     enemies = [];
     for(let i=0; i<gc; i++){
@@ -88,12 +88,15 @@ function generateLevel() {
             ey = rand(mapDim); 
         } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
         
+        // Random vision range: 1 to 3 tiles
+        const visionRange = Math.floor(Math.random() * 3) + 1;
+        
         enemies.push({
             x: ex, y: ey, 
             ax: ex, ay: ey, 
             dir: {x: 1, y: 0}, 
             alive: true,
-            range: 4,
+            visionRange: visionRange, // Actual sight distance (1-3 tiles)
             state: 'patrolling',
             investigationTarget: null,
             investigationTurns: 0,
@@ -338,13 +341,25 @@ function drawThoughtBubble(e) {
 }
 
 function drawVisionCone(e) {
+    // Use the actual vision range for drawing (1-3 tiles)
+    const drawRange = e.visionRange || 2;
+    
+    // Create gradient based on vision range
     const gradient = ctx.createRadialGradient(
         e.ax * TILE + 30, e.ay * TILE + 30, 10,
-        e.ax * TILE + 30, e.ay * TILE + 30, e.range * TILE
+        e.ax * TILE + 30, e.ay * TILE + 30, drawRange * TILE
     );
-    gradient.addColorStop(0, 'rgba(255, 50, 50, 0.2)');
-    gradient.addColorStop(0.5, 'rgba(255, 0, 0, 0.1)');
-    gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+    
+    // Different colors based on state
+    if(e.state === 'alerted') {
+        gradient.addColorStop(0, 'rgba(255, 0, 0, 0.3)');
+        gradient.addColorStop(0.7, 'rgba(255, 0, 0, 0.15)');
+        gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+    } else {
+        gradient.addColorStop(0, 'rgba(255, 50, 50, 0.2)');
+        gradient.addColorStop(0.5, 'rgba(255, 0, 0, 0.1)');
+        gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+    }
     
     ctx.fillStyle = gradient;
     ctx.beginPath();
@@ -353,30 +368,45 @@ function drawVisionCone(e) {
     const baseA = Math.atan2(e.dir.y, e.dir.x);
     const visionAngle = e.state === 'alerted' ? 1.0 : 0.7;
     
+    // Draw vision cone with wall obstruction
     for(let a = baseA - visionAngle; a <= baseA + visionAngle; a += 0.1) {
         let d = 0;
         let hitWall = false;
-        while(d < e.range && !hitWall) { 
+        let lastValidX = e.ax * TILE + 30;
+        let lastValidY = e.ay * TILE + 30;
+        
+        while(d < drawRange && !hitWall) { 
             d += 0.2; 
             const checkX = Math.floor(e.x + Math.cos(a) * d);
             const checkY = Math.floor(e.y + Math.sin(a) * d);
             
+            // Check bounds
             if(checkX < 0 || checkX >= mapDim || checkY < 0 || checkY >= mapDim) {
                 hitWall = true;
-            } else if(grid[checkY][checkX] === WALL) {
+            } 
+            // Check for walls
+            else if(grid[checkY][checkX] === WALL) {
                 hitWall = true;
-            }
-            
-            if(!hitWall) {
-                ctx.lineTo(
-                    e.ax * TILE + 30 + Math.cos(a) * d * TILE, 
-                    e.ay * TILE + 30 + Math.sin(a) * d * TILE
-                );
+                // Add a small offset to show hitting the wall
+                lastValidX = e.ax * TILE + 30 + Math.cos(a) * (d - 0.2) * TILE;
+                lastValidY = e.ay * TILE + 30 + Math.sin(a) * (d - 0.2) * TILE;
+            } else {
+                lastValidX = e.ax * TILE + 30 + Math.cos(a) * d * TILE;
+                lastValidY = e.ay * TILE + 30 + Math.sin(a) * d * TILE;
             }
         }
+        
+        ctx.lineTo(lastValidX, lastValidY);
     }
     ctx.closePath();
     ctx.fill();
+    
+    // Draw vision range indicator around enemy
+    ctx.strokeStyle = e.state === 'alerted' ? 'rgba(255, 0, 0, 0.5)' : 'rgba(255, 100, 100, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(e.ax * TILE + 30, e.ay * TILE + 30, drawRange * TILE, 0, Math.PI * 2);
+    ctx.stroke();
 }
 
 function drawMinimap() {
@@ -416,6 +446,13 @@ function drawMinimap() {
                           e.state === 'eating' ? "#00ff00" : "#ff3333";
         ctx.fillStyle = enemyColor;
         ctx.fillRect(mx + e.x*ms, my + 5 + e.y*ms, ms, ms);
+        
+        // Draw vision range on minimap
+        ctx.strokeStyle = enemyColor + "80"; // Semi-transparent
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.arc(mx + e.x*ms + ms/2, my + 5 + e.y*ms + ms/2, (e.visionRange || 2) * ms, 0, Math.PI * 2);
+        ctx.stroke();
     });
 }
 
@@ -669,6 +706,57 @@ function showVictoryStats() {
 }
 
 // ============================================
+// LINE OF SIGHT CHECKING (for enemies)
+// ============================================
+
+function hasLineOfSight(e, px, py) {
+    // Calculate distance
+    const dx = px - e.x;
+    const dy = py - e.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Can't see beyond their vision range (1-3 tiles)
+    if(distance > e.visionRange) return false;
+    
+    // Check line of sight using Bresenham's line algorithm
+    let x0 = e.x;
+    let y0 = e.y;
+    let x1 = px;
+    let y1 = py;
+    
+    const dx2 = Math.abs(x1 - x0);
+    const dy2 = Math.abs(y1 - y0);
+    const sx = (x0 < x1) ? 1 : -1;
+    const sy = (y0 < y1) ? 1 : -1;
+    let err = dx2 - dy2;
+    
+    while(true) {
+        // Don't check the starting point (enemy's position)
+        if(x0 !== e.x || y0 !== e.y) {
+            // If we hit a wall before reaching player, can't see
+            if(grid[y0][x0] === WALL) {
+                return false;
+            }
+        }
+        
+        // If we reached the player's position
+        if(x0 === x1 && y0 === y1) {
+            return true;
+        }
+        
+        const e2 = 2 * err;
+        if(e2 > -dy2) {
+            err -= dy2;
+            x0 += sx;
+        }
+        if(e2 < dx2) {
+            err += dx2;
+            y0 += sy;
+        }
+    }
+}
+
+// ============================================
 // INITIALIZATION ON LOAD
 // ============================================
 
@@ -680,3 +768,4 @@ window.addEventListener('load', () => {
 window.animMove = animMove;
 window.log = log;
 window.checkGameOver = checkGameOver;
+window.hasLineOfSight = hasLineOfSight;
