@@ -11,23 +11,25 @@ function handlePlayerMove(targetX, targetY) {
         return;
     }
     
+    // ORIGINAL LOGIC: Move to target position directly with pathfinding
     const path = findPath(player.x, player.y, targetX, targetY);
     if(!path || path.length === 0) {
         log("❌ No path available!", "#f00");
         return;
     }
     
-    // Check if exit is clicked directly (even if path is longer than 2)
+    // ORIGINAL: Check if exit is clicked directly
     if(grid[targetY][targetX] === EXIT) {
         log("🚪 Exit reached!", "#0f0");
         hasReachedExit = true;
         playerTurn = false;
         
-        // Show victory screen after delay
+        // Show victory screen after delay (ORIGINAL TIMING)
         setTimeout(() => {
             document.getElementById('resultScreen').classList.remove('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
             showVictoryStats();
-        }, 500);
+        }, 1000);
         
         // Move player to exit
         animMove(player, targetX, targetY, 0.15, () => {
@@ -37,12 +39,11 @@ function handlePlayerMove(targetX, targetY) {
         return;
     }
     
-    // Normal movement (max 2 tiles)
-    const maxSteps = Math.min(2, path.length);
+    // ORIGINAL: Move through entire path (not limited to 2 tiles)
     let stepsTaken = 0;
     
     function takeStep() {
-        if(stepsTaken >= maxSteps) {
+        if(stepsTaken >= path.length) {
             playerTurn = false;
             endTurn();
             return;
@@ -66,19 +67,8 @@ function handlePlayerMove(targetX, targetY) {
             createHideEffect(step.x, step.y, player.isHidden);
         }
         
-        // Check for trap
-        if(tile === TRAP) {
-            playerTurn = false;
-            grid[step.y][step.x] = FLOOR;
-            createTrapEffect(step.x, step.y);
-            log("⚠️ Trap activated! Turn lost.", "#ff9900");
-            animMove(player, step.x, step.y, 0.15, () => {
-                player.x = step.x;
-                player.y = step.y;
-                endTurn();
-            });
-            return;
-        }
+        // ORIGINAL: Player doesn't trigger traps - only enemies do
+        // Removed trap activation for player
         
         // Normal move
         log(`📍 Moving to (${step.x}, ${step.y})`, "#00d2ff");
@@ -130,7 +120,7 @@ function handleItemPlacement(x, y, type) {
     endTurn();
 }
 
-// A* Pathfinding Algorithm
+// A* Pathfinding Algorithm (ORIGINAL - UNCHANGED)
 function findPath(startX, startY, targetX, targetY) {
     if(startX === targetX && startY === targetY) return [];
     
