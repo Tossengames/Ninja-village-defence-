@@ -5,24 +5,24 @@
 async function processEnemyTurn(e) {
     if(!e.alive || combatSequence) return;
     
-    // Show enemy status above unit
-    if(Math.random() < 0.3) { // 30% chance to show status
-        showEnemyStatus(e);
-        await new Promise(resolve => setTimeout(resolve, 500));
+    // Show enemy status with cartoon bubble
+    if(Math.random() < 0.3) {
+        const status = getEnemyStatusText(e);
+        if(status) {
+            createSpeechBubble(e.x, e.y, status.emoji, "#ffffff", 1.5);
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
     }
     
-    // IMMEDIATE DETECTION: Check for player in line of sight
-    if(hasLineOfSight(e, player.x, player.y) && !player.isHidden) {
+    // IMMEDIATE DETECTION: Check for player in ANY line of sight within range
+    const distToPlayer = Math.hypot(e.x - player.x, e.y - player.y);
+    if(distToPlayer <= e.visionRange && hasLineOfSight(e, player.x, player.y) && !player.isHidden) {
         if(e.state !== 'alerted' && e.state !== 'chasing') {
             e.state = 'chasing';
             e.lastSeenPlayer = {x: player.x, y: player.y};
             e.chaseTurns = 5;
-            e.thought = getRandomThought('spotted');
-            e.thoughtTimer = 3;
-            createAlertEffect(e.x, e.y);
+            createSpeechBubble(e.x, e.y, "❗ SPOTTED!", e.color, 1.5);
             
-            // Show reaction above unit
-            addUnitText(e.x, e.y, "❗ SPOTTED!", e.color, 2);
             await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
@@ -33,11 +33,9 @@ async function processEnemyTurn(e) {
             e.state = 'investigating';
             e.investigationTarget = e.soundLocation;
             e.investigationTurns = 5;
-            e.thought = getRandomThought('heard');
-            e.thoughtTimer = 3;
+            createSpeechBubble(e.x, e.y, "👂 HEARD NOISE", e.color, 1.5);
             e.hasHeardSound = false;
             
-            addUnitText(e.x, e.y, "👂 HEARD NOISE", e.color, 2);
             await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
@@ -49,8 +47,7 @@ async function processEnemyTurn(e) {
         e.state = 'dead';
         stats.kills++;
         grid[e.y][e.x] = FLOOR;
-        createTrapEffect(e.x, e.y);
-        createDeathEffect(e.x, e.y);
+        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2);
         return;
     }
     
@@ -80,8 +77,7 @@ async function processEnemyTurn(e) {
         e.state = 'dead';
         stats.kills++;
         grid[e.y][e.x] = FLOOR;
-        createTrapEffect(e.x, e.y);
-        createDeathEffect(e.x, e.y);
+        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2);
         return;
     }
     
@@ -90,10 +86,7 @@ async function processEnemyTurn(e) {
         e.state = 'eating';
         e.poisonTimer = Math.floor(Math.random() * 5) + 1;
         grid[e.y][e.x] = FLOOR;
-        e.thought = getRandomThought('rice');
-        e.thoughtTimer = 3;
-        
-        addUnitText(e.x, e.y, "🍚 FOUND RICE!", "#33ff33", 2);
+        createSpeechBubble(e.x, e.y, "🍚 FOUND RICE!", "#33ff33", 1.5);
         await new Promise(resolve => setTimeout(resolve, 500));
         return;
     }
@@ -101,80 +94,38 @@ async function processEnemyTurn(e) {
     // Rice poisoning
     if(e.alive && e.state === 'eating' && e.poisonTimer > 0) {
         e.poisonTimer--;
-        e.thought = getRandomThought('sick');
-        e.thoughtTimer = 2;
         
         if(e.poisonTimer <= 0) {
             await new Promise(resolve => setTimeout(resolve, 300));
             e.alive = false;
             e.state = 'dead';
             stats.kills++;
-            createDeathEffect(e.x, e.y);
+            createSpeechBubble(e.x, e.y, "💀 POISONED!", "#ff00ff", 2);
             return;
         } else {
-            addUnitText(e.x, e.y, `🤢 SICK (${e.poisonTimer})`, "#ff00ff", 2);
+            createSpeechBubble(e.x, e.y, `🤢 SICK (${e.poisonTimer})`, "#ff00ff", 1.5);
             await new Promise(resolve => setTimeout(resolve, 300));
         }
-    }
-}
-
-function showEnemyStatus(e) {
-    const status = getEnemyStatusText(e);
-    if(status) {
-        e.thought = status.text;
-        e.thoughtTimer = 2;
-        addUnitText(e.x, e.y, status.emoji, "#ffffff", 2);
     }
 }
 
 function getEnemyStatusText(e) {
     switch(e.state) {
         case 'patrolling':
-            return {
-                emoji: getRandomEmoji(['😴', '😐', '😪', '🥱']),
-                text: getRandomThought('patrol')
-            };
+            return { emoji: getRandomEmoji(['😴', '😐', '😪', '🥱']) };
         case 'investigating':
-            return {
-                emoji: getRandomEmoji(['👂', '🤔', '🔍', '🎯']),
-                text: getRandomThought('investigate')
-            };
+            return { emoji: getRandomEmoji(['👂', '🤔', '🔍', '🎯']) };
         case 'chasing':
-            return {
-                emoji: getRandomEmoji(['❗', '👁️', '🎯', '⚡']),
-                text: getRandomThought('chase')
-            };
+            return { emoji: getRandomEmoji(['❗', '👁️', '🎯', '⚡']) };
         case 'eating':
             if(e.poisonTimer > 0) {
-                return {
-                    emoji: getRandomEmoji(['🤢', '😫', '🤮', '💀']),
-                    text: getRandomThought('sick')
-                };
+                return { emoji: getRandomEmoji(['🤢', '😫', '🤮', '💀']) };
             } else {
-                return {
-                    emoji: getRandomEmoji(['🍚', '😋', '🤤', '👍']),
-                    text: getRandomThought('eating')
-                };
+                return { emoji: getRandomEmoji(['🍚', '😋', '🤤', '👍']) };
             }
         default:
             return null;
     }
-}
-
-function getRandomThought(type) {
-    const thoughts = {
-        'patrol': ['Boring...', 'So tired...', 'When shift ends?', 'Need break...', 'Nothing here...'],
-        'investigate': ['What was that?', 'Heard something...', 'Check it out...', 'Probably nothing...'],
-        'spotted': ['INTRUDER!', 'ALERT!', 'ENEMY!', 'ATTACK!'],
-        'chase': ['Where they go?', 'After them!', 'Get them!', 'Dont escape!'],
-        'heard': ['A noise?', 'Whats that?', 'Someone there?', 'Investigate...'],
-        'rice': ['Food!', 'Im starving!', 'Lunch time!', 'For me?'],
-        'sick': ['My stomach...', 'Feel sick...', 'Poisoned?!', 'Ugh...'],
-        'eating': ['So good!', 'Delicious!', 'Mmm rice!', 'Yummy!']
-    };
-    
-    const list = thoughts[type] || ['...'];
-    return list[Math.floor(Math.random() * list.length)];
 }
 
 function getRandomEmoji(emojis) {
@@ -195,7 +146,7 @@ async function handlePatrollingState(e) {
                 other.alive && other !== e && other.x === nx && other.y === ny
             );
             
-            // Check if player is at that position (stop 1 tile away)
+            // Check if player is at that position
             const playerAtPos = (nx === player.x && ny === player.y);
             
             if(!enemyAtPos && !playerAtPos) {
@@ -226,22 +177,19 @@ async function handleChasingState(e) {
         // Calculate distance to player
         const distToPlayer = Math.hypot(e.x - player.x, e.y - player.y);
         
-        // If in attack range, attack instead of moving closer
+        // If in attack range, attack
         if(distToPlayer <= e.attackRange) {
-            addUnitText(e.x, e.y, `${e.type} ATTACK!`, e.color, 2);
+            createSpeechBubble(e.x, e.y, `${e.type} ATTACK!`, e.color, 1.5);
             await new Promise(resolve => setTimeout(resolve, 500));
             
             playerHP -= e.damage;
-            createDamageEffect(player.x, player.y, e.damage, true);
-            addUnitText(player.x, player.y, `-${e.damage}`, "#ff66ff", 2);
+            createSpeechBubble(player.x, player.y, `-${e.damage}`, "#ff66ff", 1.5);
             updateHPDisplay();
             
             await new Promise(resolve => setTimeout(resolve, 800));
             
             if(playerHP <= 0) {
                 gameOver = true;
-                document.getElementById('gameOverScreen').classList.remove('hidden');
-                document.getElementById('resultScreen').classList.add('hidden');
                 showGameOverStats();
                 return;
             }
@@ -250,19 +198,19 @@ async function handleChasingState(e) {
             return;
         }
         
-        // Move toward last seen player position (stop 1 tile away from player)
+        // Move toward last seen player position
         const dx = Math.sign(e.lastSeenPlayer.x - e.x);
         const dy = Math.sign(e.lastSeenPlayer.y - e.y);
         
         let moveX = e.x, moveY = e.y;
         let moved = false;
         
-        // Try to move toward player but stop if would end up on player
-        if(Math.abs(dx) > 0 && canMoveTo(e.x + dx, e.y, e) && !(e.x + dx === player.x && e.y === player.y)) {
+        // Try to move toward player
+        if(Math.abs(dx) > 0 && canMoveTo(e.x + dx, e.y, e)) {
             moveX = e.x + dx;
             e.dir = {x: dx, y: 0};
             moved = true;
-        } else if(Math.abs(dy) > 0 && canMoveTo(e.x, e.y + dy, e) && !(e.x === player.x && e.y + dy === player.y)) {
+        } else if(Math.abs(dy) > 0 && canMoveTo(e.x, e.y + dy, e)) {
             moveY = e.y + dy;
             e.dir = {x: 0, y: dy};
             moved = true;
@@ -270,7 +218,7 @@ async function handleChasingState(e) {
             // Try alternative directions
             const altDirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
             for(let d of altDirs) {
-                if(canMoveTo(e.x + d.x, e.y + d.y, e) && !(e.x + d.x === player.x && e.y + d.y === player.y)) {
+                if(canMoveTo(e.x + d.x, e.y + d.y, e)) {
                     moveX = e.x + d.x;
                     moveY = e.y + d.y;
                     e.dir = d;
@@ -281,7 +229,6 @@ async function handleChasingState(e) {
         }
         
         if(moved && (moveX !== e.x || moveY !== e.y)) {
-            addUnitText(e.x, e.y, "CHASING", e.color, 1);
             await new Promise(resolve => {
                 animMove(e, moveX, moveY, e.speed * 1.2, () => {
                     e.x = moveX;
@@ -294,15 +241,13 @@ async function handleChasingState(e) {
         e.chaseTurns--;
         
         // Check if player is still visible
-        if(hasLineOfSight(e, player.x, player.y) && !player.isHidden) {
+        if(distToPlayer <= e.visionRange && hasLineOfSight(e, player.x, player.y) && !player.isHidden) {
             e.lastSeenPlayer = {x: player.x, y: player.y};
             e.chaseTurns = 5;
         } else if(e.chaseTurns <= 0) {
             // Lost sight of player
             e.state = 'patrolling';
-            e.thought = getRandomThought('patrol');
-            e.thoughtTimer = 2;
-            addUnitText(e.x, e.y, "👁️ LOST SIGHT", e.color, 2);
+            createSpeechBubble(e.x, e.y, "👁️ LOST SIGHT", e.color, 1.5);
         }
     }
 }
@@ -326,7 +271,6 @@ async function handleAlertedState(e) {
         }
         
         if(moved && (moveX !== e.x || moveY !== e.y)) {
-            addUnitText(e.x, e.y, "INVESTIGATING", e.color, 1);
             await new Promise(resolve => {
                 animMove(e, moveX, moveY, e.speed, () => {
                     e.x = moveX;
@@ -339,9 +283,7 @@ async function handleAlertedState(e) {
         e.investigationTurns--;
         if(e.investigationTurns <= 0) {
             e.state = 'patrolling';
-            e.thought = getRandomThought('patrol');
-            e.thoughtTimer = 2;
-            addUnitText(e.x, e.y, "👁️ GIVING UP", e.color, 2);
+            createSpeechBubble(e.x, e.y, "👁️ GIVING UP", e.color, 1.5);
         }
     }
 }
@@ -365,7 +307,6 @@ async function handleInvestigatingState(e) {
         }
         
         if(moved && (moveX !== e.x || moveY !== e.y)) {
-            addUnitText(e.x, e.y, "INVESTIGATING", e.color, 1);
             await new Promise(resolve => {
                 animMove(e, moveX, moveY, e.speed, () => {
                     e.x = moveX;
@@ -378,16 +319,13 @@ async function handleInvestigatingState(e) {
         e.investigationTurns--;
         if(e.investigationTurns <= 0) {
             e.state = 'patrolling';
-            e.thought = '';
-            addUnitText(e.x, e.y, "👁️ GIVING UP", e.color, 2);
         }
     }
 }
 
 async function handleEatingState(e) {
     // Guard stays in place while eating
-    e.thought = getRandomEmoji(['🍚', '😋', '🤤', '👍']);
-    e.thoughtTimer = 2;
+    // Nothing to do here - already handled above
 }
 
 function canMoveTo(x, y, enemy) {
