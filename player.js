@@ -2,8 +2,8 @@
 // PLAYER MOVEMENT, ITEM PLACEMENT & ATTACK
 // ============================================
 
-function handlePlayerMove(targetX, targetY) {
-    if(!playerTurn || gameOver) return;
+async function handlePlayerMove(targetX, targetY) {
+    if(!playerTurn || gameOver || combatSequence) return;
     
     if(hasReachedExit) {
         log("✅ Already escaped!", "#0f0");
@@ -21,9 +21,12 @@ function handlePlayerMove(targetX, targetY) {
         hasReachedExit = true;
         playerTurn = false;
         
-        document.getElementById('resultScreen').classList.remove('hidden');
-        document.getElementById('gameOverScreen').classList.add('hidden');
-        showVictoryStats();
+        // Small delay before victory screen
+        setTimeout(() => {
+            document.getElementById('resultScreen').classList.remove('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            showVictoryStats();
+        }, 800);
         
         animMove(player, targetX, targetY, 0.15, () => {
             player.x = targetX;
@@ -34,12 +37,14 @@ function handlePlayerMove(targetX, targetY) {
     
     let stepsTaken = 0;
     
-    function takeStep() {
+    async function takeStep() {
         if(stepsTaken >= path.length) {
             playerTurn = false;
             
-            // Check for combat after moving
-            if(!checkCombat()) {
+            // Check for enemy attacks after moving
+            await checkEnemyAttacks();
+            
+            if(!gameOver) {
                 endTurn();
             }
             return;
@@ -53,7 +58,6 @@ function handlePlayerMove(targetX, targetY) {
             stats.coins++;
             grid[step.y][step.x] = FLOOR;
             createCoinPickupEffect(step.x, step.y);
-            log("💰 +1 Gold", "#ffd700");
         }
         
         // Check for hide spot
@@ -63,147 +67,139 @@ function handlePlayerMove(targetX, targetY) {
             createHideEffect(step.x, step.y, player.isHidden);
         }
         
-        // Check if moving into enemy (combat)
-        const enemyAtTile = enemies.find(e => e.alive && e.x === step.x && e.y === step.y);
-        if(enemyAtTile) {
-            // Enter combat with enemy
-            log(`⚔️ Engaged in combat with ${enemyAtTile.type} guard!`, "#ff3333");
+        // Check if moving into adjacent enemy (enemies stop 1 tile away)
+        const adjacentEnemies = enemies.filter(e => 
+            e.alive && Math.abs(e.x - step.x) <= 1 && Math.abs(e.y - step.y) <= 1
+        );
+        
+        if(adjacentEnemies.length > 0) {
+            // Stop before reaching enemy
             playerTurn = false;
-            combatMode = true;
+            addUnitText(player.x, player.y, "⚠️ Enemy nearby!", "#ff9900", 2);
             
-            // Player attacks first
-            enemyAtTile.hp -= 2; // Player damage
-            createDamageEffect(step.x, step.y);
-            log(`🗡️ You hit guard for 2 damage!`, "#00d2ff");
+            // Check for enemy attacks
+            await checkEnemyAttacks();
             
-            if(enemyAtTile.hp <= 0) {
-                enemyAtTile.alive = false;
-                enemyAtTile.state = 'dead';
-                stats.kills++;
-                createDeathEffect(step.x, step.y);
-                log(`💀 Guard eliminated!`, "#ff00ff");
-                
-                // Continue movement if enemy died
-                animMove(player, step.x, step.y, 0.15, () => {
-                    player.x = step.x;
-                    player.y = step.y;
-                    stepsTaken++;
-                    takeStep();
-                });
-            } else {
-                // Enemy counterattacks
-                playerHP -= enemyAtTile.damage;
-                createDamageEffect(player.x, player.y, true);
-                log(`💥 Guard hit you for ${enemyAtTile.damage} damage!`, "#ff3333");
-                updateHPDisplay();
-                
-                if(playerHP <= 0) {
-                    gameOver = true;
-                    document.getElementById('gameOverScreen').classList.remove('hidden');
-                    document.getElementById('resultScreen').classList.add('hidden');
-                    log("☠️ You were defeated in combat!", "#f00");
-                    return;
-                }
-                
-                // Move to tile after combat
-                animMove(player, step.x, step.y, 0.15, () => {
-                    player.x = step.x;
-                    player.y = step.y;
-                    stepsTaken++;
-                    takeStep();
-                });
+            if(!gameOver) {
+                endTurn();
             }
             return;
         }
         
         // Normal move
-        log(`📍 Moving to (${step.x}, ${step.y})`, "#00d2ff");
-        animMove(player, step.x, step.y, 0.15, () => {
-            player.x = step.x;
-            player.y = step.y;
-            stepsTaken++;
-            takeStep();
+        addUnitText(step.x, step.y, "👣 MOVING", "#00d2ff", 1);
+        await new Promise(resolve => {
+            animMove(player, step.x, step.y, 0.15, () => {
+                player.x = step.x;
+                player.y = step.y;
+                stepsTaken++;
+                resolve();
+            });
         });
+        
+        // Small delay between steps
+        await new Promise(resolve => setTimeout(resolve, 100));
+        takeStep();
     }
     
     takeStep();
 }
 
-function handleAttack(targetX, targetY) {
-    if(!playerTurn || gameOver) return;
+async function handleAttack(targetX, targetY) {
+    if(!playerTurn || gameOver || combatSequence) return;
     
     // Check if target tile has an enemy
     const enemy = enemies.find(e => e.alive && e.x === targetX && e.y === targetY);
     if(!enemy) {
-        log("❌ No enemy to attack!", "#f00");
+        addUnitText(player.x, player.y, "❌ No enemy!", "#ff0000", 2);
         return;
     }
     
     // Check if enemy can see player (no stealth kill if seen)
     const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
     
+    playerTurn = false;
+    
     if(canSeePlayer) {
-        // Normal combat
-        log(`⚔️ Attacking ${enemy.type} guard!`, "#ff3333");
-        enemy.hp -= 2; // Player damage
-        createDamageEffect(targetX, targetY);
-        playSound('attack');
-        log(`🗡️ You hit guard for 2 damage!`, "#00d2ff");
+        // Normal combat sequence
+        addUnitText(player.x, player.y, `⚔️ VS ${enemy.type}`, "#ff3333", 2);
         
-        if(enemy.hp <= 0) {
-            enemy.alive = false;
-            enemy.state = 'dead';
-            stats.kills++;
-            createDeathEffect(targetX, targetY);
-            log(`💀 Guard eliminated!`, "#ff00ff");
-        } else {
-            // Enemy counterattacks if in range
-            const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-            if(dist <= enemy.attackRange) {
-                playerHP -= enemy.damage;
-                createDamageEffect(player.x, player.y, true);
-                log(`💥 Guard hit you for ${enemy.damage} damage!`, "#ff3333");
-                updateHPDisplay();
-                
-                if(playerHP <= 0) {
-                    gameOver = true;
-                    document.getElementById('gameOverScreen').classList.remove('hidden');
-                    document.getElementById('resultScreen').classList.add('hidden');
-                    log("☠️ You were defeated in combat!", "#f00");
-                    return;
-                }
-            }
+        const enemyDied = await processCombatSequence(true, enemy, 2);
+        
+        if(!enemyDied && !gameOver) {
+            // Small delay before enemy turn
+            await new Promise(resolve => setTimeout(resolve, 500));
+            endTurn();
+        } else if(!gameOver) {
+            autoSwitchToMove();
+            // Small delay before next turn
+            await new Promise(resolve => setTimeout(resolve, 500));
+            endTurn();
         }
     } else {
         // Stealth kill
-        log(`🗡️ Stealth kill!`, "#00ff00");
+        addUnitText(player.x, player.y, "🗡️ STEALTH KILL!", "#00ff00", 2);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        playSound('attack');
         enemy.alive = false;
         enemy.state = 'dead';
         stats.kills++;
         createDeathEffect(targetX, targetY);
-        playSound('attack');
-        log(`💀 Guard silently eliminated!`, "#00ff00");
+        
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        autoSwitchToMove();
+        
+        // Check for other enemy reactions
+        await checkEnemyAttacks();
+        
+        if(!gameOver) {
+            // Small delay before next turn
+            await new Promise(resolve => setTimeout(resolve, 500));
+            endTurn();
+        }
     }
+}
+
+async function checkEnemyAttacks() {
+    // Check if any alerted enemy can attack player
+    const attackingEnemies = enemies.filter(e => 
+        e.alive && (e.state === 'alerted' || e.state === 'chasing') && 
+        Math.hypot(e.x - player.x, e.y - player.y) <= e.attackRange
+    );
     
-    playerTurn = false;
-    autoSwitchToMove(); // Auto switch back to move mode
-    
-    // Check for additional combat
-    if(!checkCombat()) {
-        endTurn();
+    for(let e of attackingEnemies) {
+        addUnitText(e.x, e.y, `🎯 ATTACKING!`, e.color, 2);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        playerHP -= e.damage;
+        createDamageEffect(player.x, player.y, e.damage, true);
+        addUnitText(player.x, player.y, `-${e.damage} HP`, "#ff66ff", 2);
+        updateHPDisplay();
+        
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        if(playerHP <= 0) {
+            gameOver = true;
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+            document.getElementById('resultScreen').classList.add('hidden');
+            showGameOverStats();
+            return;
+        }
     }
 }
 
 function handleItemPlacement(x, y, type) {
-    if(!playerTurn || gameOver) return;
+    if(!playerTurn || gameOver || combatSequence) return;
     
     if(inv[type] <= 0) {
-        log(`❌ No ${type}s left!`, "#f00");
+        addUnitText(player.x, player.y, `❌ No ${type}s!`, "#f00", 2);
         return;
     }
     
     if(grid[y][x] !== FLOOR) {
-        log("❌ Can't place here!", "#f00");
+        addUnitText(player.x, player.y, "❌ Can't place here!", "#f00", 2);
         return;
     }
     
@@ -214,22 +210,26 @@ function handleItemPlacement(x, y, type) {
     switch(type) {
         case 'trap':
             grid[y][x] = TRAP;
-            log(`⚠️ Trap placed at (${x}, ${y})`, "#ff6464");
+            addUnitText(x, y, "⚠️ TRAP SET", "#ff6464", 2);
             break;
         case 'rice':
             grid[y][x] = RICE;
-            log(`🍚 Rice placed at (${x}, ${y})`, "#ffff64");
+            addUnitText(x, y, "🍚 RICE SET", "#ffff64", 2);
             break;
         case 'bomb':
             grid[y][x] = BOMB;
             activeBombs.push({x: x, y: y, t: 3});
-            log(`💣 Bomb placed at (${x}, ${y}) - 3 turns`, "#ff3296");
+            addUnitText(x, y, "💣 BOMB SET", "#ff3296", 2);
             break;
     }
     
     playerTurn = false;
-    autoSwitchToMove(); // Auto switch back to move mode
-    endTurn();
+    autoSwitchToMove();
+    
+    // Small delay before enemy turn
+    setTimeout(() => {
+        endTurn();
+    }, 500);
 }
 
 // A* Pathfinding Algorithm
@@ -284,7 +284,7 @@ function findPath(startX, startY, targetX, targetY) {
             // Check if tile is occupied by alive enemy
             const enemyAtTile = enemies.find(e => e.alive && e.x === neighbor.x && e.y === neighbor.y);
             if(enemyAtTile) {
-                continue; // Can't move through enemies
+                continue;
             }
             
             if(closedSet.has(`${neighbor.x},${neighbor.y}`)) {
