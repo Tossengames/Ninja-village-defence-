@@ -12,9 +12,11 @@ function handlePlayerMove(tx, ty) {
     }
     
     if(grid[ty][tx] === EXIT) { 
+        hasReachedExit = true; // Set flag before game over
         gameOver = true; 
         document.getElementById('resultScreen').classList.remove('hidden');
         showVictoryStats();
+        log("MISSION COMPLETE! Escaped successfully!", "#0f0");
     }
 }
 
