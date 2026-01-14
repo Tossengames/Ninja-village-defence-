@@ -24,17 +24,17 @@ canvas {
     image-rendering: pixelated;
 }
 
-/* --- MISSION LOG (Top Left) --- */
+/* --- MISSION LOG (Top Left) - SMALLER --- */
 #missionLog {
     position: fixed;
     top: 15px;
     left: 15px;
-    width: 280px; /* Increased width for better logs */
-    height: 120px; /* Increased height */
-    background: rgba(0, 0, 0, 0.85);
+    width: 220px; /* Original size */
+    height: 90px; /* Original size */
+    background: rgba(0, 0, 0, 0.7);
     border-left: 3px solid var(--accent);
-    padding: 12px;
-    font-size: 12px;
+    padding: 10px;
+    font-size: 11px; /* Smaller font */
     pointer-events: none;
     overflow: hidden;
     display: flex;
@@ -42,43 +42,18 @@ canvas {
     z-index: 100;
     border-radius: 0 8px 8px 0;
     backdrop-filter: blur(5px);
-    border-top: 1px solid rgba(255,255,255,0.1);
-    border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 
 #missionLog div {
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     text-shadow: 1px 1px 2px #000;
     animation: slideIn 0.2s ease-out;
-    padding: 2px 4px;
-    border-radius: 2px;
-    background: rgba(255,255,255,0.05);
 }
 
 @keyframes slideIn {
     from { opacity: 0; transform: translateX(-10px); }
     to { opacity: 1; transform: translateX(0); }
 }
-
-/* Enhanced highlight animations */
-@keyframes pulse-highlight {
-    0% { transform: scale(1); opacity: 0.6; }
-    50% { transform: scale(1.02); opacity: 0.9; }
-    100% { transform: scale(1); opacity: 0.6; }
-}
-
-@keyframes glow {
-    0% { box-shadow: 0 0 5px currentColor; }
-    50% { box-shadow: 0 0 15px currentColor; }
-    100% { box-shadow: 0 0 5px currentColor; }
-}
-
-@keyframes ripple {
-    0% { transform: scale(1); opacity: 0.8; }
-    100% { transform: scale(1.2); opacity: 0; }
-}
-
-/* REMOVED MODE INDICATOR SECTION */
 
 /* Range Indicator */
 #rangeIndicator {
@@ -307,7 +282,7 @@ input[type="number"] {
     font-weight: bold;
 }
 
-/* Game Over Screen */
+/* Game Over Screen - ORIGINAL STYLE */
 #gameOverScreen h1 {
     color: var(--red);
     letter-spacing: 10px;
@@ -316,7 +291,7 @@ input[type="number"] {
     animation: pulse-highlight 1s infinite;
 }
 
-/* Result Screen Improvements */
+/* Result Screen Improvements - ORIGINAL */
 .result-scroll {
     background: rgba(20, 20, 20, 0.95);
     border: 2px solid var(--accent);
@@ -405,38 +380,8 @@ input[type="number"] {
     100% { text-shadow: 0 0 10px currentColor; }
 }
 
-/* Blood stain effect */
-.blood-stain {
-    position: absolute;
-    background: radial-gradient(circle, rgba(139,0,0,0.8) 0%, rgba(139,0,0,0) 70%);
-    border-radius: 50%;
-    pointer-events: none;
-}
-
-/* Explosion effect */
-.explosion-effect {
-    position: absolute;
-    background: radial-gradient(circle, rgba(255,165,0,0.8) 0%, rgba(255,0,0,0) 80%);
-    border-radius: 50%;
-    pointer-events: none;
-    animation: explode 0.5s ease-out forwards;
-}
-
-@keyframes explode {
-    0% { transform: scale(0); opacity: 1; }
-    100% { transform: scale(2); opacity: 0; }
-}
-
-/* Coin pickup effect */
-.coin-effect {
-    position: absolute;
-    color: #ffd700;
-    font-weight: bold;
-    pointer-events: none;
-    animation: floatUp 1s ease-out forwards;
-}
-
-@keyframes floatUp {
-    0% { transform: translateY(0) scale(1); opacity: 1; }
-    100% { transform: translateY(-50px) scale(0.5); opacity: 0; }
+@keyframes pulse-highlight {
+    0% { transform: scale(1); opacity: 0.6; }
+    50% { transform: scale(1.02); opacity: 0.9; }
+    100% { transform: scale(1); opacity: 0.6; }
 }
