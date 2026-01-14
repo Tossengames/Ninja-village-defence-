@@ -2,65 +2,87 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Shadow Protocol: Grand Master</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stealth Game</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="missionLog"></div>
-
-    <div id="ui-controls" class="hidden">
-        <button id="mapToggle" onclick="toggleMinimap()">🗺️ Map</button>
-        <button id="sfxToggle" onclick="toggleSFX()">🔇 SFX</button>
-    </div>
-
-    <div id="menu" class="overlay-screen">
-        <div class="menu-box">
-            <h2 style="color:var(--accent); text-align: center; letter-spacing: 4px;">MISSION START</h2>
-            <div class="menu-item">Size: <input type="number" id="mapSize" value="12" min="8" max="20"></div>
-            <div class="menu-item">Guards: <input type="number" id="guardCount" value="5" min="1" max="15"></div>
-            <div class="menu-item">SFX: <input type="checkbox" id="sfxCheckbox" checked></div>
-            <button onclick="initGame()" class="start-btn">INFILTRATE</button>
-        </div>
-    </div>
-
-    <div id="resultScreen" class="overlay-screen hidden">
-        <div class="result-scroll">
-            <div id="rankLabel" class="rank-text">Grand Master</div>
-            <div id="statsTable"></div>
-            <button onclick="location.reload()" class="reload-btn">NEXT MISSION</button>
-        </div>
-    </div>
-
-    <div id="gameOverScreen" class="overlay-screen hidden">
-        <h1 style="color:var(--red); letter-spacing: 8px;">YOU WERE SEEN</h1>
-        <button onclick="location.reload()" class="reload-btn">RETRY</button>
-    </div>
-
     <canvas id="game"></canvas>
-
+    
+    <!-- Mission Log (Top Left) -->
+    <div id="missionLog"></div>
+    
+    <!-- REMOVED MODE INDICATOR -->
+    
+    <!-- Range Indicator (Bottom Left) -->
+    <div id="rangeIndicator" class="hidden">Tap highlighted tiles to move (2 tile range)</div>
+    
+    <!-- UI Controls (Top Right) -->
+    <div id="ui-controls" class="hidden">
+        <button id="mapToggle" onclick="toggleMinimap()">Toggle Map</button>
+    </div>
+    
+    <!-- Toolbar (Bottom Center) -->
     <div id="toolbar" class="hidden">
-        <div class="tool-btn active" id="btnMove" onclick="setMode('move')">
-            <span>👣</span>Move
-            <div class="tool-count" id="moveCount">∞</div>
+        <div class="tool-btn" id="btnMove" onclick="setMode('move')">
+            <span>👣</span>
+            Move
         </div>
         <div class="tool-btn" id="btnTrap" onclick="setMode('trap')">
-            <span>⚙️</span>Trap
+            <span>⚠️</span>
+            Trap
             <div class="tool-count" id="trapCount">3</div>
         </div>
         <div class="tool-btn" id="btnRice" onclick="setMode('rice')">
-            <span>🍚</span>Rice
+            <span>🍚</span>
+            Rice
             <div class="tool-count" id="riceCount">2</div>
         </div>
         <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')">
-            <span>💣</span>Bomb
+            <span>💣</span>
+            Bomb
             <div class="tool-count" id="bombCount">1</div>
         </div>
         <div class="tool-btn" onclick="playerWait()">
-            <span>⌛</span>Wait
+            <span>⏳</span>
+            Wait
         </div>
     </div>
-
+    
+    <!-- Main Menu -->
+    <div id="menu" class="overlay-screen">
+        <div class="menu-box">
+            <h1>STEALTH GAME</h1>
+            <div class="menu-item">
+                <label>Map Size:</label>
+                <input type="number" id="mapSize" min="8" max="20" value="12">
+            </div>
+            <div class="menu-item">
+                <label>Guard Count:</label>
+                <input type="number" id="guardCount" min="1" max="15" value="5">
+            </div>
+            <button class="start-btn" onclick="initGame()">START MISSION</button>
+        </div>
+    </div>
+    
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="overlay-screen hidden">
+        <div class="result-scroll">
+            <h1>MISSION FAILED</h1>
+            <div id="statsTable"></div>
+            <button class="reload-btn" onclick="window.location.reload()">TRY AGAIN</button>
+        </div>
+    </div>
+    
+    <!-- Victory Screen -->
+    <div id="resultScreen" class="overlay-screen hidden">
+        <div class="result-scroll">
+            <div class="rank-text" id="rankLabel">RANK</div>
+            <div id="statsTable"></div>
+            <button class="reload-btn" onclick="window.location.reload()">NEW MISSION</button>
+        </div>
+    </div>
+    
     <script src="core.js"></script>
     <script src="player.js"></script>
     <script src="enemy.js"></script>
