@@ -19,8 +19,9 @@ async function processEnemyTurn(e) {
         if(e.state !== 'alerted' && e.state !== 'chasing') {
             e.state = 'chasing';
             e.lastSeenPlayer = {x: player.x, y: player.y};
-            e.chaseTurns = e.chaseMemory; // Use memory turns
+            e.chaseTurns = e.chaseMemory;
             createSpeechBubble(e.x, e.y, "❗ SPOTTED!", e.color, 2);
+            createAlertEffect(e.x, e.y);
             
             await new Promise(resolve => setTimeout(resolve, 500));
         } else if(e.state === 'chasing') {
@@ -50,7 +51,8 @@ async function processEnemyTurn(e) {
         e.state = 'dead';
         stats.kills++;
         grid[e.y][e.x] = FLOOR;
-        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2.5);
+        createTrapEffect(e.x, e.y);
+        createDeathEffect(e.x, e.y);
         return;
     }
     
@@ -80,7 +82,8 @@ async function processEnemyTurn(e) {
         e.state = 'dead';
         stats.kills++;
         grid[e.y][e.x] = FLOOR;
-        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2.5);
+        createTrapEffect(e.x, e.y);
+        createDeathEffect(e.x, e.y);
         return;
     }
     
@@ -103,7 +106,7 @@ async function processEnemyTurn(e) {
             e.alive = false;
             e.state = 'dead';
             stats.kills++;
-            createSpeechBubble(e.x, e.y, "💀 POISONED!", "#ff00ff", 2.5);
+            createDeathEffect(e.x, e.y);
             return;
         } else {
             createSpeechBubble(e.x, e.y, `🤢 SICK (${e.poisonTimer})`, "#ff00ff", 2);
@@ -188,6 +191,7 @@ async function handleChasingState(e) {
             await new Promise(resolve => setTimeout(resolve, 500));
             
             playerHP -= e.damage;
+            createDamageEffect(player.x, player.y, e.damage, true);
             createSpeechBubble(player.x, player.y, `-${e.damage}`, "#ff66ff", 2);
             updateHPDisplay();
             
