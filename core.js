@@ -34,7 +34,8 @@ let explosionEffects = [];
 let footstepEffects = [];
 let damageEffects = [];
 let unitTexts = [];
-let speechBubbles = []; // New: Cartoon-style speech bubbles
+let speechBubbles = [];
+let enemyMarks = []; // New: Marks for enemy states
 let soundQueue = [];
 
 // Canvas and rendering
@@ -157,16 +158,36 @@ function createFootstepEffect(x, y) {
     }
 }
 
-function createSpeechBubble(x, y, text, color = "#ffffff", duration = 2) {
+function createSpeechBubble(x, y, text, color = "#ffffff", duration = 3) {
     speechBubbles.push({
         x: x * TILE + TILE/2,
-        y: y * TILE - 50,
+        y: y * TILE - 60,
         text: text,
         color: color,
         life: duration,
         maxLife: duration,
         scale: 0,
-        vy: -0.3
+        vy: -0.2,
+        width: Math.min(100, text.length * 7),
+        height: 30
+    });
+}
+
+function addEnemyMark(x, y, type) {
+    const markColors = {
+        'investigating': '#ff9900',
+        'chasing': '#ff0000',
+        'alerted': '#ff3333',
+        'eating': '#00ff00',
+        'patrolling': '#666666'
+    };
+    
+    enemyMarks.push({
+        x: x,
+        y: y,
+        color: markColors[type] || '#ffffff',
+        life: 5,
+        size: 0
     });
 }
 
@@ -180,13 +201,19 @@ function updateVFX() {
     });
     
     speechBubbles = speechBubbles.filter(b => {
-        b.life -= 0.03;
-        b.scale = Math.min(1, (b.maxLife - b.life) * 2);
-        if(b.life < 0.3) {
-            b.scale = b.life / 0.3;
+        b.life -= 0.02; // Slower fade
+        b.scale = Math.min(1, (b.maxLife - b.life) * 1.5); // Faster popup
+        if(b.life < 0.5) {
+            b.scale = b.life / 0.5;
         }
         b.y += b.vy;
         return b.life > 0;
+    });
+    
+    enemyMarks = enemyMarks.filter(m => {
+        m.life -= 0.02;
+        m.size = Math.sin(m.life * 2) * 3 + 8;
+        return m.life > 0;
     });
     
     damageEffects = damageEffects.filter(d => {
@@ -211,26 +238,51 @@ function drawVFX() {
     });
     
     speechBubbles.forEach(b => {
-        const alpha = b.life * 0.8;
-        const fontSize = Math.floor(10 * b.scale);
+        const alpha = b.life;
+        const scale = b.scale;
         
-        // Bubble background
+        // White rectangle background
         ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, 20 * b.scale, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(
+            b.x - (b.width * scale) / 2,
+            b.y - (b.height * scale) / 2,
+            b.width * scale,
+            b.height * scale
+        );
         
-        // Bubble border
+        // Border
         ctx.strokeStyle = `rgba(100, 100, 100, ${alpha})`;
         ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.strokeRect(
+            b.x - (b.width * scale) / 2,
+            b.y - (b.height * scale) / 2,
+            b.width * scale,
+            b.height * scale
+        );
         
-        // Text
+        // Rounded corners effect
         ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.font = `bold ${Math.floor(12 * scale)}px Arial`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(b.text, b.x, b.y);
+    });
+    
+    enemyMarks.forEach(m => {
+        ctx.fillStyle = m.color;
+        ctx.beginPath();
+        ctx.arc(
+            m.x * TILE + TILE/2,
+            m.y * TILE + TILE/2,
+            m.size,
+            0,
+            Math.PI * 2
+        );
+        ctx.fill();
+        
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
     });
     
     damageEffects.forEach(d => {
@@ -266,6 +318,7 @@ function initGame() {
     
     particles = [];
     speechBubbles = [];
+    enemyMarks = [];
     unitTexts = [];
     
     showHighlights = true;
@@ -358,6 +411,7 @@ function generateLevel() {
             returnToPatrolPos: {x: ex, y: ey},
             lastSeenPlayer: null,
             chaseTurns: 0,
+            chaseMemory: 8, // How many turns they remember seeing player
             color: enemyStats.color,
             tint: enemyStats.tint
         });
@@ -474,6 +528,9 @@ function gameLoop() {
 
     enemies.forEach(e => {
         if(!e.alive) return;
+        
+        // Draw state mark
+        addEnemyMark(e.x, e.y, e.state);
         
         ctx.fillStyle = e.tint;
         ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
@@ -605,8 +662,46 @@ function drawVisionCone(e) {
     
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(e.ax * TILE + 30, e.ay * TILE + 30, drawRange * TILE, 0, Math.PI * 2);
+    
+    const baseA = Math.atan2(e.dir.y, e.dir.x);
+    const visionAngle = Math.PI / 3; // 60 degree cone
+    
+    ctx.moveTo(e.ax * TILE + 30, e.ay * TILE + 30);
+    
+    const rayCount = 20;
+    for(let i = 0; i <= rayCount; i++) {
+        const angle = baseA - visionAngle + (2 * visionAngle * i / rayCount);
+        let maxDistance = drawRange;
+        
+        for(let d = 0.1; d <= drawRange; d += 0.1) {
+            const checkX = Math.floor(e.x + Math.cos(angle) * d);
+            const checkY = Math.floor(e.y + Math.sin(angle) * d);
+            
+            if(checkX < 0 || checkX >= mapDim || checkY < 0 || checkY >= mapDim) {
+                maxDistance = d - 0.1;
+                break;
+            }
+            
+            if(grid[checkY][checkX] === WALL) {
+                maxDistance = d - 0.1;
+                break;
+            }
+        }
+        
+        ctx.lineTo(
+            e.ax * TILE + 30 + Math.cos(angle) * maxDistance * TILE,
+            e.ay * TILE + 30 + Math.sin(angle) * maxDistance * TILE
+        );
+    }
+    
+    ctx.closePath();
     ctx.fill();
+    
+    ctx.strokeStyle = e.state === 'alerted' || e.state === 'chasing' ? 'rgba(255, 0, 0, 0.8)' : 
+                     e.state === 'investigating' ? 'rgba(255, 165, 0, 0.6)' :
+                     e.state === 'eating' ? 'rgba(0, 255, 0, 0.6)' : 'rgba(255, 100, 100, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
 }
 
 function drawMinimap() {
@@ -672,13 +767,13 @@ function clampCamera() {
 
 function toggleMinimap() { 
     showMinimap = !showMinimap; 
-    log("Minimap toggled", showMinimap ? "#0f0" : "#f00");
+    log("Minimap " + (showMinimap ? "ON" : "OFF"), showMinimap ? "#0f0" : "#f00");
 }
 
 function toggleLog() {
     showLog = !showLog;
     document.getElementById('missionLog').style.display = showLog ? 'flex' : 'none';
-    log("Log toggled", showLog ? "#0f0" : "#f00");
+    log("Log " + (showLog ? "ON" : "OFF"), showLog ? "#0f0" : "#f00");
 }
 
 function updateToolCounts() {
@@ -774,11 +869,11 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
     combatSequence = true;
     
     // Player attacks first
-    createSpeechBubble(player.x, player.y, "🗡️ ATTACK!", "#00d2ff", 1.5);
+    createSpeechBubble(player.x, player.y, "🗡️ ATTACK!", "#00d2ff", 2);
     await new Promise(resolve => setTimeout(resolve, 500));
     
     enemy.hp -= playerDamage;
-    createSpeechBubble(enemy.x, enemy.y, `-${playerDamage}`, "#ff0000", 1.5);
+    createSpeechBubble(enemy.x, enemy.y, `-${playerDamage}`, "#ff0000", 2);
     
     await new Promise(resolve => setTimeout(resolve, 800));
     
@@ -786,7 +881,7 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
         enemy.alive = false;
         enemy.state = 'dead';
         stats.kills++;
-        createSpeechBubble(enemy.x, enemy.y, "💀", "#ff0000", 2);
+        createSpeechBubble(enemy.x, enemy.y, "💀", "#ff0000", 2.5);
         combatSequence = false;
         return true;
     }
@@ -794,18 +889,17 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
     // Enemy counterattacks if in range
     const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
     if(dist <= enemy.attackRange) {
-        createSpeechBubble(enemy.x, enemy.y, `${enemy.type} ATTACK!`, enemy.color, 1.5);
+        createSpeechBubble(enemy.x, enemy.y, `${enemy.type} ATTACK!`, enemy.color, 2);
         await new Promise(resolve => setTimeout(resolve, 500));
         
         playerHP -= enemy.damage;
-        createSpeechBubble(player.x, player.y, `-${enemy.damage}`, "#ff66ff", 1.5);
+        createSpeechBubble(player.x, player.y, `-${enemy.damage}`, "#ff66ff", 2);
         updateHPDisplay();
         
         await new Promise(resolve => setTimeout(resolve, 800));
         
         if(playerHP <= 0) {
             gameOver = true;
-            document.getElementById('gameOverScreen').classList.remove('hidden');
             showGameOverStats();
             combatSequence = false;
             return false;
@@ -940,7 +1034,7 @@ function autoSwitchToMove() {
 function playerWait() { 
     if(playerTurn) { 
         playerTurn = false; 
-        createSpeechBubble(player.x, player.y, "⏳ WAITING", "#aaaaaa", 1.5);
+        createSpeechBubble(player.x, player.y, "⏳ WAITING", "#aaaaaa", 2);
         endTurn(); 
     } 
 }
@@ -1020,18 +1114,15 @@ function showGameOverStats() {
     
     const statsTable = document.getElementById('statsTable');
     
+    // SIMPLE GAME OVER - NO STATS
     statsTable.innerHTML = `
-        <div><span>MISSION FAILED</span><span></span></div>
-        <div><span>You were defeated!</span><span></span></div>
-        <div><span>Turns Survived:</span><span>${turnCount}</span></div>
-        <div><span>Guards Eliminated:</span><span>${stats.kills}</span></div>
-        <div><span>Gold Collected:</span><span>${stats.coins}</span></div>
-        <div style="font-size: 12px; margin-top: 15px; color: #aaa; font-style: italic;">Better luck next time!</div>
+        <div style="font-size: 24px; color: #ff3333; margin: 20px 0;">YOU DIED</div>
+        <div style="font-size: 14px; color: #aaa; margin-bottom: 30px;">The mission has failed</div>
     `;
 }
 
 // ============================================
-// LINE OF SIGHT CHECKING - FIXED
+// LINE OF SIGHT CHECKING - KEEP CONE VISION
 // ============================================
 
 function hasLineOfSight(e, px, py) {
@@ -1043,7 +1134,18 @@ function hasLineOfSight(e, px, py) {
     
     if(distance > e.visionRange) return false;
     
-    // Check if anything blocks the line
+    // Check if within vision cone (60 degrees)
+    const angleToPlayer = Math.atan2(dy, dx);
+    const enemyAngle = Math.atan2(e.dir.y, e.dir.x);
+    let angleDiff = Math.abs(angleToPlayer - enemyAngle);
+    
+    // Normalize angle difference
+    if(angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+    
+    const visionCone = Math.PI / 3; // 60 degrees
+    if(angleDiff > visionCone) return false;
+    
+    // Check line of sight
     const steps = Math.max(Math.abs(dx), Math.abs(dy));
     for(let i = 1; i <= steps; i++) {
         const tx = Math.round(e.x + (dx / steps) * i);
@@ -1075,4 +1177,5 @@ window.processCombatSequence = processCombatSequence;
 window.hasLineOfSight = hasLineOfSight;
 window.createSpeechBubble = createSpeechBubble;
 window.createFootstepEffect = createFootstepEffect;
+window.addEnemyMark = addEnemyMark;
 window.autoSwitchToMove = autoSwitchToMove;
