@@ -10,7 +10,7 @@ async function processEnemyTurn(e) {
         return;
     }
     
-    // Check if guard sees rice
+    // Check if guard is standing on rice
     if(grid[e.y][e.x] === RICE && e.state !== 'eating') {
         startEating(e);
         grid[e.y][e.x] = FLOOR;
@@ -26,8 +26,8 @@ async function processEnemyTurn(e) {
         return;
     }
     
-    // Check if guard sees player (with wall obstruction)
-    if(!player.isHidden && hasLineOfSight(e, player.x, player.y)) {
+    // Check if guard sees player (with wall obstruction and limited range)
+    if(!player.isHidden && canSeePlayer(e, player.x, player.y)) {
         e.state = 'alerted';
         e.thought = '❗';
         e.thoughtTimer = 3;
@@ -35,9 +35,20 @@ async function processEnemyTurn(e) {
         return;
     }
     
-    // Check for nearby items
+    // Check for nearby items (rice within 1 tile)
     const foundItem = checkForNearbyItems(e);
     if(foundItem) return;
+    
+    // Check if heard bomb explosion
+    if(e.hasHeardSound && e.soundLocation) {
+        e.state = 'investigating';
+        e.investigationTarget = {x: e.soundLocation.x, y: e.soundLocation.y};
+        e.investigationTurns = 5;
+        e.thought = '👂';
+        e.thoughtTimer = 3;
+        e.hasHeardSound = false;
+        return;
+    }
     
     // Handle investigation state
     if(e.state === 'investigating') {
@@ -65,42 +76,76 @@ function killEnemy(e, cause) {
 
 function startEating(e) {
     e.state = 'eating';
-    e.investigationTurns = 3;
+    e.investigationTurns = 3; // Eat for 3 turns then die
     e.thought = '🍚';
     e.thoughtTimer = 3;
     log("Guard found rice and is eating!", "#ff9900");
     stats.itemsUsed++;
 }
 
-function hasLineOfSight(e, px, py) {
-    const dx = px - e.x, dy = py - e.y, dist = Math.hypot(dx, dy);
-    if(dist > e.range) return false;
+// FIXED: Check line of sight with walls and limited range
+function canSeePlayer(e, px, py) {
+    // Calculate distance
+    const dx = px - e.x;
+    const dy = py - e.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
     
-    for(let d = 0.5; d < dist; d += 0.5) {
-        const checkX = Math.floor(e.x + (dx/dist) * d);
-        const checkY = Math.floor(e.y + (dy/dist) * d);
-        
-        if(checkX < 0 || checkX >= mapDim || checkY < 0 || checkY >= mapDim) {
-            return false;
+    // Can't see beyond their vision range (random 1-2 tiles)
+    if(distance > e.visionRange) return false;
+    
+    // Check line of sight using Bresenham's line algorithm
+    let x0 = e.x;
+    let y0 = e.y;
+    let x1 = px;
+    let y1 = py;
+    
+    const dx2 = Math.abs(x1 - x0);
+    const dy2 = Math.abs(y1 - y0);
+    const sx = (x0 < x1) ? 1 : -1;
+    const sy = (y0 < y1) ? 1 : -1;
+    let err = dx2 - dy2;
+    
+    while(true) {
+        // Don't check the starting point (enemy's position)
+        if(x0 !== e.x || y0 !== e.y) {
+            // If we hit a wall before reaching player, can't see
+            if(grid[y0][x0] === WALL) {
+                return false;
+            }
         }
-        if(grid[checkY][checkX] === WALL) {
-            return false;
+        
+        // If we reached the player's position
+        if(x0 === x1 && y0 === y1) {
+            return true;
+        }
+        
+        const e2 = 2 * err;
+        if(e2 > -dy2) {
+            err -= dy2;
+            x0 += sx;
+        }
+        if(e2 < dx2) {
+            err += dx2;
+            y0 += sy;
         }
     }
-    return true;
 }
 
 function checkForNearbyItems(e) {
+    // Check adjacent tiles for rice (up, down, left, right)
     const directions = [
-        {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
+        {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1},
+        // Also check diagonals
+        {x: 1, y: 1}, {x: -1, y: 1}, {x: 1, y: -1}, {x: -1, y: -1}
     ];
     
     for(const dir of directions) {
         const nx = e.x + dir.x;
         const ny = e.y + dir.y;
         
+        // Make sure tile is within bounds
         if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim) {
-            if(grid[ny][nx] === RICE && e.state !== 'investigating') {
+            if(grid[ny][nx] === RICE && e.state !== 'investigating' && e.state !== 'eating') {
                 e.state = 'investigating';
                 e.investigationTarget = {x: nx, y: ny};
                 e.investigationTurns = 8;
@@ -109,6 +154,9 @@ function checkForNearbyItems(e) {
                 log("Guard noticed rice!", "#ff9900");
                 return true;
             }
+            
+            // Check for traps (they can't see them, but if they step on them, they die)
+            // Traps are invisible to enemies until stepped on
         }
     }
     
@@ -120,13 +168,20 @@ async function handleInvestigation(e) {
     
     // If reached investigation target
     if(e.investigationTarget && (e.x === e.investigationTarget.x && e.y === e.investigationTarget.y)) {
-        e.investigationTarget = null;
-        if(e.investigationTurns <= 0) {
-            e.state = 'patrolling';
-            e.thought = '';
-            e.thoughtTimer = 0;
-            log("Guard gave up investigation", "#aaa");
+        // If it was rice, start eating
+        if(grid[e.y][e.x] === RICE) {
+            startEating(e);
+        } else {
+            // If it was a sound location (bomb), look around
+            e.investigationTarget = null;
+            if(e.investigationTurns <= 0) {
+                e.state = 'patrolling';
+                e.thought = '';
+                e.thoughtTimer = 0;
+                log("Guard gave up investigation", "#aaa");
+            }
         }
+        return;
     }
     
     // Move toward investigation target
@@ -156,15 +211,28 @@ async function handleInvestigation(e) {
 
 async function patrolMovement(e) {
     let nx = e.x, ny = e.y;
-    const moves = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-    const d = moves[Math.floor(Math.random() * 4)];
+    const moves = [
+        {x: 1, y: 0}, {x: -1, y: 0}, 
+        {x: 0, y: 1}, {x: 0, y: -1}
+    ];
     
-    // Check for walls before moving
-    if(e.y + d.y >= 0 && e.y + d.y < mapDim && 
-       e.x + d.x >= 0 && e.x + d.x < mapDim &&
-       grid[e.y + d.y][e.x + d.x] !== WALL) {
-        nx += d.x; 
-        ny += d.y; 
+    // Filter out moves that hit walls
+    const validMoves = moves.filter(move => {
+        const checkX = e.x + move.x;
+        const checkY = e.y + move.y;
+        return checkX >= 0 && checkX < mapDim && 
+               checkY >= 0 && checkY < mapDim &&
+               grid[checkY][checkX] !== WALL;
+    });
+    
+    // If there are valid moves, pick one randomly
+    if(validMoves.length > 0) {
+        const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+        nx += randomMove.x;
+        ny += randomMove.y;
+        
+        // Update direction for vision cone
+        e.dir = randomMove;
     }
     
     await new Promise(r => animMove(e, nx, ny, 0.2, r));
