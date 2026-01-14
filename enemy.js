@@ -32,6 +32,18 @@ async function processEnemyTurn(e) {
         e.hasHeardSound = false;
     }
     
+    // Check for trap before moving
+    if(grid[e.y][e.x] === TRAP) {
+        e.alive = false;
+        e.state = 'dead';
+        stats.kills++;
+        grid[e.y][e.x] = FLOOR; // Remove trap
+        createTrapEffect(e.x, e.y);
+        createDeathEffect(e.x, e.y);
+        log(`⚠️ Guard stepped on trap and died!`, "#ff3333");
+        return;
+    }
+    
     // State-based behavior
     switch(e.state) {
         case 'alerted':
@@ -49,6 +61,18 @@ async function processEnemyTurn(e) {
         default:
             await handlePatrollingState(e);
             break;
+    }
+    
+    // Check for trap after moving
+    if(e.alive && grid[e.y][e.x] === TRAP) {
+        e.alive = false;
+        e.state = 'dead';
+        stats.kills++;
+        grid[e.y][e.x] = FLOOR; // Remove trap
+        createTrapEffect(e.x, e.y);
+        createDeathEffect(e.x, e.y);
+        log(`⚠️ Guard stepped on trap and died!`, "#ff3333");
+        return;
     }
     
     // Check for rice
@@ -83,16 +107,17 @@ async function processEnemyTurn(e) {
 }
 
 function logEnemyState(e) {
-    const stateLogs = {
-        'patrolling': `👁️ Guard patrolling at (${e.x},${e.y})`,
-        'investigating': `🔍 Guard investigating at (${e.x},${e.y})`,
-        'alerted': `🚨 Guard alerted at (${e.x},${e.y})`,
-        'eating': `🍚 Guard eating at (${e.x},${e.y})`,
-        'poisoned': `☠️ Guard poisoned at (${e.x},${e.y})`
-    };
-    
-    if(stateLogs[e.state]) {
-        log(stateLogs[e.state], getStateColor(e.state));
+    // Only log important state changes, not every turn
+    if(e.state === 'alerted' || e.state === 'eating' || e.state === 'poisoned') {
+        const stateLogs = {
+            'alerted': `🚨 Guard alerted at (${e.x},${e.y})`,
+            'eating': `🍚 Guard eating at (${e.x},${e.y})`,
+            'poisoned': `☠️ Guard poisoned at (${e.x},${e.y})`
+        };
+        
+        if(stateLogs[e.state]) {
+            log(stateLogs[e.state], getStateColor(e.state));
+        }
     }
 }
 
