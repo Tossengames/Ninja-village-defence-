@@ -12,8 +12,6 @@
     <!-- Mission Log (Top Left) -->
     <div id="missionLog"></div>
     
-    <!-- REMOVED MODE INDICATOR -->
-    
     <!-- Range Indicator (Bottom Left) -->
     <div id="rangeIndicator" class="hidden">Tap highlighted tiles to move (2 tile range)</div>
     
@@ -74,9 +72,10 @@
         </div>
     </div>
     
-    <!-- Victory Screen -->
+    <!-- Victory Screen - ORIGINAL TENCHU STYLE -->
     <div id="resultScreen" class="overlay-screen hidden">
         <div class="result-scroll">
+            <h1 style="color: var(--accent); margin-bottom: 20px;">MISSION COMPLETE</h1>
             <div class="rank-text" id="rankLabel">RANK</div>
             <div id="statsTable"></div>
             <button class="reload-btn" onclick="window.location.reload()">NEW MISSION</button>
