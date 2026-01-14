@@ -27,7 +27,7 @@ async function processEnemyTurn(e) {
     }
     
     // Check if guard sees player (with wall obstruction and limited range)
-    if(!player.isHidden && canSeePlayer(e, player.x, player.y)) {
+    if(!player.isHidden && canSeePlayer(e)) {
         e.state = 'alerted';
         e.thought = '❗';
         e.thoughtTimer = 3;
@@ -83,17 +83,32 @@ function startEating(e) {
     stats.itemsUsed++;
 }
 
-// FIXED: Check line of sight with walls and limited range
-function canSeePlayer(e, px, py) {
+// FIXED: Check line of sight with walls and limited range (1-3 tiles)
+function canSeePlayer(e) {
+    const px = player.x;
+    const py = player.y;
+    
     // Calculate distance
     const dx = px - e.x;
     const dy = py - e.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    // Can't see beyond their vision range (random 1-2 tiles)
+    // Can't see beyond their vision range (1-3 tiles)
     if(distance > e.visionRange) return false;
     
-    // Check line of sight using Bresenham's line algorithm
+    // Also check if player is within vision cone angle (not just distance)
+    const angleToPlayer = Math.atan2(dy, dx);
+    const enemyAngle = Math.atan2(e.dir.y, e.dir.x);
+    let angleDiff = Math.abs(angleToPlayer - enemyAngle);
+    
+    // Normalize angle difference to 0-PI range
+    if(angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+    
+    // Vision cone is 140 degrees (0.7 radians each side = 1.4 total = ~80 degrees)
+    // Actually make it narrower - about 90 degrees total (0.8 radians each side)
+    if(angleDiff > 0.8) return false;
+    
+    // Now check line of sight with Bresenham's algorithm
     let x0 = e.x;
     let y0 = e.y;
     let x1 = px;
@@ -154,9 +169,6 @@ function checkForNearbyItems(e) {
                 log("Guard noticed rice!", "#ff9900");
                 return true;
             }
-            
-            // Check for traps (they can't see them, but if they step on them, they die)
-            // Traps are invisible to enemies until stepped on
         }
     }
     
