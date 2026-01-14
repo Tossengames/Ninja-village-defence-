@@ -14,7 +14,7 @@ let camX = 0, camY = 0, zoom = 1.0;
 let showMinimap = false;
 let showHighlights = true; // Always true now
 let highlightedTiles = [];
-let hasReachedExit = false; // NEW: Track if player reached exit
+let hasReachedExit = false; // Track if player reached exit
 
 // Canvas and rendering
 const canvas = document.getElementById('game');
@@ -660,11 +660,8 @@ canvas.addEventListener('touchend', e => {
     const isValidMove = highlightedTiles.some(t => t.x === tx && t.y === ty);
 
     if(selectMode === 'move' && dist <= 2 && isValidMove) {
-        playerTurn = false;
-        animMove(player, tx, ty, 0.2, () => {
-            handlePlayerMove(tx, ty);
-            endTurn();
-        });
+        // Call handlePlayerMove - it will handle pathfinding
+        handlePlayerMove(tx, ty);
     } else if(selectMode !== 'move' && dist <= 2 && grid[ty][tx] === FLOOR && isValidMove) {
         handleItemPlacement(tx, ty, selectMode);
     } else if(!isValidMove) {
@@ -718,7 +715,7 @@ function setMode(m) {
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
     updateModeIndicator();
-    // REMOVED: No log message for mode change
+    // No log message for mode change
 }
 
 function playerWait() { 
@@ -766,6 +763,8 @@ function showVictoryStats() {
         rankDescription = "Survived, but barely";
     }
     
+    // Set the data-rank attribute for CSS styling
+    rankLabel.setAttribute('data-rank', rank);
     rankLabel.textContent = rank;
     
     statsTable.innerHTML = `
