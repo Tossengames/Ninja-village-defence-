@@ -102,6 +102,8 @@ function generateLevel() {
             investigationTurns: 0,
             thought: '',
             thoughtTimer: 0,
+            poisonTimer: 0,
+            poisonCounter: 0,
             hearingRange: 6,
             hasHeardSound: false,
             soundLocation: null,
@@ -278,6 +280,9 @@ function gameLoop() {
         } else if(e.state === 'eating') {
             ctx.fillStyle = "rgba(50, 255, 50, 0.3)";
             ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+        } else if(e.state === 'poisoned') {
+            ctx.fillStyle = "rgba(255, 0, 255, 0.3)";
+            ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
         }
         
         drawSprite('guard', e.ax, e.ay);
@@ -344,21 +349,36 @@ function drawVisionCone(e) {
     // Use the actual vision range for drawing (1-3 tiles)
     const drawRange = e.visionRange || 2;
     
-    // Create gradient based on vision range
+    // More visible vision cone with gradient
     const gradient = ctx.createRadialGradient(
-        e.ax * TILE + 30, e.ay * TILE + 30, 10,
+        e.ax * TILE + 30, e.ay * TILE + 30, 5,
         e.ax * TILE + 30, e.ay * TILE + 30, drawRange * TILE
     );
     
-    // Different colors based on state
     if(e.state === 'alerted') {
-        gradient.addColorStop(0, 'rgba(255, 0, 0, 0.3)');
-        gradient.addColorStop(0.7, 'rgba(255, 0, 0, 0.15)');
-        gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+        // Bright red when alerted
+        gradient.addColorStop(0, 'rgba(255, 0, 0, 0.6)');
+        gradient.addColorStop(0.3, 'rgba(255, 50, 50, 0.4)');
+        gradient.addColorStop(0.7, 'rgba(255, 100, 100, 0.2)');
+        gradient.addColorStop(1, 'rgba(255, 150, 150, 0)');
+    } else if(e.state === 'investigating') {
+        // Orange when investigating
+        gradient.addColorStop(0, 'rgba(255, 165, 0, 0.5)');
+        gradient.addColorStop(0.3, 'rgba(255, 195, 50, 0.3)');
+        gradient.addColorStop(0.7, 'rgba(255, 215, 100, 0.1)');
+        gradient.addColorStop(1, 'rgba(255, 235, 150, 0)');
+    } else if(e.state === 'eating' || e.state === 'poisoned') {
+        // Green when eating, purple when poisoned
+        const color = e.state === 'eating' ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 255, 0.5)';
+        gradient.addColorStop(0, color);
+        gradient.addColorStop(0.5, color.replace('0.5', '0.2'));
+        gradient.addColorStop(1, color.replace('0.5', '0'));
     } else {
-        gradient.addColorStop(0, 'rgba(255, 50, 50, 0.2)');
-        gradient.addColorStop(0.5, 'rgba(255, 0, 0, 0.1)');
-        gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+        // Normal red vision
+        gradient.addColorStop(0, 'rgba(255, 100, 100, 0.4)');
+        gradient.addColorStop(0.3, 'rgba(255, 150, 150, 0.2)');
+        gradient.addColorStop(0.7, 'rgba(255, 200, 200, 0.1)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
     }
     
     ctx.fillStyle = gradient;
@@ -366,47 +386,59 @@ function drawVisionCone(e) {
     ctx.moveTo(e.ax * TILE + 30, e.ay * TILE + 30);
     
     const baseA = Math.atan2(e.dir.y, e.dir.x);
-    const visionAngle = e.state === 'alerted' ? 1.0 : 0.7;
+    const visionAngle = 0.7; // Fixed cone angle (140 degrees total)
     
-    // Draw vision cone with wall obstruction
-    for(let a = baseA - visionAngle; a <= baseA + visionAngle; a += 0.1) {
-        let d = 0;
-        let hitWall = false;
-        let lastValidX = e.ax * TILE + 30;
-        let lastValidY = e.ay * TILE + 30;
+    // Draw the vision cone with proper wall blocking
+    const rayCount = 20; // More rays for smoother cone
+    for(let i = 0; i <= rayCount; i++) {
+        const angle = baseA - visionAngle + (2 * visionAngle * i / rayCount);
+        let maxDistance = drawRange;
         
-        while(d < drawRange && !hitWall) { 
-            d += 0.2; 
-            const checkX = Math.floor(e.x + Math.cos(a) * d);
-            const checkY = Math.floor(e.y + Math.sin(a) * d);
+        // Cast ray to find max visible distance
+        for(let d = 0.1; d <= drawRange; d += 0.1) {
+            const checkX = Math.floor(e.x + Math.cos(angle) * d);
+            const checkY = Math.floor(e.y + Math.sin(angle) * d);
             
             // Check bounds
             if(checkX < 0 || checkX >= mapDim || checkY < 0 || checkY >= mapDim) {
-                hitWall = true;
-            } 
+                maxDistance = d - 0.1;
+                break;
+            }
+            
             // Check for walls
-            else if(grid[checkY][checkX] === WALL) {
-                hitWall = true;
-                // Add a small offset to show hitting the wall
-                lastValidX = e.ax * TILE + 30 + Math.cos(a) * (d - 0.2) * TILE;
-                lastValidY = e.ay * TILE + 30 + Math.sin(a) * (d - 0.2) * TILE;
-            } else {
-                lastValidX = e.ax * TILE + 30 + Math.cos(a) * d * TILE;
-                lastValidY = e.ay * TILE + 30 + Math.sin(a) * d * TILE;
+            if(grid[checkY][checkX] === WALL) {
+                maxDistance = d - 0.1;
+                break;
             }
         }
         
-        ctx.lineTo(lastValidX, lastValidY);
+        // Draw this edge of the cone
+        ctx.lineTo(
+            e.ax * TILE + 30 + Math.cos(angle) * maxDistance * TILE,
+            e.ay * TILE + 30 + Math.sin(angle) * maxDistance * TILE
+        );
     }
+    
     ctx.closePath();
     ctx.fill();
     
-    // Draw vision range indicator around enemy
-    ctx.strokeStyle = e.state === 'alerted' ? 'rgba(255, 0, 0, 0.5)' : 'rgba(255, 100, 100, 0.3)';
+    // Draw outline for better visibility
+    ctx.strokeStyle = e.state === 'alerted' ? 'rgba(255, 0, 0, 0.8)' : 
+                     e.state === 'investigating' ? 'rgba(255, 165, 0, 0.6)' :
+                     e.state === 'eating' ? 'rgba(0, 255, 0, 0.6)' :
+                     e.state === 'poisoned' ? 'rgba(255, 0, 255, 0.6)' :
+                     'rgba(255, 100, 100, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw vision range indicator (subtle circle at max range)
+    ctx.strokeStyle = e.state === 'alerted' ? 'rgba(255, 0, 0, 0.3)' : 'rgba(255, 100, 100, 0.2)';
     ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]); // Dashed line
     ctx.beginPath();
     ctx.arc(e.ax * TILE + 30, e.ay * TILE + 30, drawRange * TILE, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.setLineDash([]); // Reset dash
 }
 
 function drawMinimap() {
@@ -443,7 +475,8 @@ function drawMinimap() {
     enemies.filter(e => e.alive).forEach(e => {
         const enemyColor = e.state === 'alerted' ? "#ff0000" :
                           e.state === 'investigating' ? "#ff9900" :
-                          e.state === 'eating' ? "#00ff00" : "#ff3333";
+                          e.state === 'eating' ? "#00ff00" :
+                          e.state === 'poisoned' ? "#ff00ff" : "#ff3333";
         ctx.fillStyle = enemyColor;
         ctx.fillRect(mx + e.x*ms, my + 5 + e.y*ms, ms, ms);
         
@@ -475,7 +508,6 @@ function clampCamera() {
 
 function toggleMinimap() { 
     showMinimap = !showMinimap; 
-    log(showMinimap ? "Minimap ON" : "Minimap OFF", "#aaa");
 }
 
 function updateModeIndicator() {
@@ -531,7 +563,6 @@ async function endTurn() {
                     e.state = 'investigating';
                     e.thought = '👂';
                     e.thoughtTimer = 3;
-                    log("Guard heard explosion!", "#ff9900");
                 }
             }
         });
@@ -709,6 +740,45 @@ function showVictoryStats() {
 // LINE OF SIGHT CHECKING (for enemies)
 // ============================================
 
+function checkLineOfSightRay(x0, y0, x1, y1) {
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = (x0 < x1) ? 1 : -1;
+    const sy = (y0 < y1) ? 1 : -1;
+    let err = dx - dy;
+    
+    let currentX = x0;
+    let currentY = y0;
+    
+    // Don't check starting position
+    let firstStep = true;
+    
+    while(true) {
+        if(!firstStep) {
+            // If we hit a wall, line of sight is blocked
+            if(grid[currentY][currentX] === WALL) {
+                return false;
+            }
+        }
+        firstStep = false;
+        
+        // If we reached the target
+        if(currentX === x1 && currentY === y1) {
+            return true;
+        }
+        
+        const e2 = 2 * err;
+        if(e2 > -dy) {
+            err -= dy;
+            currentX += sx;
+        }
+        if(e2 < dx) {
+            err += dx;
+            currentY += sy;
+        }
+    }
+}
+
 function hasLineOfSight(e, px, py) {
     // Calculate distance
     const dx = px - e.x;
@@ -718,42 +788,19 @@ function hasLineOfSight(e, px, py) {
     // Can't see beyond their vision range (1-3 tiles)
     if(distance > e.visionRange) return false;
     
-    // Check line of sight using Bresenham's line algorithm
-    let x0 = e.x;
-    let y0 = e.y;
-    let x1 = px;
-    let y1 = py;
+    // Check if player is within vision cone angle
+    const angleToPlayer = Math.atan2(dy, dx);
+    const enemyAngle = Math.atan2(e.dir.y, e.dir.x);
+    let angleDiff = Math.abs(angleToPlayer - enemyAngle);
     
-    const dx2 = Math.abs(x1 - x0);
-    const dy2 = Math.abs(y1 - y0);
-    const sx = (x0 < x1) ? 1 : -1;
-    const sy = (y0 < y1) ? 1 : -1;
-    let err = dx2 - dy2;
+    // Normalize angle difference to 0-PI range
+    if(angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
     
-    while(true) {
-        // Don't check the starting point (enemy's position)
-        if(x0 !== e.x || y0 !== e.y) {
-            // If we hit a wall before reaching player, can't see
-            if(grid[y0][x0] === WALL) {
-                return false;
-            }
-        }
-        
-        // If we reached the player's position
-        if(x0 === x1 && y0 === y1) {
-            return true;
-        }
-        
-        const e2 = 2 * err;
-        if(e2 > -dy2) {
-            err -= dy2;
-            x0 += sx;
-        }
-        if(e2 < dx2) {
-            err += dx2;
-            y0 += sy;
-        }
-    }
+    // Vision cone is 140 degrees (0.7 radians each side)
+    if(angleDiff > 0.7) return false;
+    
+    // Use ray casting for wall checking
+    return checkLineOfSightRay(e.x, e.y, px, py);
 }
 
 // ============================================
@@ -769,3 +816,4 @@ window.animMove = animMove;
 window.log = log;
 window.checkGameOver = checkGameOver;
 window.hasLineOfSight = hasLineOfSight;
+window.checkLineOfSightRay = checkLineOfSightRay;
