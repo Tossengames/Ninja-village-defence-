@@ -13,11 +13,13 @@ let inv = { trap: 3, rice: 2, bomb: 1 };
 let camX = 0, camY = 0, zoom = 1.0;
 let showMinimap = false;
 let showHighlights = true;
-let showLog = true; // New: Toggle log visibility
+let showLog = true;
 let highlightedTiles = [];
 let hasReachedExit = false;
-let currentEnemyTurn = null; // Track which enemy is currently moving
-let combatMode = false; // New: Combat mode flag
+let currentEnemyTurn = null;
+let combatMode = false;
+let combatSequence = false; // New: For turn-based combat sequences
+let combatLog = []; // New: Store combat events
 
 // Player stats
 let playerHP = 10;
@@ -31,6 +33,7 @@ let hideEffects = [];
 let explosionEffects = [];
 let footstepEffects = [];
 let damageEffects = [];
+let unitTexts = []; // New: Text above units
 let soundQueue = [];
 
 // Canvas and rendering
@@ -48,14 +51,14 @@ const modeColors = {
     'trap': { fill: 'rgba(255, 100, 100, 0.15)', border: 'rgba(255, 100, 100, 0.7)', glow: 'rgba(255, 100, 100, 0.3)' },
     'rice': { fill: 'rgba(255, 255, 100, 0.15)', border: 'rgba(255, 255, 100, 0.7)', glow: 'rgba(255, 255, 100, 0.3)' },
     'bomb': { fill: 'rgba(255, 50, 150, 0.15)', border: 'rgba(255, 50, 150, 0.7)', glow: 'rgba(255, 50, 150, 0.3)' },
-    'attack': { fill: 'rgba(255, 0, 0, 0.3)', border: 'rgba(255, 0, 0, 0.8)', glow: 'rgba(255, 0, 0, 0.5)' } // New attack mode
+    'attack': { fill: 'rgba(255, 0, 0, 0.3)', border: 'rgba(255, 0, 0, 0.8)', glow: 'rgba(255, 0, 0, 0.5)' }
 };
 
-// Enemy types
+// Enemy types with distinct colors
 const ENEMY_TYPES = {
-    NORMAL: { range: 1, hp: 10, speed: 0.1, damage: 2 },
-    ARCHER: { range: 3, hp: 8, speed: 0.08, damage: 1 },
-    SPEAR: { range: 2, hp: 12, speed: 0.09, damage: 3 }
+    NORMAL: { range: 1, hp: 10, speed: 0.08, damage: 2, color: '#ff3333', tint: 'rgba(255, 50, 50, 0.3)' },
+    ARCHER: { range: 3, hp: 8, speed: 0.06, damage: 1, color: '#33cc33', tint: 'rgba(50, 255, 50, 0.3)' },
+    SPEAR: { range: 2, hp: 12, speed: 0.07, damage: 3, color: '#3366ff', tint: 'rgba(50, 100, 255, 0.3)' }
 };
 
 // ============================================
@@ -172,6 +175,26 @@ function playSound(type, options = {}) {
                 oscillator.start();
                 oscillator.stop(audioContext.currentTime + 0.3);
                 break;
+                
+            case 'arrow':
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.4);
+                break;
+                
+            case 'spear':
+                oscillator.type = 'square';
+                oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+                oscillator.frequency.linearRampToValueAtTime(100, audioContext.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.3);
+                break;
         }
         
     } catch (e) {
@@ -208,7 +231,7 @@ function createDeathEffect(x, y) {
     
     createBloodStain(x, y);
     playSound('death');
-    log("🩸 Guard eliminated!", "#ff3333");
+    addUnitText(x, y, "💀 KILLED!", "#ff0000", 3);
 }
 
 function createExplosionEffect(x, y) {
@@ -236,7 +259,7 @@ function createExplosionEffect(x, y) {
     }
     
     playSound('explosion');
-    log("💥 Bomb exploded!", "#ff9900");
+    addUnitText(x, y, "💥 BOOM!", "#ff9900", 2);
 }
 
 function createCoinPickupEffect(x, y) {
@@ -254,7 +277,7 @@ function createCoinPickupEffect(x, y) {
     });
     
     playSound('coin');
-    log("💰 Coin collected!", "#ffd700");
+    addUnitText(x, y, "💰 +1 GOLD", "#ffd700", 2);
 }
 
 function createHideEffect(x, y, isHiding) {
@@ -269,7 +292,7 @@ function createHideEffect(x, y, isHiding) {
     
     if(isHiding) {
         playSound('hide');
-        log("🕶️ Player is hiding!", "#00d2ff");
+        addUnitText(x, y, "🕶️ HIDING", "#00d2ff", 2);
     }
 }
 
@@ -300,7 +323,7 @@ function createTrapEffect(x, y) {
     }
     
     playSound('trap');
-    log("⚠️ Trap activated!", "#ff6464");
+    addUnitText(x, y, "⚠️ TRAP!", "#ff6464", 2);
 }
 
 function createAlertEffect(x, y) {
@@ -318,7 +341,7 @@ function createAlertEffect(x, y) {
     playSound('alert');
 }
 
-function createDamageEffect(x, y, isPlayer = false) {
+function createDamageEffect(x, y, damage, isPlayer = false) {
     for(let i = 0; i < 8; i++) {
         particles.push({
             x: x * TILE + TILE/2,
@@ -334,12 +357,24 @@ function createDamageEffect(x, y, isPlayer = false) {
     damageEffects.push({
         x: x * TILE + TILE/2,
         y: y * TILE + TILE/2 - 20,
-        value: isPlayer ? "-2" : "-2",
+        value: `-${damage}`,
         life: 1.0,
         color: isPlayer ? '#ff66ff' : '#ff6666'
     });
     
-    playSound('hurt');
+    playSound(isPlayer ? 'hurt' : (damage > 2 ? 'spear' : damage === 1 ? 'arrow' : 'hurt'));
+}
+
+function addUnitText(x, y, text, color = "#ffffff", duration = 2) {
+    unitTexts.push({
+        x: x * TILE + TILE/2,
+        y: y * TILE - 35,
+        text: text,
+        color: color,
+        life: duration,
+        vy: -0.5,
+        size: 14
+    });
 }
 
 function updateVFX() {
@@ -381,6 +416,12 @@ function updateVFX() {
         d.y -= 1;
         d.life -= 0.03;
         return d.life > 0;
+    });
+    
+    unitTexts = unitTexts.filter(t => {
+        t.y += t.vy;
+        t.life -= 0.03;
+        return t.life > 0;
     });
 }
 
@@ -461,6 +502,18 @@ function drawVFX() {
         ctx.textAlign = "center";
         ctx.fillText(d.value, d.x, d.y);
     });
+    
+    unitTexts.forEach(t => {
+        ctx.fillStyle = t.color;
+        ctx.font = `bold ${t.size}px Arial`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(t.text, t.x, t.y);
+        
+        // Text shadow for better visibility
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillText(t.text, t.x + 1, t.y + 1);
+    });
 }
 
 // ============================================
@@ -473,6 +526,7 @@ function initGame() {
     hasReachedExit = false;
     playerHP = playerMaxHP;
     combatMode = false;
+    combatSequence = false;
     
     particles = [];
     bloodStains = [];
@@ -481,6 +535,7 @@ function initGame() {
     explosionEffects = [];
     footstepEffects = [];
     damageEffects = [];
+    unitTexts = [];
     
     showHighlights = true;
     showLog = true;
@@ -489,6 +544,7 @@ function initGame() {
     document.getElementById('toolbar').classList.remove('hidden');
     document.getElementById('rangeIndicator').classList.remove('hidden');
     document.getElementById('logToggle').classList.remove('hidden');
+    document.getElementById('hpDisplay').classList.remove('hidden');
     
     generateLevel();
     centerCamera();
@@ -532,7 +588,6 @@ function generateLevel() {
         
         const visionRange = Math.floor(Math.random() * 3) + 1;
         
-        // Random enemy type
         const typeRoll = Math.random();
         let enemyType, enemyStats;
         if(typeRoll < 0.6) {
@@ -570,7 +625,9 @@ function generateLevel() {
             soundLocation: null,
             returnToPatrolPos: {x: ex, y: ey},
             lastSeenPlayer: null,
-            chaseTurns: 0
+            chaseTurns: 0,
+            color: enemyStats.color,
+            tint: enemyStats.tint
         });
     }
 }
@@ -669,7 +726,6 @@ function calculateHighlightedTiles() {
                     });
                 }
             } else if(selectMode === 'attack') {
-                // Attack mode highlights adjacent tiles
                 if(dist === 1 && (tile === FLOOR || tile === HIDE)) {
                     highlightedTiles.push({
                         x: tx, y: ty,
@@ -729,9 +785,12 @@ function gameLoop() {
         });
     }
 
-    // Draw enemies
     enemies.forEach(e => {
         if(!e.alive) return;
+        
+        // Draw enemy tint based on type
+        ctx.fillStyle = e.tint;
+        ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
         
         // Draw health bar
         const healthPercent = e.hp / e.maxHP;
@@ -747,6 +806,12 @@ function gameLoop() {
         ctx.textAlign = "center";
         ctx.fillText(e.hp.toString(), e.ax * TILE + TILE/2, e.ay * TILE - 4);
         
+        // Draw type indicator
+        ctx.fillStyle = e.color;
+        ctx.font = "bold 8px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText(e.type.charAt(0), e.ax * TILE + 3, e.ay * TILE + 10);
+        
         if(e.state === 'alerted' || e.state === 'chasing') {
             ctx.fillStyle = "rgba(255, 50, 50, 0.3)";
             ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
@@ -760,6 +825,7 @@ function gameLoop() {
         
         drawSprite('guard', e.ax, e.ay);
         
+        // Draw thought bubble above unit
         if(e.thought && e.thoughtTimer > 0) {
             drawThoughtBubble(e);
         }
@@ -770,7 +836,7 @@ function gameLoop() {
         
         // Draw attack range if alerted/chasing
         if((e.state === 'alerted' || e.state === 'chasing') && !player.isHidden) {
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+            ctx.strokeStyle = e.color + "80";
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 5]);
             ctx.beginPath();
@@ -822,20 +888,37 @@ function gameLoop() {
 function drawThoughtBubble(e) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.beginPath();
-    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 25, 12, 0, Math.PI * 2);
+    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 25, 15, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 25, 12, 0, Math.PI * 2);
+    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 25, 15, 0, Math.PI * 2);
     ctx.stroke();
     
-    ctx.font = '16px Arial';
+    ctx.font = '12px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#000';
-    ctx.fillText(e.thought, e.ax * TILE + TILE/2, e.ay * TILE - 25);
+    
+    // Wrap text if too long
+    const words = e.thought.split(' ');
+    let line = '';
+    let lineCount = 0;
+    const maxWidth = 24;
+    
+    for(let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        if(testLine.length > maxWidth && n > 0) {
+            ctx.fillText(line, e.ax * TILE + TILE/2, e.ay * TILE - 25 + (lineCount * 12));
+            line = words[n] + ' ';
+            lineCount++;
+        } else {
+            line = testLine;
+        }
+    }
+    ctx.fillText(line, e.ax * TILE + TILE/2, e.ay * TILE - 25 + (lineCount * 12));
 }
 
 function drawVisionCone(e) {
@@ -948,9 +1031,9 @@ function drawMinimap() {
     ctx.fill();
     
     enemies.filter(e => e.alive).forEach(e => {
-        const enemyColor = e.state === 'alerted' || e.state === 'chasing' ? "#ff0000" :
+        const enemyColor = e.state === 'alerted' || e.state === 'chasing' ? e.color :
                           e.state === 'investigating' ? "#ff9900" :
-                          e.state === 'eating' ? "#00ff00" : "#ff3333";
+                          e.state === 'eating' ? "#00ff00" : e.color;
         ctx.fillStyle = enemyColor;
         ctx.fillRect(mx + e.x*ms, my + 5 + e.y*ms, ms, ms);
         
@@ -980,7 +1063,7 @@ function centerOnUnit(x, y) {
 
 function clampCamera() {
     const mapSize = mapDim * TILE * zoom;
-    const pad = 100;
+    const pad = Math.min(100, canvas.width * 0.1);
     camX = Math.min(pad, Math.max(camX, canvas.width - mapSize - pad));
     camY = Math.min(pad, Math.max(camY, canvas.height - mapSize - pad));
 }
@@ -1015,6 +1098,7 @@ async function endTurn() {
         return;
     }
     
+    // Process Bombs first
     let exploding = [];
     activeBombs = activeBombs.filter(b => {
         b.t--;
@@ -1025,11 +1109,15 @@ async function endTurn() {
         return true;
     });
 
-    exploding.forEach(b => {
+    // Handle bomb explosions one by one
+    for(let b of exploding) {
+        await new Promise(resolve => setTimeout(resolve, 500)); // Wait between explosions
+        
         grid[b.y][b.x] = FLOOR; 
         shake = 20; 
         createExplosionEffect(b.x, b.y);
         
+        // Alert nearby enemies to the sound
         enemies.forEach(e => {
             if(e.alive && e.state !== 'dead') {
                 const dist = Math.hypot(e.x - b.x, e.y - b.y);
@@ -1038,66 +1126,96 @@ async function endTurn() {
                     e.soundLocation = {x: b.x, y: b.y};
                     e.investigationTurns = 5;
                     e.state = 'investigating';
-                    e.thought = '👂';
+                    e.thought = 'Heard explosion!';
                     e.thoughtTimer = 3;
-                    log("👂 Guard heard explosion!", "#ff9900");
                 }
             }
         });
         
-        enemies.forEach(e => { 
-            if(e.alive && Math.abs(e.x-b.x)<=1 && Math.abs(e.y-b.y)<=1) { 
-                e.alive = false; 
-                e.state = 'dead';
-                stats.kills++;
-                createDeathEffect(e.x, e.y);
-            }
-        });
-    });
+        // Kill enemies in blast radius one by one
+        const enemiesInBlast = enemies.filter(e => 
+            e.alive && Math.abs(e.x-b.x)<=1 && Math.abs(e.y-b.y)<=1
+        );
+        
+        for(let e of enemiesInBlast) {
+            await new Promise(resolve => setTimeout(resolve, 300)); // Wait between deaths
+            e.alive = false; 
+            e.state = 'dead';
+            stats.kills++;
+            createDeathEffect(e.x, e.y);
+        }
+    }
 
-    // Process all enemies
+    // Process all enemies with delays
     for(let e of enemies.filter(g => g.alive)) {
         currentEnemyTurn = e;
         centerOnUnit(e.x, e.y);
         
-        // Wait a bit before enemy moves
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait before enemy moves
+        await new Promise(resolve => setTimeout(resolve, 800));
         
         await processEnemyTurn(e);
         
-        // Wait a bit after enemy moves
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Wait after enemy moves
+        await new Promise(resolve => setTimeout(resolve, 500));
     }
     
     currentEnemyTurn = null;
     centerCamera();
     
+    // Small wait before returning to player
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
     turnCount++; 
     playerTurn = true;
 }
 
-function checkCombat() {
-    // Check if any enemy can attack player
-    for(let e of enemies.filter(g => g.alive)) {
-        if(e.state === 'alerted' || e.state === 'chasing') {
-            const dist = Math.hypot(e.x - player.x, e.y - player.y);
-            if(dist <= e.attackRange) {
-                // Enemy attacks player
-                playerHP -= e.damage;
-                createDamageEffect(player.x, player.y, true);
-                log(`💥 ${e.type} guard hit you for ${e.damage} damage!`, "#ff3333");
-                updateHPDisplay();
-                
-                if(playerHP <= 0) {
-                    gameOver = true;
-                    document.getElementById('gameOverScreen').classList.remove('hidden');
-                    document.getElementById('resultScreen').classList.add('hidden');
-                    log("☠️ You were defeated in combat!", "#f00");
-                    return true;
-                }
-            }
+async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
+    combatSequence = true;
+    
+    // Player attacks first
+    addUnitText(player.x, player.y, "🗡️ ATTACK!", "#00d2ff", 2);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    enemy.hp -= playerDamage;
+    createDamageEffect(enemy.x, enemy.y, playerDamage);
+    addUnitText(enemy.x, enemy.y, `-${playerDamage}`, "#ff0000", 2);
+    
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    if(enemy.hp <= 0) {
+        enemy.alive = false;
+        enemy.state = 'dead';
+        stats.kills++;
+        createDeathEffect(enemy.x, enemy.y);
+        combatSequence = false;
+        return true;
+    }
+    
+    // Enemy counterattacks if in range
+    const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+    if(dist <= enemy.attackRange) {
+        addUnitText(enemy.x, enemy.y, `${enemy.type} ATTACK!`, enemy.color, 2);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        playerHP -= enemy.damage;
+        createDamageEffect(player.x, player.y, enemy.damage, true);
+        addUnitText(player.x, player.y, `-${enemy.damage}`, "#ff66ff", 2);
+        updateHPDisplay();
+        
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        if(playerHP <= 0) {
+            gameOver = true;
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+            document.getElementById('resultScreen').classList.add('hidden');
+            showGameOverStats();
+            combatSequence = false;
+            return false;
         }
     }
+    
+    combatSequence = false;
     return false;
 }
 
@@ -1218,7 +1336,6 @@ function setMode(m) {
     document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
 }
 
-// Auto-switch to move mode after item use
 function autoSwitchToMove() {
     setMode('move');
 }
@@ -1226,7 +1343,7 @@ function autoSwitchToMove() {
 function playerWait() { 
     if(playerTurn) { 
         playerTurn = false; 
-        log("Waiting...", "#aaa");
+        addUnitText(player.x, player.y, "⏳ WAITING", "#aaaaaa", 2);
         endTurn(); 
     } 
 }
@@ -1235,8 +1352,10 @@ function showVictoryStats() {
     const statsTable = document.getElementById('statsTable');
     const rankLabel = document.getElementById('rankLabel');
     
+    // Calculate score
     let score = Math.max(0, stats.kills * 100 + stats.coins * 50 - turnCount * 5 - stats.itemsUsed * 10);
     
+    // Tenchu-style rankings
     let rank = "Novice";
     let rankDescription = "";
     let rankColor = "#888";
@@ -1275,7 +1394,14 @@ function showVictoryStats() {
         rankColor = "#888";
     }
     
+    // Set rank text
+    rankLabel.textContent = rank;
+    rankLabel.style.color = rankColor;
+    rankLabel.style.textShadow = `0 0 20px ${rankColor}80`;
+    
+    // Show detailed stats
     statsTable.innerHTML = `
+        <div><span>MISSION COMPLETE</span><span></span></div>
         <div><span>Turns Taken:</span><span>${turnCount}</span></div>
         <div><span>Guards Eliminated:</span><span>${stats.kills}</span></div>
         <div><span>Gold Collected:</span><span>${stats.coins}</span></div>
@@ -1286,10 +1412,23 @@ function showVictoryStats() {
         </div>
         <div style="font-size: 12px; margin-top: 15px; color: #aaa; font-style: italic;">${rankDescription}</div>
     `;
+}
+
+function showGameOverStats() {
+    const statsTable = document.getElementById('statsTable');
     
-    rankLabel.textContent = rank;
-    rankLabel.style.color = rankColor;
-    rankLabel.style.textShadow = `0 0 20px ${rankColor}80`;
+    // Calculate score even on game over
+    let score = Math.max(0, stats.kills * 100 + stats.coins * 50 - turnCount * 5 - stats.itemsUsed * 10);
+    
+    statsTable.innerHTML = `
+        <div><span>MISSION FAILED</span><span></span></div>
+        <div><span>Turns Survived:</span><span>${turnCount}</span></div>
+        <div><span>Guards Eliminated:</span><span>${stats.kills}</span></div>
+        <div><span>Gold Collected:</span><span>${stats.coins}</span></div>
+        <div><span>Items Used:</span><span>${stats.itemsUsed}</span></div>
+        <div><span>Final Score:</span><span style="color: #ff3333; font-weight: bold;">${score}</span></div>
+        <div style="font-size: 12px; margin-top: 15px; color: #aaa; font-style: italic;">Better luck next time!</div>
+    `;
 }
 
 // ============================================
@@ -1364,7 +1503,7 @@ window.addEventListener('load', () => {
 // Export functions that other scripts need
 window.animMove = animMove;
 window.log = log;
-window.checkGameOver = checkGameOver;
+window.processCombatSequence = processCombatSequence;
 window.hasLineOfSight = hasLineOfSight;
 window.checkLineOfSightRay = checkLineOfSightRay;
 window.createDeathEffect = createDeathEffect;
@@ -1374,3 +1513,4 @@ window.createCoinPickupEffect = createCoinPickupEffect;
 window.createHideEffect = createHideEffect;
 window.playSound = playSound;
 window.autoSwitchToMove = autoSwitchToMove;
+window.addUnitText = addUnitText;
