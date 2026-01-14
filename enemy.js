@@ -5,25 +5,28 @@
 async function processEnemyTurn(e) {
     if(!e.alive || combatSequence) return;
     
-    // Show enemy status with cartoon bubble
+    // Show enemy status with cartoon bubble (30% chance)
     if(Math.random() < 0.3) {
         const status = getEnemyStatusText(e);
         if(status) {
-            createSpeechBubble(e.x, e.y, status.emoji, "#ffffff", 1.5);
+            createSpeechBubble(e.x, e.y, status.emoji, "#ffffff", 2);
             await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
     
-    // IMMEDIATE DETECTION: Check for player in ANY line of sight within range
-    const distToPlayer = Math.hypot(e.x - player.x, e.y - player.y);
-    if(distToPlayer <= e.visionRange && hasLineOfSight(e, player.x, player.y) && !player.isHidden) {
+    // Check for player in cone vision
+    if(hasLineOfSight(e, player.x, player.y) && !player.isHidden) {
         if(e.state !== 'alerted' && e.state !== 'chasing') {
             e.state = 'chasing';
             e.lastSeenPlayer = {x: player.x, y: player.y};
-            e.chaseTurns = 5;
-            createSpeechBubble(e.x, e.y, "❗ SPOTTED!", e.color, 1.5);
+            e.chaseTurns = e.chaseMemory; // Use memory turns
+            createSpeechBubble(e.x, e.y, "❗ SPOTTED!", e.color, 2);
             
             await new Promise(resolve => setTimeout(resolve, 500));
+        } else if(e.state === 'chasing') {
+            // Update last seen position
+            e.lastSeenPlayer = {x: player.x, y: player.y};
+            e.chaseTurns = e.chaseMemory; // Reset memory
         }
     }
     
@@ -33,7 +36,7 @@ async function processEnemyTurn(e) {
             e.state = 'investigating';
             e.investigationTarget = e.soundLocation;
             e.investigationTurns = 5;
-            createSpeechBubble(e.x, e.y, "👂 HEARD NOISE", e.color, 1.5);
+            createSpeechBubble(e.x, e.y, "👂 HEARD NOISE", e.color, 2);
             e.hasHeardSound = false;
             
             await new Promise(resolve => setTimeout(resolve, 300));
@@ -47,7 +50,7 @@ async function processEnemyTurn(e) {
         e.state = 'dead';
         stats.kills++;
         grid[e.y][e.x] = FLOOR;
-        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2);
+        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2.5);
         return;
     }
     
@@ -77,7 +80,7 @@ async function processEnemyTurn(e) {
         e.state = 'dead';
         stats.kills++;
         grid[e.y][e.x] = FLOOR;
-        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2);
+        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2.5);
         return;
     }
     
@@ -86,7 +89,7 @@ async function processEnemyTurn(e) {
         e.state = 'eating';
         e.poisonTimer = Math.floor(Math.random() * 5) + 1;
         grid[e.y][e.x] = FLOOR;
-        createSpeechBubble(e.x, e.y, "🍚 FOUND RICE!", "#33ff33", 1.5);
+        createSpeechBubble(e.x, e.y, "🍚 FOUND RICE!", "#33ff33", 2);
         await new Promise(resolve => setTimeout(resolve, 500));
         return;
     }
@@ -100,10 +103,10 @@ async function processEnemyTurn(e) {
             e.alive = false;
             e.state = 'dead';
             stats.kills++;
-            createSpeechBubble(e.x, e.y, "💀 POISONED!", "#ff00ff", 2);
+            createSpeechBubble(e.x, e.y, "💀 POISONED!", "#ff00ff", 2.5);
             return;
         } else {
-            createSpeechBubble(e.x, e.y, `🤢 SICK (${e.poisonTimer})`, "#ff00ff", 1.5);
+            createSpeechBubble(e.x, e.y, `🤢 SICK (${e.poisonTimer})`, "#ff00ff", 2);
             await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
@@ -174,16 +177,18 @@ async function handlePatrollingState(e) {
 
 async function handleChasingState(e) {
     if(e.chaseTurns > 0) {
-        // Calculate distance to player
-        const distToPlayer = Math.hypot(e.x - player.x, e.y - player.y);
+        // Calculate distance to last seen position
+        const distToLastSeen = Math.hypot(e.x - e.lastSeenPlayer.x, e.y - e.lastSeenPlayer.y);
         
-        // If in attack range, attack
-        if(distToPlayer <= e.attackRange) {
-            createSpeechBubble(e.x, e.y, `${e.type} ATTACK!`, e.color, 1.5);
+        // If in attack range of last seen position (or player if still visible), attack
+        if(distToLastSeen <= e.attackRange || 
+           (hasLineOfSight(e, player.x, player.y) && !player.isHidden && Math.hypot(e.x - player.x, e.y - player.y) <= e.attackRange)) {
+            
+            createSpeechBubble(e.x, e.y, `${e.type} ATTACK!`, e.color, 2);
             await new Promise(resolve => setTimeout(resolve, 500));
             
             playerHP -= e.damage;
-            createSpeechBubble(player.x, player.y, `-${e.damage}`, "#ff66ff", 1.5);
+            createSpeechBubble(player.x, player.y, `-${e.damage}`, "#ff66ff", 2);
             updateHPDisplay();
             
             await new Promise(resolve => setTimeout(resolve, 800));
@@ -205,7 +210,7 @@ async function handleChasingState(e) {
         let moveX = e.x, moveY = e.y;
         let moved = false;
         
-        // Try to move toward player
+        // Try to move toward last seen position
         if(Math.abs(dx) > 0 && canMoveTo(e.x + dx, e.y, e)) {
             moveX = e.x + dx;
             e.dir = {x: dx, y: 0};
@@ -241,13 +246,15 @@ async function handleChasingState(e) {
         e.chaseTurns--;
         
         // Check if player is still visible
-        if(distToPlayer <= e.visionRange && hasLineOfSight(e, player.x, player.y) && !player.isHidden) {
+        if(hasLineOfSight(e, player.x, player.y) && !player.isHidden) {
             e.lastSeenPlayer = {x: player.x, y: player.y};
-            e.chaseTurns = 5;
+            e.chaseTurns = e.chaseMemory; // Reset memory
         } else if(e.chaseTurns <= 0) {
-            // Lost sight of player
-            e.state = 'patrolling';
-            createSpeechBubble(e.x, e.y, "👁️ LOST SIGHT", e.color, 1.5);
+            // Lost sight of player for too long
+            e.state = 'investigating';
+            e.investigationTarget = e.lastSeenPlayer;
+            e.investigationTurns = 3;
+            createSpeechBubble(e.x, e.y, "👁️ LOST SIGHT", e.color, 2);
         }
     }
 }
@@ -283,7 +290,7 @@ async function handleAlertedState(e) {
         e.investigationTurns--;
         if(e.investigationTurns <= 0) {
             e.state = 'patrolling';
-            createSpeechBubble(e.x, e.y, "👁️ GIVING UP", e.color, 1.5);
+            createSpeechBubble(e.x, e.y, "👁️ GIVING UP", e.color, 2);
         }
     }
 }
