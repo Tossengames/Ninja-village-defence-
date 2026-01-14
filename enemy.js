@@ -78,7 +78,7 @@ async function processEnemyTurn(e) {
     // Check for rice
     if(e.alive && grid[e.y][e.x] === RICE) {
         e.state = 'eating';
-        e.poisonTimer = 3;
+        e.poisonTimer = Math.floor(Math.random() * 5) + 1; // Random 1-5 turns
         grid[e.y][e.x] = FLOOR;
         e.thought = '🍚';
         e.thoughtTimer = 5;
@@ -86,23 +86,22 @@ async function processEnemyTurn(e) {
         return;
     }
     
-    // Check for poison
-    if(e.alive && e.poisonTimer > 0) {
+    // ORIGINAL RICE POISONING SYSTEM: Kill after poison timer expires
+    if(e.alive && e.state === 'eating' && e.poisonTimer > 0) {
         e.poisonTimer--;
-        e.poisonCounter++;
-        if(e.poisonCounter >= 3) {
-            e.state = 'poisoned';
-            log(`☠️ Guard at (${e.x},${e.y}) is poisoned!`, "#ff00ff");
+        e.thought = '🤢';
+        e.thoughtTimer = 2;
+        
+        if(e.poisonTimer <= 0) {
+            e.alive = false;
+            e.state = 'dead';
+            stats.kills++;
+            createDeathEffect(e.x, e.y);
+            log(`💀 Guard eliminated by poisoned rice!`, "#ff00ff");
+            return;
+        } else {
+            log(`☠️ Guard feeling sick (${e.poisonTimer} turns left)`, "#ff00ff");
         }
-    }
-    
-    // Check if poisoned guard should die
-    if(e.state === 'poisoned' && e.poisonCounter >= 6) {
-        e.alive = false;
-        e.state = 'dead';
-        stats.kills++;
-        createDeathEffect(e.x, e.y);
-        log(`💀 Guard eliminated by poison!`, "#ff00ff");
     }
 }
 
@@ -111,8 +110,7 @@ function logEnemyState(e) {
     if(e.state === 'alerted' || e.state === 'eating' || e.state === 'poisoned') {
         const stateLogs = {
             'alerted': `🚨 Guard alerted at (${e.x},${e.y})`,
-            'eating': `🍚 Guard eating at (${e.x},${e.y})`,
-            'poisoned': `☠️ Guard poisoned at (${e.x},${e.y})`
+            'eating': `🍚 Guard eating at (${e.x},${e.y})`
         };
         
         if(stateLogs[e.state]) {
@@ -232,38 +230,9 @@ async function handleEatingState(e) {
     e.thought = '🍚';
     e.thoughtTimer = 2;
     
-    if(e.poisonTimer <= 0) {
-        e.state = 'patrolling';
-        log(`👁️ Guard finished eating`, "#ff6666");
-    }
+    // The death will be handled in the main processEnemyTurn function
+    // by the poisonTimer countdown
 }
 
-async function handlePoisonedState(e) {
-    // Poisoned guard moves randomly or stays still
-    if(Math.random() < 0.5) {
-        const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-        const validDirs = dirs.filter(d => {
-            const nx = e.x + d.x;
-            const ny = e.y + d.y;
-            return nx>=0 && nx<mapDim && ny>=0 && ny<mapDim && grid[ny][nx]!==WALL;
-        });
-        
-        if(validDirs.length > 0) {
-            const d = validDirs[Math.floor(Math.random()*validDirs.length)];
-            e.dir = d;
-            const nx = e.x + d.x;
-            const ny = e.y + d.y;
-            
-            await new Promise(resolve => {
-                animMove(e, nx, ny, 0.08, () => {
-                    e.x = nx;
-                    e.y = ny;
-                    resolve();
-                });
-            });
-        }
-    }
-    
-    e.thought = '🤢';
-    e.thoughtTimer = 2;
-}
+// Remove poisoned state handler since we're using the original system
+// The old poisoned state was replaced with the eating + poisonTimer system
