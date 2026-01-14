@@ -12,14 +12,27 @@ let stats = { kills: 0, coins: 0, itemsUsed: 0 };
 let inv = { trap: 3, rice: 2, bomb: 1 };
 let camX = 0, camY = 0, zoom = 1.0;
 let showMinimap = false;
-let showHighlights = true; // Always true now
+let showHighlights = true;
 let highlightedTiles = [];
-let hasReachedExit = false; // Track if player reached exit
+let hasReachedExit = false;
+
+// VFX Systems
+let particles = [];
+let bloodStains = [];
+let coinPickupEffects = [];
+let hideEffects = [];
+let explosionEffects = [];
+let footstepEffects = [];
+let soundQueue = [];
 
 // Canvas and rendering
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const sprites = {};
+
+// Audio context for programmatic SFX
+let audioContext;
+let gainNode;
 
 // Mode colors for highlighting
 const modeColors = {
@@ -28,6 +41,375 @@ const modeColors = {
     'rice': { fill: 'rgba(255, 255, 100, 0.15)', border: 'rgba(255, 255, 100, 0.7)', glow: 'rgba(255, 255, 100, 0.3)' },
     'bomb': { fill: 'rgba(255, 50, 150, 0.15)', border: 'rgba(255, 50, 150, 0.7)', glow: 'rgba(255, 50, 150, 0.3)' }
 };
+
+// ============================================
+// AUDIO SYSTEM (Programmatic SFX)
+// ============================================
+
+function initAudio() {
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        gainNode = audioContext.createGain();
+        gainNode.connect(audioContext.destination);
+        gainNode.gain.value = 0.3; // Volume control
+    } catch (e) {
+        console.log("Audio not supported:", e);
+    }
+}
+
+function playSound(type, options = {}) {
+    if (!audioContext) return;
+    
+    try {
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        
+        oscillator.connect(gain);
+        gain.connect(gainNode);
+        
+        // Configure based on sound type
+        switch(type) {
+            case 'explosion':
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(80, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.5, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.7);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.7);
+                break;
+                
+            case 'coin':
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+                oscillator.frequency.exponentialRampToValueAtTime(1046.5, audioContext.currentTime + 0.2); // C6
+                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.3);
+                break;
+                
+            case 'step':
+                oscillator.type = 'square';
+                oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.1);
+                break;
+                
+            case 'death':
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.8);
+                gain.gain.setValueAtTime(0.4, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.8);
+                break;
+                
+            case 'hide':
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(329.63, audioContext.currentTime); // E4
+                oscillator.frequency.exponentialRampToValueAtTime(164.81, audioContext.currentTime + 0.3); // E3
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.3);
+                break;
+                
+            case 'trap':
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+                oscillator.frequency.linearRampToValueAtTime(100, audioContext.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.5);
+                break;
+                
+            case 'alert':
+                oscillator.type = 'square';
+                oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5
+                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.2);
+                break;
+        }
+        
+    } catch (e) {
+        console.log("Sound error:", e);
+    }
+}
+
+// ============================================
+// VFX SYSTEMS
+// ============================================
+
+function createBloodStain(x, y) {
+    bloodStains.push({
+        x: x * TILE + TILE/2,
+        y: y * TILE + TILE/2,
+        size: Math.random() * 20 + 10,
+        opacity: 0.8,
+        life: 1000 // Permanent stain
+    });
+}
+
+function createDeathEffect(x, y) {
+    // Create blood particles
+    for(let i = 0; i < 15; i++) {
+        particles.push({
+            x: x * TILE + TILE/2,
+            y: y * TILE + TILE/2,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8,
+            life: 1.0,
+            color: `rgb(${Math.floor(Math.random() * 100 + 155)}, 0, 0)`,
+            size: Math.random() * 5 + 3
+        });
+    }
+    
+    // Create blood stain
+    createBloodStain(x, y);
+    
+    playSound('death');
+    log("🩸 Guard eliminated!", "#ff3333");
+}
+
+function createExplosionEffect(x, y) {
+    explosionEffects.push({
+        x: x * TILE + TILE/2,
+        y: y * TILE + TILE/2,
+        radius: 10,
+        maxRadius: TILE * 1.5,
+        life: 1.0,
+        shockwave: 0
+    });
+    
+    // Create explosion particles
+    for(let i = 0; i < 25; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 4 + 2;
+        particles.push({
+            x: x * TILE + TILE/2,
+            y: y * TILE + TILE/2,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1.0,
+            color: `rgb(${Math.floor(Math.random() * 100 + 155)}, ${Math.floor(Math.random() * 100)}, 0)`,
+            size: Math.random() * 4 + 2
+        });
+    }
+    
+    playSound('explosion');
+    log("💥 Bomb exploded!", "#ff9900");
+}
+
+function createCoinPickupEffect(x, y) {
+    coinPickupEffects.push({
+        x: x * TILE + TILE/2,
+        y: y * TILE + TILE/2,
+        particles: Array.from({length: 8}, (_, i) => ({
+            angle: (i / 8) * Math.PI * 2,
+            distance: 0,
+            maxDistance: 30,
+            speed: 1 + Math.random() * 0.5,
+            life: 1.0
+        })),
+        life: 1.0
+    });
+    
+    playSound('coin');
+    log("💰 Coin collected!", "#ffd700");
+}
+
+function createHideEffect(x, y, isHiding) {
+    hideEffects.push({
+        x: x * TILE + TILE/2,
+        y: y * TILE + TILE/2,
+        radius: isHiding ? TILE/2 : 0,
+        targetRadius: isHiding ? TILE * 1.2 : 0,
+        life: 1.0,
+        color: isHiding ? 'rgba(0, 210, 255, 0.3)' : 'rgba(255, 255, 255, 0.3)'
+    });
+    
+    if(isHiding) {
+        playSound('hide');
+        log("🕶️ Player is hiding!", "#00d2ff");
+    }
+}
+
+function createFootstepEffect(x, y) {
+    footstepEffects.push({
+        x: x * TILE + TILE/2 + (Math.random() - 0.5) * 10,
+        y: y * TILE + TILE/2 + (Math.random() - 0.5) * 10,
+        life: 1.0,
+        size: Math.random() * 8 + 4
+    });
+    
+    // Play step sound occasionally
+    if(Math.random() < 0.3) {
+        playSound('step');
+    }
+}
+
+function createTrapEffect(x, y) {
+    // Create smoke particles
+    for(let i = 0; i < 10; i++) {
+        particles.push({
+            x: x * TILE + TILE/2,
+            y: y * TILE + TILE/2,
+            vx: (Math.random() - 0.5) * 3,
+            vy: (Math.random() - 0.5) * 3,
+            life: 1.0,
+            color: 'rgba(100, 100, 100, 0.7)',
+            size: Math.random() * 4 + 2
+        });
+    }
+    
+    playSound('trap');
+    log("⚠️ Trap activated!", "#ff6464");
+}
+
+function createAlertEffect(x, y) {
+    particles.push({
+        x: x * TILE + TILE/2,
+        y: y * TILE + TILE/2,
+        vx: 0,
+        vy: 0,
+        life: 1.0,
+        color: 'rgba(255, 0, 0, 0.8)',
+        size: TILE/2,
+        pulse: true
+    });
+    
+    playSound('alert');
+    log("🚨 Guard alerted!", "#ff3333");
+}
+
+function updateVFX() {
+    // Update particles
+    particles = particles.filter(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.2; // Gravity
+        p.life -= 0.02;
+        return p.life > 0;
+    });
+    
+    // Update explosion effects
+    explosionEffects = explosionEffects.filter(e => {
+        e.radius += 15;
+        e.shockwave += 5;
+        e.life -= 0.05;
+        return e.life > 0;
+    });
+    
+    // Update coin pickup effects
+    coinPickupEffects = coinPickupEffects.filter(e => {
+        e.particles.forEach(p => {
+            p.distance = Math.min(p.distance + p.speed, p.maxDistance);
+        });
+        e.life -= 0.03;
+        return e.life > 0;
+    });
+    
+    // Update hide effects
+    hideEffects = hideEffects.filter(e => {
+        e.radius += (e.targetRadius - e.radius) * 0.2;
+        e.life -= 0.05;
+        return e.life > 0;
+    });
+    
+    // Update footstep effects
+    footstepEffects = footstepEffects.filter(f => {
+        f.life -= 0.1;
+        return f.life > 0;
+    });
+}
+
+function drawVFX() {
+    // Draw blood stains
+    bloodStains.forEach(stain => {
+        ctx.fillStyle = `rgba(139, 0, 0, ${stain.opacity})`;
+        ctx.beginPath();
+        ctx.arc(stain.x, stain.y, stain.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    // Draw particles
+    particles.forEach(p => {
+        if(p.pulse) {
+            const pulseSize = p.size * (0.8 + Math.sin(Date.now() / 100) * 0.2);
+            ctx.fillStyle = p.color.replace('0.8', p.life.toString());
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, pulseSize, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            ctx.fillStyle = p.color.replace('1.0', p.life.toString());
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+    
+    // Draw explosion effects
+    explosionEffects.forEach(e => {
+        // Shockwave
+        ctx.strokeStyle = `rgba(255, 165, 0, ${e.life})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.shockwave, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Fireball
+        const gradient = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.radius);
+        gradient.addColorStop(0, `rgba(255, 255, 0, ${e.life})`);
+        gradient.addColorStop(0.5, `rgba(255, 100, 0, ${e.life * 0.7})`);
+        gradient.addColorStop(1, `rgba(255, 0, 0, 0)`);
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    // Draw coin pickup effects
+    coinPickupEffects.forEach(e => {
+        e.particles.forEach(p => {
+            const x = e.x + Math.cos(p.angle) * p.distance;
+            const y = e.y + Math.sin(p.angle) * p.distance;
+            
+            ctx.fillStyle = `rgba(255, 215, 0, ${e.life})`;
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    });
+    
+    // Draw hide effects
+    hideEffects.forEach(e => {
+        const gradient = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.radius);
+        gradient.addColorStop(0, e.color.replace('0.3', (e.life * 0.3).toString()));
+        gradient.addColorStop(1, e.color.replace('0.3', '0'));
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    // Draw footstep effects
+    footstepEffects.forEach(f => {
+        ctx.fillStyle = `rgba(200, 200, 200, ${f.life * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, f.size * f.life, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
 
 // ============================================
 // INITIALIZATION
@@ -39,19 +421,24 @@ function initGame() {
     // Reset exit reached flag
     hasReachedExit = false;
     
+    // Reset VFX
+    particles = [];
+    bloodStains = [];
+    coinPickupEffects = [];
+    hideEffects = [];
+    explosionEffects = [];
+    footstepEffects = [];
+    
     // Remove highlight toggle from menu and always show highlights
     showHighlights = true;
     
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('toolbar').classList.remove('hidden');
-    document.getElementById('ui-controls').classList.remove('hidden');
-    document.getElementById('modeIndicator').classList.remove('hidden');
     document.getElementById('rangeIndicator').classList.remove('hidden');
     
     generateLevel();
     centerCamera();
     updateToolCounts();
-    updateModeIndicator();
     requestAnimationFrame(gameLoop);
 }
 
@@ -303,6 +690,9 @@ function gameLoop() {
         }
     });
 
+    // Draw VFX
+    drawVFX();
+
     // Draw player with shadow
     ctx.shadowColor = player.isHidden ? 'rgba(0, 210, 255, 0.5)' : 'rgba(255, 255, 255, 0.3)';
     ctx.shadowBlur = 15;
@@ -322,6 +712,9 @@ function gameLoop() {
     if(showMinimap) {
         drawMinimap();
     }
+    
+    // Update VFX
+    updateVFX();
     
     shake *= 0.8;
     requestAnimationFrame(gameLoop);
@@ -514,20 +907,6 @@ function toggleMinimap() {
     showMinimap = !showMinimap; 
 }
 
-function updateModeIndicator() {
-    const indicator = document.getElementById('modeIndicator');
-    const modeName = selectMode.toUpperCase();
-    indicator.innerHTML = `Mode: <span class="mode-name">${modeName}</span>`;
-    
-    const colors = {
-        'move': '#00d2ff',
-        'trap': '#ff6464',
-        'rice': '#ffff64',
-        'bomb': '#ff3296'
-    };
-    indicator.style.borderLeftColor = colors[selectMode] || '#00d2ff';
-}
-
 function updateToolCounts() {
     document.getElementById('trapCount').textContent = inv.trap;
     document.getElementById('riceCount').textContent = inv.rice;
@@ -561,7 +940,7 @@ async function endTurn() {
     exploding.forEach(b => {
         grid[b.y][b.x] = FLOOR; 
         shake = 20; 
-        log("BOOM!", "#f44");
+        createExplosionEffect(b.x, b.y);
         
         // Alert nearby enemies to the sound
         enemies.forEach(e => {
@@ -574,6 +953,7 @@ async function endTurn() {
                     e.state = 'investigating';
                     e.thought = '👂';
                     e.thoughtTimer = 3;
+                    log("👂 Guard heard explosion!", "#ff9900");
                 }
             }
         });
@@ -584,7 +964,7 @@ async function endTurn() {
                 e.alive = false; 
                 e.state = 'dead';
                 stats.kills++;
-                log("Guard eliminated by explosion!", "#0f0");
+                createDeathEffect(e.x, e.y);
             }
         });
     });
@@ -604,7 +984,7 @@ function checkGameOver() {
     
     gameOver = true; 
     document.getElementById('gameOverScreen').classList.remove('hidden');
-    log("YOU WERE SPOTTED!", "#f00");
+    log("🚨 MISSION FAILED: You were spotted!", "#f00");
 }
 
 // ============================================
@@ -665,7 +1045,7 @@ canvas.addEventListener('touchend', e => {
     } else if(selectMode !== 'move' && dist <= 2 && grid[ty][tx] === FLOOR && isValidMove) {
         handleItemPlacement(tx, ty, selectMode);
     } else if(!isValidMove) {
-        log("Out of range!", "#f00");
+        log("❌ Out of range!", "#f00");
     }
 });
 
@@ -697,6 +1077,12 @@ function animMove(obj, tx, ty, speed, cb) {
         p += speed; 
         obj.ax = sx + (tx - sx) * p; 
         obj.ay = sy + (ty - sy) * p;
+        
+        // Create footstep effect during movement
+        if(Math.random() < 0.3 && obj === player) {
+            createFootstepEffect(sx + (tx - sx) * p, sy + (ty - sy) * p);
+        }
+        
         if(p < 1) {
             requestAnimationFrame(step);
         } else { 
@@ -714,14 +1100,13 @@ function setMode(m) {
     selectMode = m;
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
-    updateModeIndicator();
-    // No log message for mode change
+    // No log message for mode change - this function is now silent
 }
 
 function playerWait() { 
     if(playerTurn) { 
         playerTurn = false; 
-        log("Waiting...", "#aaa");
+        log("⏳ Waiting...", "#aaa");
         endTurn(); 
     } 
 }
@@ -856,6 +1241,7 @@ function hasLineOfSight(e, px, py) {
 
 window.addEventListener('load', () => {
     loadSprites();
+    initAudio();
 });
 
 // Export functions that other scripts need
@@ -864,3 +1250,9 @@ window.log = log;
 window.checkGameOver = checkGameOver;
 window.hasLineOfSight = hasLineOfSight;
 window.checkLineOfSightRay = checkLineOfSightRay;
+window.createDeathEffect = createDeathEffect;
+window.createTrapEffect = createTrapEffect;
+window.createAlertEffect = createAlertEffect;
+window.createCoinPickupEffect = createCoinPickupEffect;
+window.createHideEffect = createHideEffect;
+window.playSound = playSound;
