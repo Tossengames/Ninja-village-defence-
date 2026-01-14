@@ -54,7 +54,7 @@ async function handlePlayerMove(targetX, targetY) {
         if(tile === COIN) {
             stats.coins++;
             grid[step.y][step.x] = FLOOR;
-            createSpeechBubble(step.x, step.y, "💰 +1 GOLD", "#ffd700", 1.5);
+            createSpeechBubble(step.x, step.y, "💰 +1 GOLD", "#ffd700", 2);
         }
         
         // Check for hide spot
@@ -62,7 +62,7 @@ async function handlePlayerMove(targetX, targetY) {
         player.isHidden = (tile === HIDE);
         if(player.isHidden !== wasHidden) {
             createSpeechBubble(step.x, step.y, player.isHidden ? "🕶️ HIDING" : "👀 VISIBLE", 
-                              player.isHidden ? "#00d2ff" : "#ffffff", 1.5);
+                              player.isHidden ? "#00d2ff" : "#ffffff", 2);
         }
         
         // Normal move - ALWAYS MOVE even if enemy nearby
@@ -89,7 +89,7 @@ async function handleAttack(targetX, targetY) {
     // Check if target tile has an enemy
     const enemy = enemies.find(e => e.alive && e.x === targetX && e.y === targetY);
     if(!enemy) {
-        createSpeechBubble(player.x, player.y, "❌ No enemy!", "#ff0000", 1.5);
+        createSpeechBubble(player.x, player.y, "❌ No enemy!", "#ff0000", 2);
         return;
     }
     
@@ -100,7 +100,7 @@ async function handleAttack(targetX, targetY) {
     
     if(canSeePlayer) {
         // Normal combat sequence
-        createSpeechBubble(player.x, player.y, `⚔️ VS ${enemy.type}`, "#ff3333", 1.5);
+        createSpeechBubble(player.x, player.y, `⚔️ VS ${enemy.type}`, "#ff3333", 2);
         
         const enemyDied = await processCombatSequence(true, enemy, 2);
         
@@ -108,11 +108,11 @@ async function handleAttack(targetX, targetY) {
             // Player automatically counterattacks if in range
             const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
             if(dist <= 1) { // Player attack range is 1
-                createSpeechBubble(player.x, player.y, "🗡️ COUNTER!", "#00d2ff", 1.5);
+                createSpeechBubble(player.x, player.y, "🗡️ COUNTER!", "#00d2ff", 2);
                 await new Promise(resolve => setTimeout(resolve, 500));
                 
                 enemy.hp -= 2;
-                createSpeechBubble(enemy.x, enemy.y, `-2`, "#ff0000", 1.5);
+                createSpeechBubble(enemy.x, enemy.y, `-2`, "#ff0000", 2);
                 
                 await new Promise(resolve => setTimeout(resolve, 800));
                 
@@ -120,7 +120,7 @@ async function handleAttack(targetX, targetY) {
                     enemy.alive = false;
                     enemy.state = 'dead';
                     stats.kills++;
-                    createSpeechBubble(enemy.x, enemy.y, "💀", "#ff0000", 2);
+                    createSpeechBubble(enemy.x, enemy.y, "💀", "#ff0000", 2.5);
                 }
             }
             
@@ -134,14 +134,14 @@ async function handleAttack(targetX, targetY) {
             endTurn();
         }
     } else {
-        // Stealth kill
-        createSpeechBubble(player.x, player.y, "🗡️ STEALTH KILL!", "#00ff00", 1.5);
+        // Stealth kill (enemy can't see player)
+        createSpeechBubble(player.x, player.y, "🗡️ STEALTH KILL!", "#00ff00", 2);
         await new Promise(resolve => setTimeout(resolve, 500));
         
         enemy.alive = false;
         enemy.state = 'dead';
         stats.kills++;
-        createSpeechBubble(enemy.x, enemy.y, "💀", "#ff0000", 2);
+        createSpeechBubble(enemy.x, enemy.y, "💀", "#ff0000", 2.5);
         
         await new Promise(resolve => setTimeout(resolve, 800));
         
@@ -165,11 +165,11 @@ async function checkEnemyAttacks() {
     );
     
     for(let e of attackingEnemies) {
-        createSpeechBubble(e.x, e.y, `🎯 ATTACKING!`, e.color, 1.5);
+        createSpeechBubble(e.x, e.y, `🎯 ATTACKING!`, e.color, 2);
         await new Promise(resolve => setTimeout(resolve, 500));
         
         playerHP -= e.damage;
-        createSpeechBubble(player.x, player.y, `-${e.damage} HP`, "#ff66ff", 1.5);
+        createSpeechBubble(player.x, player.y, `-${e.damage} HP`, "#ff66ff", 2);
         updateHPDisplay();
         
         await new Promise(resolve => setTimeout(resolve, 800));
@@ -186,12 +186,12 @@ function handleItemPlacement(x, y, type) {
     if(!playerTurn || gameOver || combatSequence) return;
     
     if(inv[type] <= 0) {
-        createSpeechBubble(player.x, player.y, `❌ No ${type}s!`, "#f00", 1.5);
+        createSpeechBubble(player.x, player.y, `❌ No ${type}s!`, "#f00", 2);
         return;
     }
     
     if(grid[y][x] !== FLOOR) {
-        createSpeechBubble(player.x, player.y, "❌ Can't place here!", "#f00", 1.5);
+        createSpeechBubble(player.x, player.y, "❌ Can't place here!", "#f00", 2);
         return;
     }
     
@@ -202,16 +202,16 @@ function handleItemPlacement(x, y, type) {
     switch(type) {
         case 'trap':
             grid[y][x] = TRAP;
-            createSpeechBubble(x, y, "⚠️ TRAP SET", "#ff6464", 1.5);
+            createSpeechBubble(x, y, "⚠️ TRAP SET", "#ff6464", 2);
             break;
         case 'rice':
             grid[y][x] = RICE;
-            createSpeechBubble(x, y, "🍚 RICE SET", "#ffff64", 1.5);
+            createSpeechBubble(x, y, "🍚 RICE SET", "#ffff64", 2);
             break;
         case 'bomb':
             grid[y][x] = BOMB;
             activeBombs.push({x: x, y: y, t: 3});
-            createSpeechBubble(x, y, "💣 BOMB SET", "#ff3296", 1.5);
+            createSpeechBubble(x, y, "💣 BOMB SET", "#ff3296", 2);
             break;
     }
     
