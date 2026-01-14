@@ -18,8 +18,8 @@ let highlightedTiles = [];
 let hasReachedExit = false;
 let currentEnemyTurn = null;
 let combatMode = false;
-let combatSequence = false; // New: For turn-based combat sequences
-let combatLog = []; // New: Store combat events
+let combatSequence = false;
+let combatLog = [];
 
 // Player stats
 let playerHP = 10;
@@ -33,7 +33,8 @@ let hideEffects = [];
 let explosionEffects = [];
 let footstepEffects = [];
 let damageEffects = [];
-let unitTexts = []; // New: Text above units
+let unitTexts = [];
+let speechBubbles = []; // New: Cartoon-style speech bubbles
 let soundQueue = [];
 
 // Canvas and rendering
@@ -126,75 +127,6 @@ function playSound(type, options = {}) {
                 oscillator.start();
                 oscillator.stop(audioContext.currentTime + 0.8);
                 break;
-                
-            case 'hide':
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(329.63, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(164.81, audioContext.currentTime + 0.3);
-                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.3);
-                break;
-                
-            case 'trap':
-                oscillator.type = 'triangle';
-                oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
-                oscillator.frequency.linearRampToValueAtTime(100, audioContext.currentTime + 0.5);
-                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.5);
-                break;
-                
-            case 'alert':
-                oscillator.type = 'square';
-                oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
-                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.2);
-                break;
-                
-            case 'attack':
-                oscillator.type = 'sawtooth';
-                oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(150, audioContext.currentTime + 0.2);
-                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.2);
-                break;
-                
-            case 'hurt':
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.3);
-                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.3);
-                break;
-                
-            case 'arrow':
-                oscillator.type = 'triangle';
-                oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.4);
-                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.4);
-                break;
-                
-            case 'spear':
-                oscillator.type = 'square';
-                oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
-                oscillator.frequency.linearRampToValueAtTime(100, audioContext.currentTime + 0.3);
-                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.3);
-                break;
         }
         
     } catch (e) {
@@ -206,174 +138,35 @@ function playSound(type, options = {}) {
 // VFX SYSTEMS
 // ============================================
 
-function createBloodStain(x, y) {
-    bloodStains.push({
-        x: x * TILE + TILE/2,
-        y: y * TILE + TILE/2,
-        size: Math.random() * 20 + 10,
-        opacity: 0.8,
-        life: 1000
-    });
-}
-
-function createDeathEffect(x, y) {
-    for(let i = 0; i < 15; i++) {
-        particles.push({
-            x: x * TILE + TILE/2,
-            y: y * TILE + TILE/2,
-            vx: (Math.random() - 0.5) * 8,
-            vy: (Math.random() - 0.5) * 8,
-            life: 1.0,
-            color: `rgb(${Math.floor(Math.random() * 100 + 155)}, 0, 0)`,
-            size: Math.random() * 5 + 3
-        });
-    }
-    
-    createBloodStain(x, y);
-    playSound('death');
-    addUnitText(x, y, "💀 KILLED!", "#ff0000", 3);
-}
-
-function createExplosionEffect(x, y) {
-    explosionEffects.push({
-        x: x * TILE + TILE/2,
-        y: y * TILE + TILE/2,
-        radius: 10,
-        maxRadius: TILE * 1.5,
-        life: 1.0,
-        shockwave: 0
-    });
-    
-    for(let i = 0; i < 25; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 4 + 2;
-        particles.push({
-            x: x * TILE + TILE/2,
-            y: y * TILE + TILE/2,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            life: 1.0,
-            color: `rgb(${Math.floor(Math.random() * 100 + 155)}, ${Math.floor(Math.random() * 100)}, 0)`,
-            size: Math.random() * 4 + 2
-        });
-    }
-    
-    playSound('explosion');
-    addUnitText(x, y, "💥 BOOM!", "#ff9900", 2);
-}
-
-function createCoinPickupEffect(x, y) {
-    coinPickupEffects.push({
-        x: x * TILE + TILE/2,
-        y: y * TILE + TILE/2,
-        particles: Array.from({length: 8}, (_, i) => ({
-            angle: (i / 8) * Math.PI * 2,
-            distance: 0,
-            maxDistance: 30,
-            speed: 1 + Math.random() * 0.5,
-            life: 1.0
-        })),
-        life: 1.0
-    });
-    
-    playSound('coin');
-    addUnitText(x, y, "💰 +1 GOLD", "#ffd700", 2);
-}
-
-function createHideEffect(x, y, isHiding) {
-    hideEffects.push({
-        x: x * TILE + TILE/2,
-        y: y * TILE + TILE/2,
-        radius: isHiding ? TILE/2 : 0,
-        targetRadius: isHiding ? TILE * 1.2 : 0,
-        life: 1.0,
-        color: isHiding ? 'rgba(0, 210, 255, 0.3)' : 'rgba(255, 255, 255, 0.3)'
-    });
-    
-    if(isHiding) {
-        playSound('hide');
-        addUnitText(x, y, "🕶️ HIDING", "#00d2ff", 2);
-    }
-}
-
 function createFootstepEffect(x, y) {
-    footstepEffects.push({
-        x: x * TILE + TILE/2 + (Math.random() - 0.5) * 10,
-        y: y * TILE + TILE/2 + (Math.random() - 0.5) * 10,
-        life: 1.0,
-        size: Math.random() * 8 + 4
-    });
+    for(let i = 0; i < 3; i++) {
+        particles.push({
+            x: x * TILE + TILE/2 + (Math.random() - 0.5) * 15,
+            y: y * TILE + TILE/2 + (Math.random() - 0.5) * 15,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: (Math.random() - 0.5) * 0.5,
+            life: 0.8,
+            color: `rgba(200, 200, 200, ${Math.random() * 0.5 + 0.3})`,
+            size: Math.random() * 3 + 2,
+            gravity: 0.1
+        });
+    }
     
     if(Math.random() < 0.3) {
         playSound('step');
     }
 }
 
-function createTrapEffect(x, y) {
-    for(let i = 0; i < 10; i++) {
-        particles.push({
-            x: x * TILE + TILE/2,
-            y: y * TILE + TILE/2,
-            vx: (Math.random() - 0.5) * 3,
-            vy: (Math.random() - 0.5) * 3,
-            life: 1.0,
-            color: 'rgba(100, 100, 100, 0.7)',
-            size: Math.random() * 4 + 2
-        });
-    }
-    
-    playSound('trap');
-    addUnitText(x, y, "⚠️ TRAP!", "#ff6464", 2);
-}
-
-function createAlertEffect(x, y) {
-    particles.push({
+function createSpeechBubble(x, y, text, color = "#ffffff", duration = 2) {
+    speechBubbles.push({
         x: x * TILE + TILE/2,
-        y: y * TILE + TILE/2,
-        vx: 0,
-        vy: 0,
-        life: 1.0,
-        color: 'rgba(255, 0, 0, 0.8)',
-        size: TILE/2,
-        pulse: true
-    });
-    
-    playSound('alert');
-}
-
-function createDamageEffect(x, y, damage, isPlayer = false) {
-    for(let i = 0; i < 8; i++) {
-        particles.push({
-            x: x * TILE + TILE/2,
-            y: y * TILE + TILE/2,
-            vx: (Math.random() - 0.5) * 6,
-            vy: (Math.random() - 0.5) * 6,
-            life: 1.0,
-            color: isPlayer ? 'rgba(255, 100, 255, 0.8)' : 'rgba(255, 100, 100, 0.8)',
-            size: Math.random() * 3 + 2
-        });
-    }
-    
-    damageEffects.push({
-        x: x * TILE + TILE/2,
-        y: y * TILE + TILE/2 - 20,
-        value: `-${damage}`,
-        life: 1.0,
-        color: isPlayer ? '#ff66ff' : '#ff6666'
-    });
-    
-    playSound(isPlayer ? 'hurt' : (damage > 2 ? 'spear' : damage === 1 ? 'arrow' : 'hurt'));
-}
-
-function addUnitText(x, y, text, color = "#ffffff", duration = 2) {
-    unitTexts.push({
-        x: x * TILE + TILE/2,
-        y: y * TILE - 35,
+        y: y * TILE - 50,
         text: text,
         color: color,
         life: duration,
-        vy: -0.5,
-        size: 14
+        maxLife: duration,
+        scale: 0,
+        vy: -0.3
     });
 }
 
@@ -381,35 +174,19 @@ function updateVFX() {
     particles = particles.filter(p => {
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.2;
-        p.life -= 0.02;
+        p.vy += p.gravity || 0.2;
+        p.life -= 0.03;
         return p.life > 0;
     });
     
-    explosionEffects = explosionEffects.filter(e => {
-        e.radius += 15;
-        e.shockwave += 5;
-        e.life -= 0.05;
-        return e.life > 0;
-    });
-    
-    coinPickupEffects = coinPickupEffects.filter(e => {
-        e.particles.forEach(p => {
-            p.distance = Math.min(p.distance + p.speed, p.maxDistance);
-        });
-        e.life -= 0.03;
-        return e.life > 0;
-    });
-    
-    hideEffects = hideEffects.filter(e => {
-        e.radius += (e.targetRadius - e.radius) * 0.2;
-        e.life -= 0.05;
-        return e.life > 0;
-    });
-    
-    footstepEffects = footstepEffects.filter(f => {
-        f.life -= 0.1;
-        return f.life > 0;
+    speechBubbles = speechBubbles.filter(b => {
+        b.life -= 0.03;
+        b.scale = Math.min(1, (b.maxLife - b.life) * 2);
+        if(b.life < 0.3) {
+            b.scale = b.life / 0.3;
+        }
+        b.y += b.vy;
+        return b.life > 0;
     });
     
     damageEffects = damageEffects.filter(d => {
@@ -426,74 +203,34 @@ function updateVFX() {
 }
 
 function drawVFX() {
-    bloodStains.forEach(stain => {
-        ctx.fillStyle = `rgba(139, 0, 0, ${stain.opacity})`;
+    particles.forEach(p => {
+        ctx.fillStyle = p.color.replace('0.8', p.life.toString());
         ctx.beginPath();
-        ctx.arc(stain.x, stain.y, stain.size, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
     });
     
-    particles.forEach(p => {
-        if(p.pulse) {
-            const pulseSize = p.size * (0.8 + Math.sin(Date.now() / 100) * 0.2);
-            ctx.fillStyle = p.color.replace('0.8', p.life.toString());
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, pulseSize, 0, Math.PI * 2);
-            ctx.fill();
-        } else {
-            ctx.fillStyle = p.color.replace('1.0', p.life.toString());
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    });
-    
-    explosionEffects.forEach(e => {
-        ctx.strokeStyle = `rgba(255, 165, 0, ${e.life})`;
-        ctx.lineWidth = 3;
+    speechBubbles.forEach(b => {
+        const alpha = b.life * 0.8;
+        const fontSize = Math.floor(10 * b.scale);
+        
+        // Bubble background
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.beginPath();
-        ctx.arc(e.x, e.y, e.shockwave, 0, Math.PI * 2);
+        ctx.arc(b.x, b.y, 20 * b.scale, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Bubble border
+        ctx.strokeStyle = `rgba(100, 100, 100, ${alpha})`;
+        ctx.lineWidth = 2;
         ctx.stroke();
         
-        const gradient = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.radius);
-        gradient.addColorStop(0, `rgba(255, 255, 0, ${e.life})`);
-        gradient.addColorStop(0.5, `rgba(255, 100, 0, ${e.life * 0.7})`);
-        gradient.addColorStop(1, `rgba(255, 0, 0, 0)`);
-        
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-        ctx.fill();
-    });
-    
-    coinPickupEffects.forEach(e => {
-        e.particles.forEach(p => {
-            const x = e.x + Math.cos(p.angle) * p.distance;
-            const y = e.y + Math.sin(p.angle) * p.distance;
-            
-            ctx.fillStyle = `rgba(255, 215, 0, ${e.life})`;
-            ctx.beginPath();
-            ctx.arc(x, y, 3, 0, Math.PI * 2);
-            ctx.fill();
-        });
-    });
-    
-    hideEffects.forEach(e => {
-        const gradient = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.radius);
-        gradient.addColorStop(0, e.color.replace('0.3', (e.life * 0.3).toString()));
-        gradient.addColorStop(1, e.color.replace('0.3', '0'));
-        
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-        ctx.fill();
-    });
-    
-    footstepEffects.forEach(f => {
-        ctx.fillStyle = `rgba(200, 200, 200, ${f.life * 0.5})`;
-        ctx.beginPath();
-        ctx.arc(f.x, f.y, f.size * f.life, 0, Math.PI * 2);
-        ctx.fill();
+        // Text
+        ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(b.text, b.x, b.y);
     });
     
     damageEffects.forEach(d => {
@@ -510,7 +247,6 @@ function drawVFX() {
         ctx.textBaseline = "middle";
         ctx.fillText(t.text, t.x, t.y);
         
-        // Text shadow for better visibility
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillText(t.text, t.x + 1, t.y + 1);
     });
@@ -529,12 +265,7 @@ function initGame() {
     combatSequence = false;
     
     particles = [];
-    bloodStains = [];
-    coinPickupEffects = [];
-    hideEffects = [];
-    explosionEffects = [];
-    footstepEffects = [];
-    damageEffects = [];
+    speechBubbles = [];
     unitTexts = [];
     
     showHighlights = true;
@@ -545,6 +276,7 @@ function initGame() {
     document.getElementById('rangeIndicator').classList.remove('hidden');
     document.getElementById('logToggle').classList.remove('hidden');
     document.getElementById('hpDisplay').classList.remove('hidden');
+    document.getElementById('ui-controls').classList.remove('hidden');
     
     generateLevel();
     centerCamera();
@@ -661,41 +393,6 @@ function drawSprite(n, x, y) {
     }
 }
 
-function drawTileHighlight(x, y, colorSet, pulse = true) {
-    const time = Date.now() / 1000;
-    const pulseFactor = pulse ? (Math.sin(time * 6) * 0.1 + 0.9) : 1;
-    
-    ctx.fillStyle = colorSet.fill;
-    ctx.fillRect(x*TILE + 4, y*TILE + 4, TILE - 8, TILE - 8);
-    
-    ctx.strokeStyle = colorSet.border;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(x*TILE + 2, y*TILE + 2, TILE - 4, TILE - 4);
-    
-    ctx.strokeStyle = colorSet.glow;
-    ctx.lineWidth = 1;
-    for(let i = 0; i < 3; i++) {
-        const offset = i * 2 * pulseFactor;
-        ctx.strokeRect(
-            x*TILE + 1 - offset, 
-            y*TILE + 1 - offset, 
-            TILE - 2 + offset*2, 
-            TILE - 2 + offset*2
-        );
-    }
-    
-    ctx.fillStyle = colorSet.border;
-    const cornerSize = 6;
-    ctx.fillRect(x*TILE + 2, y*TILE + 2, cornerSize, 2);
-    ctx.fillRect(x*TILE + 2, y*TILE + 2, 2, cornerSize);
-    ctx.fillRect(x*TILE + TILE - cornerSize - 2, y*TILE + 2, cornerSize, 2);
-    ctx.fillRect(x*TILE + TILE - 2, y*TILE + 2, 2, cornerSize);
-    ctx.fillRect(x*TILE + 2, y*TILE + TILE - 2, cornerSize, 2);
-    ctx.fillRect(x*TILE + 2, y*TILE + TILE - cornerSize - 2, 2, cornerSize);
-    ctx.fillRect(x*TILE + TILE - cornerSize - 2, y*TILE + TILE - 2, cornerSize, 2);
-    ctx.fillRect(x*TILE + TILE - 2, y*TILE + TILE - cornerSize - 2, 2, cornerSize);
-}
-
 function calculateHighlightedTiles() {
     highlightedTiles = [];
     if(!playerTurn) return;
@@ -772,27 +469,15 @@ function gameLoop() {
         calculateHighlightedTiles();
         highlightedTiles.forEach(tile => {
             drawTileHighlight(tile.x, tile.y, tile.color);
-            
-            if(tile.type === 'exit') {
-                ctx.fillStyle = "rgba(0, 255, 100, 0.3)";
-                ctx.fillRect(tile.x*TILE + 15, tile.y*TILE + 15, TILE - 30, TILE - 30);
-            } else if(tile.type === 'coin') {
-                ctx.fillStyle = "rgba(255, 215, 0, 0.3)";
-                ctx.beginPath();
-                ctx.arc(tile.x*TILE + TILE/2, tile.y*TILE + TILE/2, 15, 0, Math.PI * 2);
-                ctx.fill();
-            }
         });
     }
 
     enemies.forEach(e => {
         if(!e.alive) return;
         
-        // Draw enemy tint based on type
         ctx.fillStyle = e.tint;
         ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
         
-        // Draw health bar
         const healthPercent = e.hp / e.maxHP;
         ctx.fillStyle = healthPercent > 0.5 ? "#0f0" : healthPercent > 0.25 ? "#ff0" : "#f00";
         ctx.fillRect(e.ax * TILE + 5, e.ay * TILE - 8, (TILE - 10) * healthPercent, 4);
@@ -800,13 +485,11 @@ function gameLoop() {
         ctx.lineWidth = 1;
         ctx.strokeRect(e.ax * TILE + 5, e.ay * TILE - 8, TILE - 10, 4);
         
-        // Draw HP text
         ctx.fillStyle = "#fff";
         ctx.font = "bold 10px monospace";
         ctx.textAlign = "center";
         ctx.fillText(e.hp.toString(), e.ax * TILE + TILE/2, e.ay * TILE - 4);
         
-        // Draw type indicator
         ctx.fillStyle = e.color;
         ctx.font = "bold 8px monospace";
         ctx.textAlign = "left";
@@ -825,30 +508,13 @@ function gameLoop() {
         
         drawSprite('guard', e.ax, e.ay);
         
-        // Draw thought bubble above unit
-        if(e.thought && e.thoughtTimer > 0) {
-            drawThoughtBubble(e);
-        }
-        
         if(!player.isHidden && e.state !== 'dead') {
             drawVisionCone(e);
-        }
-        
-        // Draw attack range if alerted/chasing
-        if((e.state === 'alerted' || e.state === 'chasing') && !player.isHidden) {
-            ctx.strokeStyle = e.color + "80";
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
-            ctx.beginPath();
-            ctx.arc(e.ax * TILE + 30, e.ay * TILE + 30, e.attackRange * TILE, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]);
         }
     });
 
     drawVFX();
 
-    // Draw player health bar
     const playerHealthPercent = playerHP / playerMaxHP;
     ctx.fillStyle = playerHealthPercent > 0.5 ? "#0f0" : playerHealthPercent > 0.25 ? "#ff0" : "#f00";
     ctx.fillRect(player.ax * TILE + 5, player.ay * TILE - 8, (TILE - 10) * playerHealthPercent, 4);
@@ -856,7 +522,6 @@ function gameLoop() {
     ctx.lineWidth = 1;
     ctx.strokeRect(player.ax * TILE + 5, player.ay * TILE - 8, TILE - 10, 4);
     
-    // Draw player HP text
     ctx.fillStyle = "#fff";
     ctx.font = "bold 10px monospace";
     ctx.textAlign = "center";
@@ -885,40 +550,28 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-function drawThoughtBubble(e) {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.beginPath();
-    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 25, 15, 0, Math.PI * 2);
-    ctx.fill();
+function drawTileHighlight(x, y, colorSet, pulse = true) {
+    const time = Date.now() / 1000;
+    const pulseFactor = pulse ? (Math.sin(time * 6) * 0.1 + 0.9) : 1;
     
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 25, 15, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.fillStyle = colorSet.fill;
+    ctx.fillRect(x*TILE + 4, y*TILE + 4, TILE - 8, TILE - 8);
     
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#000';
+    ctx.strokeStyle = colorSet.border;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x*TILE + 2, y*TILE + 2, TILE - 4, TILE - 4);
     
-    // Wrap text if too long
-    const words = e.thought.split(' ');
-    let line = '';
-    let lineCount = 0;
-    const maxWidth = 24;
-    
-    for(let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
-        if(testLine.length > maxWidth && n > 0) {
-            ctx.fillText(line, e.ax * TILE + TILE/2, e.ay * TILE - 25 + (lineCount * 12));
-            line = words[n] + ' ';
-            lineCount++;
-        } else {
-            line = testLine;
-        }
+    ctx.strokeStyle = colorSet.glow;
+    ctx.lineWidth = 1;
+    for(let i = 0; i < 3; i++) {
+        const offset = i * 2 * pulseFactor;
+        ctx.strokeRect(
+            x*TILE + 1 - offset, 
+            y*TILE + 1 - offset, 
+            TILE - 2 + offset*2, 
+            TILE - 2 + offset*2
+        );
     }
-    ctx.fillText(line, e.ax * TILE + TILE/2, e.ay * TILE - 25 + (lineCount * 12));
 }
 
 function drawVisionCone(e) {
@@ -952,53 +605,8 @@ function drawVisionCone(e) {
     
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.moveTo(e.ax * TILE + 30, e.ay * TILE + 30);
-    
-    const baseA = Math.atan2(e.dir.y, e.dir.x);
-    const visionAngle = 0.7;
-    
-    const rayCount = 20;
-    for(let i = 0; i <= rayCount; i++) {
-        const angle = baseA - visionAngle + (2 * visionAngle * i / rayCount);
-        let maxDistance = drawRange;
-        
-        for(let d = 0.1; d <= drawRange; d += 0.1) {
-            const checkX = Math.floor(e.x + Math.cos(angle) * d);
-            const checkY = Math.floor(e.y + Math.sin(angle) * d);
-            
-            if(checkX < 0 || checkX >= mapDim || checkY < 0 || checkY >= mapDim) {
-                maxDistance = d - 0.1;
-                break;
-            }
-            
-            if(grid[checkY][checkX] === WALL) {
-                maxDistance = d - 0.1;
-                break;
-            }
-        }
-        
-        ctx.lineTo(
-            e.ax * TILE + 30 + Math.cos(angle) * maxDistance * TILE,
-            e.ay * TILE + 30 + Math.sin(angle) * maxDistance * TILE
-        );
-    }
-    
-    ctx.closePath();
-    ctx.fill();
-    
-    ctx.strokeStyle = e.state === 'alerted' || e.state === 'chasing' ? 'rgba(255, 0, 0, 0.8)' : 
-                     e.state === 'investigating' ? 'rgba(255, 165, 0, 0.6)' :
-                     e.state === 'eating' ? 'rgba(0, 255, 0, 0.6)' : 'rgba(255, 100, 100, 0.5)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    
-    ctx.strokeStyle = e.state === 'alerted' || e.state === 'chasing' ? 'rgba(255, 0, 0, 0.3)' : 'rgba(255, 100, 100, 0.2)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath();
     ctx.arc(e.ax * TILE + 30, e.ay * TILE + 30, drawRange * TILE, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.fill();
 }
 
 function drawMinimap() {
@@ -1036,12 +644,6 @@ function drawMinimap() {
                           e.state === 'eating' ? "#00ff00" : e.color;
         ctx.fillStyle = enemyColor;
         ctx.fillRect(mx + e.x*ms, my + 5 + e.y*ms, ms, ms);
-        
-        ctx.strokeStyle = enemyColor + "80";
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.arc(mx + e.x*ms + ms/2, my + 5 + e.y*ms + ms/2, (e.visionRange || 2) * ms, 0, Math.PI * 2);
-        ctx.stroke();
     });
 }
 
@@ -1070,11 +672,13 @@ function clampCamera() {
 
 function toggleMinimap() { 
     showMinimap = !showMinimap; 
+    log("Minimap toggled", showMinimap ? "#0f0" : "#f00");
 }
 
 function toggleLog() {
     showLog = !showLog;
     document.getElementById('missionLog').style.display = showLog ? 'flex' : 'none';
+    log("Log toggled", showLog ? "#0f0" : "#f00");
 }
 
 function updateToolCounts() {
@@ -1109,13 +713,11 @@ async function endTurn() {
         return true;
     });
 
-    // Handle bomb explosions one by one
     for(let b of exploding) {
-        await new Promise(resolve => setTimeout(resolve, 500)); // Wait between explosions
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         grid[b.y][b.x] = FLOOR; 
         shake = 20; 
-        createExplosionEffect(b.x, b.y);
         
         // Alert nearby enemies to the sound
         enemies.forEach(e => {
@@ -1126,33 +728,31 @@ async function endTurn() {
                     e.soundLocation = {x: b.x, y: b.y};
                     e.investigationTurns = 5;
                     e.state = 'investigating';
-                    e.thought = 'Heard explosion!';
-                    e.thoughtTimer = 3;
+                    createSpeechBubble(e.x, e.y, "What was that?", "#ff9900");
                 }
             }
         });
         
-        // Kill enemies in blast radius one by one
         const enemiesInBlast = enemies.filter(e => 
             e.alive && Math.abs(e.x-b.x)<=1 && Math.abs(e.y-b.y)<=1
         );
         
         for(let e of enemiesInBlast) {
-            await new Promise(resolve => setTimeout(resolve, 300)); // Wait between deaths
+            await new Promise(resolve => setTimeout(resolve, 300));
             e.alive = false; 
             e.state = 'dead';
             stats.kills++;
-            createDeathEffect(e.x, e.y);
+            createSpeechBubble(e.x, e.y, "💀", "#ff0000");
         }
     }
 
-    // Process all enemies with delays
+    // Process all enemies with random delays
     for(let e of enemies.filter(g => g.alive)) {
         currentEnemyTurn = e;
         centerOnUnit(e.x, e.y);
         
-        // Wait before enemy moves
-        await new Promise(resolve => setTimeout(resolve, 800));
+        // Random wait before enemy moves (300-1200ms)
+        await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 900));
         
         await processEnemyTurn(e);
         
@@ -1174,12 +774,11 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
     combatSequence = true;
     
     // Player attacks first
-    addUnitText(player.x, player.y, "🗡️ ATTACK!", "#00d2ff", 2);
+    createSpeechBubble(player.x, player.y, "🗡️ ATTACK!", "#00d2ff", 1.5);
     await new Promise(resolve => setTimeout(resolve, 500));
     
     enemy.hp -= playerDamage;
-    createDamageEffect(enemy.x, enemy.y, playerDamage);
-    addUnitText(enemy.x, enemy.y, `-${playerDamage}`, "#ff0000", 2);
+    createSpeechBubble(enemy.x, enemy.y, `-${playerDamage}`, "#ff0000", 1.5);
     
     await new Promise(resolve => setTimeout(resolve, 800));
     
@@ -1187,7 +786,7 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
         enemy.alive = false;
         enemy.state = 'dead';
         stats.kills++;
-        createDeathEffect(enemy.x, enemy.y);
+        createSpeechBubble(enemy.x, enemy.y, "💀", "#ff0000", 2);
         combatSequence = false;
         return true;
     }
@@ -1195,12 +794,11 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
     // Enemy counterattacks if in range
     const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
     if(dist <= enemy.attackRange) {
-        addUnitText(enemy.x, enemy.y, `${enemy.type} ATTACK!`, enemy.color, 2);
+        createSpeechBubble(enemy.x, enemy.y, `${enemy.type} ATTACK!`, enemy.color, 1.5);
         await new Promise(resolve => setTimeout(resolve, 500));
         
         playerHP -= enemy.damage;
-        createDamageEffect(player.x, player.y, enemy.damage, true);
-        addUnitText(player.x, player.y, `-${enemy.damage}`, "#ff66ff", 2);
+        createSpeechBubble(player.x, player.y, `-${enemy.damage}`, "#ff66ff", 1.5);
         updateHPDisplay();
         
         await new Promise(resolve => setTimeout(resolve, 800));
@@ -1208,7 +806,6 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
         if(playerHP <= 0) {
             gameOver = true;
             document.getElementById('gameOverScreen').classList.remove('hidden');
-            document.getElementById('resultScreen').classList.add('hidden');
             showGameOverStats();
             combatSequence = false;
             return false;
@@ -1313,7 +910,7 @@ function animMove(obj, tx, ty, speed, cb) {
         obj.ax = sx + (tx - sx) * p; 
         obj.ay = sy + (ty - sy) * p;
         
-        if(Math.random() < 0.3 && obj === player) {
+        if(Math.random() < 0.5 && obj === player) {
             createFootstepEffect(sx + (tx - sx) * p, sy + (ty - sy) * p);
         }
         
@@ -1343,12 +940,15 @@ function autoSwitchToMove() {
 function playerWait() { 
     if(playerTurn) { 
         playerTurn = false; 
-        addUnitText(player.x, player.y, "⏳ WAITING", "#aaaaaa", 2);
+        createSpeechBubble(player.x, player.y, "⏳ WAITING", "#aaaaaa", 1.5);
         endTurn(); 
     } 
 }
 
 function showVictoryStats() {
+    document.getElementById('resultScreen').classList.remove('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    
     const statsTable = document.getElementById('statsTable');
     const rankLabel = document.getElementById('rankLabel');
     
@@ -1415,61 +1015,24 @@ function showVictoryStats() {
 }
 
 function showGameOverStats() {
-    const statsTable = document.getElementById('statsTable');
+    document.getElementById('gameOverScreen').classList.remove('hidden');
+    document.getElementById('resultScreen').classList.add('hidden');
     
-    // Calculate score even on game over
-    let score = Math.max(0, stats.kills * 100 + stats.coins * 50 - turnCount * 5 - stats.itemsUsed * 10);
+    const statsTable = document.getElementById('statsTable');
     
     statsTable.innerHTML = `
         <div><span>MISSION FAILED</span><span></span></div>
+        <div><span>You were defeated!</span><span></span></div>
         <div><span>Turns Survived:</span><span>${turnCount}</span></div>
         <div><span>Guards Eliminated:</span><span>${stats.kills}</span></div>
         <div><span>Gold Collected:</span><span>${stats.coins}</span></div>
-        <div><span>Items Used:</span><span>${stats.itemsUsed}</span></div>
-        <div><span>Final Score:</span><span style="color: #ff3333; font-weight: bold;">${score}</span></div>
         <div style="font-size: 12px; margin-top: 15px; color: #aaa; font-style: italic;">Better luck next time!</div>
     `;
 }
 
 // ============================================
-// LINE OF SIGHT CHECKING
+// LINE OF SIGHT CHECKING - FIXED
 // ============================================
-
-function checkLineOfSightRay(x0, y0, x1, y1) {
-    const dx = Math.abs(x1 - x0);
-    const dy = Math.abs(y1 - y0);
-    const sx = (x0 < x1) ? 1 : -1;
-    const sy = (y0 < y1) ? 1 : -1;
-    let err = dx - dy;
-    
-    let currentX = x0;
-    let currentY = y0;
-    
-    let firstStep = true;
-    
-    while(true) {
-        if(!firstStep) {
-            if(grid[currentY][currentX] === WALL) {
-                return false;
-            }
-        }
-        firstStep = false;
-        
-        if(currentX === x1 && currentY === y1) {
-            return true;
-        }
-        
-        const e2 = 2 * err;
-        if(e2 > -dy) {
-            err -= dy;
-            currentX += sx;
-        }
-        if(e2 < dx) {
-            err += dx;
-            currentY += sy;
-        }
-    }
-}
 
 function hasLineOfSight(e, px, py) {
     if(hasReachedExit) return false;
@@ -1480,15 +1043,19 @@ function hasLineOfSight(e, px, py) {
     
     if(distance > e.visionRange) return false;
     
-    const angleToPlayer = Math.atan2(dy, dx);
-    const enemyAngle = Math.atan2(e.dir.y, e.dir.x);
-    let angleDiff = Math.abs(angleToPlayer - enemyAngle);
+    // Check if anything blocks the line
+    const steps = Math.max(Math.abs(dx), Math.abs(dy));
+    for(let i = 1; i <= steps; i++) {
+        const tx = Math.round(e.x + (dx / steps) * i);
+        const ty = Math.round(e.y + (dy / steps) * i);
+        
+        if(tx === px && ty === py) break; // Reached target
+        
+        if(tx < 0 || tx >= mapDim || ty < 0 || ty >= mapDim) return false;
+        if(grid[ty][tx] === WALL) return false;
+    }
     
-    if(angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
-    
-    if(angleDiff > 0.7) return false;
-    
-    return checkLineOfSightRay(e.x, e.y, px, py);
+    return true;
 }
 
 // ============================================
@@ -1498,6 +1065,7 @@ function hasLineOfSight(e, px, py) {
 window.addEventListener('load', () => {
     loadSprites();
     initAudio();
+    log("Game loaded. Press START MISSION to begin.", "#0f0");
 });
 
 // Export functions that other scripts need
@@ -1505,12 +1073,6 @@ window.animMove = animMove;
 window.log = log;
 window.processCombatSequence = processCombatSequence;
 window.hasLineOfSight = hasLineOfSight;
-window.checkLineOfSightRay = checkLineOfSightRay;
-window.createDeathEffect = createDeathEffect;
-window.createTrapEffect = createTrapEffect;
-window.createAlertEffect = createAlertEffect;
-window.createCoinPickupEffect = createCoinPickupEffect;
-window.createHideEffect = createHideEffect;
-window.playSound = playSound;
+window.createSpeechBubble = createSpeechBubble;
+window.createFootstepEffect = createFootstepEffect;
 window.autoSwitchToMove = autoSwitchToMove;
-window.addUnitText = addUnitText;
