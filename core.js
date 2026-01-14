@@ -14,6 +14,7 @@ let camX = 0, camY = 0, zoom = 1.0;
 let showMinimap = false;
 let showHighlights = true; // Always true now
 let highlightedTiles = [];
+let hasReachedExit = false; // NEW: Track if player reached exit
 
 // Canvas and rendering
 const canvas = document.getElementById('game');
@@ -34,6 +35,9 @@ const modeColors = {
 
 function initGame() {
     mapDim = Math.min(20, Math.max(8, parseInt(document.getElementById('mapSize').value) || 12));
+    
+    // Reset exit reached flag
+    hasReachedExit = false;
     
     // Remove highlight toggle from menu and always show highlights
     showHighlights = true;
@@ -535,6 +539,13 @@ function updateToolCounts() {
 // ============================================
 
 async function endTurn() {
+    // If player already reached exit, don't process enemies
+    if(hasReachedExit) {
+        turnCount++; 
+        playerTurn = true;
+        return;
+    }
+    
     // Process Bombs
     let exploding = [];
     activeBombs = activeBombs.filter(b => {
@@ -588,6 +599,9 @@ async function endTurn() {
 }
 
 function checkGameOver() {
+    // Don't game over if player already reached exit
+    if(hasReachedExit) return;
+    
     gameOver = true; 
     document.getElementById('gameOverScreen').classList.remove('hidden');
     log("YOU WERE SPOTTED!", "#f00");
@@ -704,6 +718,7 @@ function setMode(m) {
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
     updateModeIndicator();
+    // REMOVED: No log message for mode change
 }
 
 function playerWait() { 
@@ -718,21 +733,51 @@ function showVictoryStats() {
     const statsTable = document.getElementById('statsTable');
     const rankLabel = document.getElementById('rankLabel');
     
-    let rank = "Novice";
-    let score = stats.kills * 100 + stats.coins * 50 - turnCount * 5 - stats.itemsUsed * 10;
+    // Calculate score with minimum of 0 (no negative scores)
+    let score = Math.max(0, stats.kills * 100 + stats.coins * 50 - turnCount * 5 - stats.itemsUsed * 10);
     
-    if(score > 500) rank = "Grand Master";
-    else if(score > 300) rank = "Expert";
-    else if(score > 150) rank = "Adept";
+    // Tenchu-style rankings
+    let rank = "Novice";
+    let rankDescription = "";
+    
+    if(score >= 1000) {
+        rank = "Grand Master";
+        rankDescription = "Perfect stealth, maximum efficiency";
+    } else if(score >= 750) {
+        rank = "Shadow Master";
+        rankDescription = "Flawless execution, unseen and unheard";
+    } else if(score >= 500) {
+        rank = "Master Ninja";
+        rankDescription = "Superior technique, few could match";
+    } else if(score >= 350) {
+        rank = "Expert";
+        rankDescription = "Skilled infiltration, clean work";
+    } else if(score >= 200) {
+        rank = "Adept";
+        rankDescription = "Competent performance, room for improvement";
+    } else if(score >= 100) {
+        rank = "Assassin";
+        rankDescription = "Ruthless but sloppy";
+    } else if(score >= 50) {
+        rank = "Initiate";
+        rankDescription = "Basic skills shown";
+    } else {
+        rank = "Novice";
+        rankDescription = "Survived, but barely";
+    }
     
     rankLabel.textContent = rank;
     
     statsTable.innerHTML = `
-        <div><span>Turns:</span><span>${turnCount}</span></div>
+        <div><span>Mission Complete</span></div>
+        <div><span>Turns Taken:</span><span>${turnCount}</span></div>
         <div><span>Guards Eliminated:</span><span>${stats.kills}</span></div>
         <div><span>Gold Collected:</span><span>${stats.coins}</span></div>
         <div><span>Items Used:</span><span>${stats.itemsUsed}</span></div>
-        <div><span>Final Score:</span><span>${score}</span></div>
+        <div style="border-top: 1px solid rgba(255,255,255,0.2); margin-top: 10px; padding-top: 10px;">
+            <span>Final Score:</span><span style="color: var(--accent); font-weight: bold;">${score}</span>
+        </div>
+        <div style="font-size: 12px; margin-top: 15px; color: #aaa; font-style: italic;">${rankDescription}</div>
     `;
 }
 
@@ -780,6 +825,9 @@ function checkLineOfSightRay(x0, y0, x1, y1) {
 }
 
 function hasLineOfSight(e, px, py) {
+    // Don't check if player has reached exit
+    if(hasReachedExit) return false;
+    
     // Calculate distance
     const dx = px - e.x;
     const dy = py - e.y;
