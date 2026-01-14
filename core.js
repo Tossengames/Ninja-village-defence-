@@ -577,7 +577,7 @@ function calculateHighlightedTiles() {
     highlightedTiles = [];
     if(!playerTurn) return;
     
-    const range = 2;
+    const range = 2; // Highlight range is still 2 tiles
     const colorSet = modeColors[selectMode];
     
     for(let dy = -range; dy <= range; dy++) {
@@ -984,7 +984,8 @@ function checkGameOver() {
     
     gameOver = true; 
     document.getElementById('gameOverScreen').classList.remove('hidden');
-    log("🚨 MISSION FAILED: You were spotted!", "#f00");
+    document.getElementById('resultScreen').classList.add('hidden');
+    log("YOU WERE SPOTTED!", "#f00");
 }
 
 // ============================================
@@ -1040,12 +1041,12 @@ canvas.addEventListener('touchend', e => {
     const isValidMove = highlightedTiles.some(t => t.x === tx && t.y === ty);
 
     if(selectMode === 'move' && dist <= 2 && isValidMove) {
-        // Call handlePlayerMove - it will handle pathfinding
+        // Call handlePlayerMove with the target position (not limited to 2 tiles for movement)
         handlePlayerMove(tx, ty);
     } else if(selectMode !== 'move' && dist <= 2 && grid[ty][tx] === FLOOR && isValidMove) {
         handleItemPlacement(tx, ty, selectMode);
     } else if(!isValidMove) {
-        log("❌ Out of range!", "#f00");
+        log("Out of range!", "#f00");
     }
 });
 
@@ -1106,7 +1107,7 @@ function setMode(m) {
 function playerWait() { 
     if(playerTurn) { 
         playerTurn = false; 
-        log("⏳ Waiting...", "#aaa");
+        log("Waiting...", "#aaa");
         endTurn(); 
     } 
 }
