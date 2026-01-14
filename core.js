@@ -13,8 +13,15 @@ let inv = { trap: 3, rice: 2, bomb: 1 };
 let camX = 0, camY = 0, zoom = 1.0;
 let showMinimap = false;
 let showHighlights = true;
+let showLog = true; // New: Toggle log visibility
 let highlightedTiles = [];
 let hasReachedExit = false;
+let currentEnemyTurn = null; // Track which enemy is currently moving
+let combatMode = false; // New: Combat mode flag
+
+// Player stats
+let playerHP = 10;
+let playerMaxHP = 10;
 
 // VFX Systems
 let particles = [];
@@ -23,6 +30,7 @@ let coinPickupEffects = [];
 let hideEffects = [];
 let explosionEffects = [];
 let footstepEffects = [];
+let damageEffects = [];
 let soundQueue = [];
 
 // Canvas and rendering
@@ -39,7 +47,15 @@ const modeColors = {
     'move': { fill: 'rgba(0, 210, 255, 0.15)', border: 'rgba(0, 210, 255, 0.7)', glow: 'rgba(0, 210, 255, 0.3)' },
     'trap': { fill: 'rgba(255, 100, 100, 0.15)', border: 'rgba(255, 100, 100, 0.7)', glow: 'rgba(255, 100, 100, 0.3)' },
     'rice': { fill: 'rgba(255, 255, 100, 0.15)', border: 'rgba(255, 255, 100, 0.7)', glow: 'rgba(255, 255, 100, 0.3)' },
-    'bomb': { fill: 'rgba(255, 50, 150, 0.15)', border: 'rgba(255, 50, 150, 0.7)', glow: 'rgba(255, 50, 150, 0.3)' }
+    'bomb': { fill: 'rgba(255, 50, 150, 0.15)', border: 'rgba(255, 50, 150, 0.7)', glow: 'rgba(255, 50, 150, 0.3)' },
+    'attack': { fill: 'rgba(255, 0, 0, 0.3)', border: 'rgba(255, 0, 0, 0.8)', glow: 'rgba(255, 0, 0, 0.5)' } // New attack mode
+};
+
+// Enemy types
+const ENEMY_TYPES = {
+    NORMAL: { range: 1, hp: 10, speed: 0.1, damage: 2 },
+    ARCHER: { range: 3, hp: 8, speed: 0.08, damage: 1 },
+    SPEAR: { range: 2, hp: 12, speed: 0.09, damage: 3 }
 };
 
 // ============================================
@@ -135,6 +151,26 @@ function playSound(type, options = {}) {
                 gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
                 oscillator.start();
                 oscillator.stop(audioContext.currentTime + 0.2);
+                break;
+                
+            case 'attack':
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(150, audioContext.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.2);
+                break;
+                
+            case 'hurt':
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.3);
                 break;
         }
         
@@ -280,7 +316,30 @@ function createAlertEffect(x, y) {
     });
     
     playSound('alert');
-    log("🚨 Guard alerted!", "#ff3333");
+}
+
+function createDamageEffect(x, y, isPlayer = false) {
+    for(let i = 0; i < 8; i++) {
+        particles.push({
+            x: x * TILE + TILE/2,
+            y: y * TILE + TILE/2,
+            vx: (Math.random() - 0.5) * 6,
+            vy: (Math.random() - 0.5) * 6,
+            life: 1.0,
+            color: isPlayer ? 'rgba(255, 100, 255, 0.8)' : 'rgba(255, 100, 100, 0.8)',
+            size: Math.random() * 3 + 2
+        });
+    }
+    
+    damageEffects.push({
+        x: x * TILE + TILE/2,
+        y: y * TILE + TILE/2 - 20,
+        value: isPlayer ? "-2" : "-2",
+        life: 1.0,
+        color: isPlayer ? '#ff66ff' : '#ff6666'
+    });
+    
+    playSound('hurt');
 }
 
 function updateVFX() {
@@ -316,6 +375,12 @@ function updateVFX() {
     footstepEffects = footstepEffects.filter(f => {
         f.life -= 0.1;
         return f.life > 0;
+    });
+    
+    damageEffects = damageEffects.filter(d => {
+        d.y -= 1;
+        d.life -= 0.03;
+        return d.life > 0;
     });
 }
 
@@ -389,6 +454,13 @@ function drawVFX() {
         ctx.arc(f.x, f.y, f.size * f.life, 0, Math.PI * 2);
         ctx.fill();
     });
+    
+    damageEffects.forEach(d => {
+        ctx.fillStyle = d.color.replace('1.0', d.life.toString());
+        ctx.font = "bold 16px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(d.value, d.x, d.y);
+    });
 }
 
 // ============================================
@@ -399,6 +471,8 @@ function initGame() {
     mapDim = Math.min(20, Math.max(8, parseInt(document.getElementById('mapSize').value) || 12));
     
     hasReachedExit = false;
+    playerHP = playerMaxHP;
+    combatMode = false;
     
     particles = [];
     bloodStains = [];
@@ -406,16 +480,20 @@ function initGame() {
     hideEffects = [];
     explosionEffects = [];
     footstepEffects = [];
+    damageEffects = [];
     
     showHighlights = true;
+    showLog = true;
     
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('toolbar').classList.remove('hidden');
     document.getElementById('rangeIndicator').classList.remove('hidden');
+    document.getElementById('logToggle').classList.remove('hidden');
     
     generateLevel();
     centerCamera();
     updateToolCounts();
+    updateHPDisplay();
     requestAnimationFrame(gameLoop);
 }
 
@@ -454,11 +532,31 @@ function generateLevel() {
         
         const visionRange = Math.floor(Math.random() * 3) + 1;
         
+        // Random enemy type
+        const typeRoll = Math.random();
+        let enemyType, enemyStats;
+        if(typeRoll < 0.6) {
+            enemyType = 'NORMAL';
+            enemyStats = ENEMY_TYPES.NORMAL;
+        } else if(typeRoll < 0.85) {
+            enemyType = 'SPEAR';
+            enemyStats = ENEMY_TYPES.SPEAR;
+        } else {
+            enemyType = 'ARCHER';
+            enemyStats = ENEMY_TYPES.ARCHER;
+        }
+        
         enemies.push({
             x: ex, y: ey, 
             ax: ex, ay: ey, 
             dir: {x: 1, y: 0}, 
             alive: true,
+            hp: enemyStats.hp,
+            maxHP: enemyStats.hp,
+            type: enemyType,
+            attackRange: enemyStats.range,
+            damage: enemyStats.damage,
+            speed: enemyStats.speed,
             visionRange: visionRange,
             state: 'patrolling',
             investigationTarget: null,
@@ -470,7 +568,9 @@ function generateLevel() {
             hearingRange: 6,
             hasHeardSound: false,
             soundLocation: null,
-            returnToPatrolPos: {x: ex, y: ey}
+            returnToPatrolPos: {x: ex, y: ey},
+            lastSeenPlayer: null,
+            chaseTurns: 0
         });
     }
 }
@@ -568,6 +668,15 @@ function calculateHighlightedTiles() {
                               tile === COIN ? 'coin' : 'move'
                     });
                 }
+            } else if(selectMode === 'attack') {
+                // Attack mode highlights adjacent tiles
+                if(dist === 1 && (tile === FLOOR || tile === HIDE)) {
+                    highlightedTiles.push({
+                        x: tx, y: ty,
+                        color: colorSet,
+                        type: 'attack'
+                    });
+                }
             } else {
                 if(tile === FLOOR) {
                     highlightedTiles.push({
@@ -620,10 +729,25 @@ function gameLoop() {
         });
     }
 
+    // Draw enemies
     enemies.forEach(e => {
         if(!e.alive) return;
         
-        if(e.state === 'alerted') {
+        // Draw health bar
+        const healthPercent = e.hp / e.maxHP;
+        ctx.fillStyle = healthPercent > 0.5 ? "#0f0" : healthPercent > 0.25 ? "#ff0" : "#f00";
+        ctx.fillRect(e.ax * TILE + 5, e.ay * TILE - 8, (TILE - 10) * healthPercent, 4);
+        ctx.strokeStyle = "#333";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(e.ax * TILE + 5, e.ay * TILE - 8, TILE - 10, 4);
+        
+        // Draw HP text
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 10px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(e.hp.toString(), e.ax * TILE + TILE/2, e.ay * TILE - 4);
+        
+        if(e.state === 'alerted' || e.state === 'chasing') {
             ctx.fillStyle = "rgba(255, 50, 50, 0.3)";
             ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
         } else if(e.state === 'investigating') {
@@ -638,15 +762,39 @@ function gameLoop() {
         
         if(e.thought && e.thoughtTimer > 0) {
             drawThoughtBubble(e);
-            e.thoughtTimer--;
         }
         
         if(!player.isHidden && e.state !== 'dead') {
             drawVisionCone(e);
         }
+        
+        // Draw attack range if alerted/chasing
+        if((e.state === 'alerted' || e.state === 'chasing') && !player.isHidden) {
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.arc(e.ax * TILE + 30, e.ay * TILE + 30, e.attackRange * TILE, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
     });
 
     drawVFX();
+
+    // Draw player health bar
+    const playerHealthPercent = playerHP / playerMaxHP;
+    ctx.fillStyle = playerHealthPercent > 0.5 ? "#0f0" : playerHealthPercent > 0.25 ? "#ff0" : "#f00";
+    ctx.fillRect(player.ax * TILE + 5, player.ay * TILE - 8, (TILE - 10) * playerHealthPercent, 4);
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(player.ax * TILE + 5, player.ay * TILE - 8, TILE - 10, 4);
+    
+    // Draw player HP text
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 10px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(playerHP.toString(), player.ax * TILE + TILE/2, player.ay * TILE - 4);
 
     ctx.shadowColor = player.isHidden ? 'rgba(0, 210, 255, 0.5)' : 'rgba(255, 255, 255, 0.3)';
     ctx.shadowBlur = 15;
@@ -674,20 +822,20 @@ function gameLoop() {
 function drawThoughtBubble(e) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.beginPath();
-    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 10, 12, 0, Math.PI * 2);
+    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 25, 12, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 10, 12, 0, Math.PI * 2);
+    ctx.arc(e.ax * TILE + TILE/2, e.ay * TILE - 25, 12, 0, Math.PI * 2);
     ctx.stroke();
     
-    ctx.font = '20px Arial';
+    ctx.font = '16px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#000';
-    ctx.fillText(e.thought, e.ax * TILE + TILE/2, e.ay * TILE - 10);
+    ctx.fillText(e.thought, e.ax * TILE + TILE/2, e.ay * TILE - 25);
 }
 
 function drawVisionCone(e) {
@@ -698,7 +846,7 @@ function drawVisionCone(e) {
         e.ax * TILE + 30, e.ay * TILE + 30, drawRange * TILE
     );
     
-    if(e.state === 'alerted') {
+    if(e.state === 'alerted' || e.state === 'chasing') {
         gradient.addColorStop(0, 'rgba(255, 0, 0, 0.6)');
         gradient.addColorStop(0.3, 'rgba(255, 50, 50, 0.4)');
         gradient.addColorStop(0.7, 'rgba(255, 100, 100, 0.2)');
@@ -755,13 +903,13 @@ function drawVisionCone(e) {
     ctx.closePath();
     ctx.fill();
     
-    ctx.strokeStyle = e.state === 'alerted' ? 'rgba(255, 0, 0, 0.8)' : 
+    ctx.strokeStyle = e.state === 'alerted' || e.state === 'chasing' ? 'rgba(255, 0, 0, 0.8)' : 
                      e.state === 'investigating' ? 'rgba(255, 165, 0, 0.6)' :
                      e.state === 'eating' ? 'rgba(0, 255, 0, 0.6)' : 'rgba(255, 100, 100, 0.5)';
     ctx.lineWidth = 2;
     ctx.stroke();
     
-    ctx.strokeStyle = e.state === 'alerted' ? 'rgba(255, 0, 0, 0.3)' : 'rgba(255, 100, 100, 0.2)';
+    ctx.strokeStyle = e.state === 'alerted' || e.state === 'chasing' ? 'rgba(255, 0, 0, 0.3)' : 'rgba(255, 100, 100, 0.2)';
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
     ctx.beginPath();
@@ -800,7 +948,7 @@ function drawMinimap() {
     ctx.fill();
     
     enemies.filter(e => e.alive).forEach(e => {
-        const enemyColor = e.state === 'alerted' ? "#ff0000" :
+        const enemyColor = e.state === 'alerted' || e.state === 'chasing' ? "#ff0000" :
                           e.state === 'investigating' ? "#ff9900" :
                           e.state === 'eating' ? "#00ff00" : "#ff3333";
         ctx.fillStyle = enemyColor;
@@ -824,6 +972,12 @@ function centerCamera() {
     clampCamera();
 }
 
+function centerOnUnit(x, y) {
+    camX = (canvas.width/2) - (x*TILE + TILE/2)*zoom;
+    camY = (canvas.height/2) - (y*TILE + TILE/2)*zoom;
+    clampCamera();
+}
+
 function clampCamera() {
     const mapSize = mapDim * TILE * zoom;
     const pad = 100;
@@ -835,10 +989,19 @@ function toggleMinimap() {
     showMinimap = !showMinimap; 
 }
 
+function toggleLog() {
+    showLog = !showLog;
+    document.getElementById('missionLog').style.display = showLog ? 'flex' : 'none';
+}
+
 function updateToolCounts() {
     document.getElementById('trapCount').textContent = inv.trap;
     document.getElementById('riceCount').textContent = inv.rice;
     document.getElementById('bombCount').textContent = inv.bomb;
+}
+
+function updateHPDisplay() {
+    document.getElementById('playerHP').textContent = `${playerHP}/${playerMaxHP}`;
 }
 
 // ============================================
@@ -892,30 +1055,50 @@ async function endTurn() {
         });
     });
 
+    // Process all enemies
     for(let e of enemies.filter(g => g.alive)) {
+        currentEnemyTurn = e;
+        centerOnUnit(e.x, e.y);
+        
+        // Wait a bit before enemy moves
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         await processEnemyTurn(e);
+        
+        // Wait a bit after enemy moves
+        await new Promise(resolve => setTimeout(resolve, 300));
     }
+    
+    currentEnemyTurn = null;
+    centerCamera();
     
     turnCount++; 
     playerTurn = true;
 }
 
-function checkGameOver() {
-    if(hasReachedExit) return;
-    
-    gameOver = true; 
-    document.getElementById('gameOverScreen').classList.remove('hidden');
-    document.getElementById('resultScreen').classList.add('hidden');
-    log("YOU WERE SPOTTED!", "#f00");
-    
-    const statsTable = document.getElementById('statsTable');
-    statsTable.innerHTML = `
-        <div><span>Turns Taken:</span><span>${turnCount}</span></div>
-        <div><span>Guards Eliminated:</span><span>${stats.kills}</span></div>
-        <div><span>Gold Collected:</span><span>${stats.coins}</span></div>
-        <div><span>Items Used:</span><span>${stats.itemsUsed}</span></div>
-        <div style="font-size: 12px; margin-top: 15px; color: #aaa; font-style: italic;">Mission Failed</div>
-    `;
+function checkCombat() {
+    // Check if any enemy can attack player
+    for(let e of enemies.filter(g => g.alive)) {
+        if(e.state === 'alerted' || e.state === 'chasing') {
+            const dist = Math.hypot(e.x - player.x, e.y - player.y);
+            if(dist <= e.attackRange) {
+                // Enemy attacks player
+                playerHP -= e.damage;
+                createDamageEffect(player.x, player.y, true);
+                log(`💥 ${e.type} guard hit you for ${e.damage} damage!`, "#ff3333");
+                updateHPDisplay();
+                
+                if(playerHP <= 0) {
+                    gameOver = true;
+                    document.getElementById('gameOverScreen').classList.remove('hidden');
+                    document.getElementById('resultScreen').classList.add('hidden');
+                    log("☠️ You were defeated in combat!", "#f00");
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 // ============================================
@@ -972,7 +1155,9 @@ canvas.addEventListener('touchend', e => {
 
     if(selectMode === 'move' && dist <= 2 && isValidMove) {
         handlePlayerMove(tx, ty);
-    } else if(selectMode !== 'move' && dist <= 2 && grid[ty][tx] === FLOOR && isValidMove) {
+    } else if(selectMode === 'attack' && dist === 1 && isValidMove) {
+        handleAttack(tx, ty);
+    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR && isValidMove) {
         handleItemPlacement(tx, ty, selectMode);
     } else if(!isValidMove) {
         log("Out of range!", "#f00");
@@ -984,6 +1169,8 @@ canvas.addEventListener('touchend', e => {
 // ============================================
 
 function log(msg, color="#aaa") {
+    if(!showLog) return;
+    
     const logDiv = document.getElementById('missionLog');
     const d = document.createElement('div');
     d.style.color = color;
@@ -1029,6 +1216,11 @@ function setMode(m) {
     selectMode = m;
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
+}
+
+// Auto-switch to move mode after item use
+function autoSwitchToMove() {
+    setMode('move');
 }
 
 function playerWait() { 
@@ -1088,6 +1280,7 @@ function showVictoryStats() {
         <div><span>Guards Eliminated:</span><span>${stats.kills}</span></div>
         <div><span>Gold Collected:</span><span>${stats.coins}</span></div>
         <div><span>Items Used:</span><span>${stats.itemsUsed}</span></div>
+        <div><span>Final Health:</span><span>${playerHP}/${playerMaxHP}</span></div>
         <div style="border-top: 1px solid rgba(255,255,255,0.2); margin-top: 10px; padding-top: 10px;">
             <span>Final Score:</span><span style="color: ${rankColor}; font-weight: bold;">${score}</span>
         </div>
@@ -1180,3 +1373,4 @@ window.createAlertEffect = createAlertEffect;
 window.createCoinPickupEffect = createCoinPickupEffect;
 window.createHideEffect = createHideEffect;
 window.playSound = playSound;
+window.autoSwitchToMove = autoSwitchToMove;
