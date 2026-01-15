@@ -112,6 +112,16 @@ function playSound(type, options = {}) {
                 oscillator.start();
                 oscillator.stop(audioContext.currentTime + 0.3);
                 break;
+                
+            case 'gas':
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(220, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(110, audioContext.currentTime + 1.0);
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1.0);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 1.0);
+                break;
         }
         
     } catch (e) {
@@ -119,7 +129,7 @@ function playSound(type, options = {}) {
     }
 }
 
-// VFX Functions (same as before, just the functions without console logs)
+// VFX Functions
 function createBloodStain(x, y) {
     bloodStains.push({
         x: x * TILE + TILE/2,
@@ -280,6 +290,25 @@ function createDamageEffect(x, y, damage, isPlayer = false) {
     });
     
     playSound(isPlayer ? 'hurt' : 'attack');
+}
+
+function createGasEffect(x, y) {
+    for(let i = 0; i < 15; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * TILE/2;
+        particles.push({
+            x: x * TILE + TILE/2 + Math.cos(angle) * dist,
+            y: y * TILE + TILE/2 + Math.sin(angle) * dist,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: (Math.random() - 0.5) * 0.5,
+            life: 2.0,
+            color: 'rgba(153, 50, 204, 0.6)',
+            size: Math.random() * 6 + 3
+        });
+    }
+    
+    playSound('gas');
+    createSpeechBubble(x, y, "💨 SLEEPING GAS!", "#9932cc", 1.5);
 }
 
 function createSpeechBubble(x, y, text, color = "#ffffff", duration = 1.5) {
