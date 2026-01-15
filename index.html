@@ -9,20 +9,12 @@
 <body>
     <canvas id="game"></canvas>
     
-    <!-- Mission Log (Top Left) -->
-    <div id="missionLog" style="display: flex;"></div>
-    
-    <!-- HP Display -->
-    <div id="hpDisplay" class="hidden">HP: <span id="playerHP">10/10</span></div>
-    
-    <!-- Range Indicator (Bottom Left) -->
-    <div id="rangeIndicator" class="hidden">Tap highlighted tiles to move/attack</div>
-    <div class="camera-hint hidden" id="cameraHint">Drag with one finger to pan • Pinch to zoom</div>
+    <!-- Mission Log (Top Left) - Hidden by default -->
+    <div id="missionLog" class="hidden"></div>
     
     <!-- UI Controls (Top Right) -->
     <div id="ui-controls" class="hidden">
         <button id="mapToggle" onclick="toggleMinimap()">Toggle Map</button>
-        <button id="logToggle" onclick="toggleLog()">Toggle Log</button>
     </div>
     
     <!-- Toolbar (Bottom Center) -->
