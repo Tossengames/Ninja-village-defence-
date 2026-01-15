@@ -128,12 +128,13 @@ canvas {
     display: none;
 }
 
+/* --- TOOL BUTTONS - ALL SAME STYLE --- */
 .tool-btn {
     width: 65px;
     height: 65px;
     min-width: 65px;
     background: linear-gradient(145deg, #1a1a1a, #222);
-    border: 2px solid #444;
+    border: 2px solid #444; /* All buttons have same border color */
     border-radius: 15px;
     display: flex;
     flex-direction: column;
@@ -153,7 +154,7 @@ canvas {
 }
 
 .tool-btn.active {
-    border-color: var(--blue);
+    border-color: var(--blue); /* Only active state changes border */
     color: #fff;
     background: linear-gradient(145deg, #1e2a30, #2a3a42);
     box-shadow: 0 0 20px rgba(0, 210, 255, 0.6), 
@@ -183,29 +184,8 @@ canvas {
     justify-content: center;
 }
 
-/* Attack button specific styling */
-#btnAttack {
-    border-color: #ff3333;
-}
-
-#btnAttack.active {
-    border-color: #ff0000;
-    background: linear-gradient(145deg, #3a1e1e, #422a2a);
-    box-shadow: 0 0 20px rgba(255, 0, 0, 0.6), 
-                inset 0 0 10px rgba(255, 0, 0, 0.2);
-}
-
-/* Gas button specific styling */
-#btnGas {
-    border-color: #8a2be2;
-}
-
-#btnGas.active {
-    border-color: #9932cc;
-    background: linear-gradient(145deg, #2e1a3a, #3a2a42);
-    box-shadow: 0 0 20px rgba(153, 50, 204, 0.6), 
-                inset 0 0 10px rgba(153, 50, 204, 0.2);
-}
+/* REMOVED special styling for Attack and Gas buttons */
+/* They now use the same styling as other buttons */
 
 /* --- OVERLAY SCREENS --- */
 .overlay-screen {
