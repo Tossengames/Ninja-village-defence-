@@ -2,19 +2,14 @@
 // ENEMY AI & DETECTION SYSTEM
 // ============================================
 
-console.log("Loading enemy system...");
-
 async function processEnemyTurn(e) {
     if(!e.alive) return;
     
-    // Update enemy detection
     const canSeePlayer = hasLineOfSight(e, player.x, player.y) && !player.isHidden;
     
-    // TRACK WHEN PLAYER IS SPOTTED
     if(canSeePlayer) {
-        // Player is spotted!
         if(e.state !== 'alerted' && e.state !== 'chasing') {
-            stats.timesSpotted++; // Track being spotted
+            stats.timesSpotted++;
             createAlertEffect(e.x, e.y);
             createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 1.5);
             playSound('alert');
@@ -25,7 +20,6 @@ async function processEnemyTurn(e) {
         e.chaseTurns = e.chaseMemory;
     }
     
-    // State-based behavior
     switch(e.state) {
         case 'patrolling':
             await patrolBehavior(e);
@@ -42,7 +36,6 @@ async function processEnemyTurn(e) {
             break;
     }
     
-    // Check for immediate attack after moving
     const distToPlayer = Math.hypot(e.x - player.x, e.y - player.y);
     if(distToPlayer <= e.attackRange && (e.state === 'alerted' || e.state === 'chasing')) {
         await new Promise(resolve => setTimeout(resolve, 300));
@@ -53,11 +46,9 @@ async function processEnemyTurn(e) {
         createDamageEffect(player.x, player.y, e.damage, true);
         createSpeechBubble(player.x, player.y, `-${e.damage}`, "#ff66ff", 1);
         shake = 15;
-        updateHPDisplay();
         
         if(playerHP <= 0) {
             playerHP = 0;
-            updateHPDisplay();
             setTimeout(() => {
                 showGameOverScreen();
             }, 500);
@@ -72,7 +63,6 @@ async function patrolBehavior(e) {
         {x: 1, y: 1}, {x: -1, y: -1}, {x: 1, y: -1}, {x: -1, y: 1}
     ];
     
-    // Check for sounds
     if(e.hasHeardSound && e.soundLocation) {
         e.state = 'investigating';
         e.investigationTarget = e.soundLocation;
@@ -82,13 +72,11 @@ async function patrolBehavior(e) {
         return;
     }
     
-    // Random patrol movement
     const dir = directions[Math.floor(Math.random() * directions.length)];
     const nx = e.x + dir.x;
     const ny = e.y + dir.y;
     
     if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && grid[ny][nx] !== WALL) {
-        // Check for rice
         if(grid[ny][nx] === RICE) {
             e.state = 'eating';
             grid[ny][nx] = FLOOR;
@@ -107,7 +95,6 @@ async function patrolBehavior(e) {
 
 async function chaseBehavior(e) {
     if(e.chaseTurns <= 0) {
-        // Return to patrol
         e.state = 'patrolling';
         createSpeechBubble(e.x, e.y, "Lost them...", "#aaa", 1);
         return;
@@ -115,7 +102,6 @@ async function chaseBehavior(e) {
     
     e.chaseTurns--;
     
-    // Move toward last seen player position
     if(e.lastSeenPlayer) {
         const dx = e.lastSeenPlayer.x - e.x;
         const dy = e.lastSeenPlayer.y - e.y;
@@ -155,7 +141,6 @@ async function investigateBehavior(e) {
         const dy = e.investigationTarget.y - e.y;
         
         if(Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
-            // Reached investigation target
             e.investigationTarget = null;
             createSpeechBubble(e.x, e.y, "Nothing here", "#aaa", 1);
             return;
@@ -187,5 +172,3 @@ async function eatBehavior(e) {
     await new Promise(resolve => setTimeout(resolve, 800));
     e.state = 'patrolling';
 }
-
-console.log("Enemy system loaded");
