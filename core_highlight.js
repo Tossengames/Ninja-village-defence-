@@ -61,31 +61,16 @@ function calculateHighlightedTiles() {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                     if(enemyAtTile) {
                         // Check if enemy can see player for stealth kill
-                        const canSeePlayer = !enemyAtTile.isSleeping && hasLineOfSight(enemyAtTile, player.x, player.y) && !player.isHidden;
-                        const isAlerted = enemyAtTile.state === 'alerted' || enemyAtTile.state === 'chasing';
-                        
-                        if(enemyAtTile.isSleeping) {
-                            // Sleeping enemy - instant stealth kill
-                            highlightedTiles.push({
-                                x: tx, y: ty,
-                                color: modeColors.stealth, // Green for stealth
-                                type: 'stealth'
-                            });
-                        } else if(canSeePlayer || isAlerted) {
-                            // Normal combat
-                            highlightedTiles.push({
-                                x: tx, y: ty,
-                                color: modeColors.attack, // Red for combat
-                                type: 'attack'
-                            });
-                        } else {
-                            // Stealth kill (enemy can't see player)
-                            highlightedTiles.push({
-                                x: tx, y: ty,
-                                color: modeColors.stealth, // Green for stealth
-                                type: 'stealth'
-                            });
-                        }
+                        const canSeePlayer = hasLineOfSight(enemyAtTile, player.x, player.y) && !player.isHidden;
+                        highlightedTiles.push({
+                            x: tx, y: ty,
+                            color: canSeePlayer ? modeColors.attack : {
+                                fill: 'rgba(0, 255, 0, 0.3)',
+                                border: 'rgba(0, 255, 0, 0.8)',
+                                glow: 'rgba(0, 255, 0, 0.5)'
+                            },
+                            type: canSeePlayer ? 'attack' : 'stealth'
+                        });
                     }
                 }
             } else if(selectMode === 'trap' || selectMode === 'rice' || selectMode === 'bomb' || selectMode === 'gas') {
