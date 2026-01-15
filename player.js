@@ -67,7 +67,7 @@ async function handlePlayerMove(targetX, targetY) {
             
             // Switch to attack mode if enemy adjacent
             const adjacentEnemies = enemies.filter(e => 
-                e.alive && !e.isSleeping && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
+                e.alive && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
             );
             
             if(adjacentEnemies.length > 0) {
@@ -130,12 +130,6 @@ async function handleAttack(targetX, targetY) {
         return;
     }
     
-    // If enemy is sleeping, can't attack (must be awake)
-    if(enemy.isSleeping) {
-        createSpeechBubble(player.x, player.y, "Enemy is sleeping!", "#9932cc", 1);
-        return;
-    }
-    
     if(playerUsedActionThisTurn) {
         createSpeechBubble(player.x, player.y, "Already used action this turn!", "#ff9900", 1);
         return;
@@ -143,6 +137,25 @@ async function handleAttack(targetX, targetY) {
     
     playerUsedActionThisTurn = true;
     playerTurn = false; // Immediately end turn after attack
+    
+    // Check if enemy is sleeping - INSTANT KILL (stealth)
+    if(enemy.isSleeping) {
+        createSpeechBubble(player.x, player.y, "💤 SLEEPING KILL!", "#9932cc", 1);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        enemy.alive = false;
+        enemy.state = 'dead';
+        enemy.hp = 0;
+        stats.kills++;
+        stats.stealthKills++; // Count as stealth kill
+        createDeathEffect(targetX, targetY);
+        
+        autoSwitchToMove();
+        setTimeout(() => {
+            endTurn();
+        }, 500);
+        return;
+    }
     
     // Check if enemy can see player (CONE VISION ONLY)
     const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
