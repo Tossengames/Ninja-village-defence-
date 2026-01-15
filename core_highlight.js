@@ -1,8 +1,6 @@
 // ============================================
-// TILE HIGHLIGHTING SYSTEM (UPDATED)
+// TILE HIGHLIGHTING SYSTEM
 // ============================================
-
-console.log("Loading highlighting system...");
 
 function calculateHighlightedTiles() {
     highlightedTiles = [];
@@ -14,15 +12,15 @@ function calculateHighlightedTiles() {
     let range;
     switch(selectMode) {
         case 'move':
-            range = 3; // Player can move 3 tiles
+            range = 3;
             break;
         case 'attack':
-            range = 1; // Attack only adjacent tiles
+            range = 1;
             break;
         case 'trap':
         case 'rice':
         case 'bomb':
-            range = 2; // Items can be placed 2 tiles away
+            range = 2;
             break;
         default:
             range = 2;
@@ -41,7 +39,6 @@ function calculateHighlightedTiles() {
             const tile = grid[ty][tx];
             
             if(selectMode === 'move') {
-                // Only highlight walkable, non-occupied tiles within 3 range
                 if(dist <= 3 && tile !== WALL && tile !== undefined) {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                     if(!enemyAtTile) {
@@ -55,7 +52,6 @@ function calculateHighlightedTiles() {
                     }
                 }
             } else if(selectMode === 'attack') {
-                // Only highlight adjacent tiles with enemies (range = 1)
                 if(dist === 1) {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                     if(enemyAtTile) {
@@ -67,7 +63,6 @@ function calculateHighlightedTiles() {
                     }
                 }
             } else if(selectMode === 'trap' || selectMode === 'rice' || selectMode === 'bomb') {
-                // Highlight empty floor tiles within 2 range
                 if(dist <= 2 && tile === FLOOR) {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                     const hasItem = tile === TRAP || tile === RICE || tile === BOMB || tile === COIN || tile === HIDE || tile === EXIT;
@@ -84,5 +79,3 @@ function calculateHighlightedTiles() {
         }
     }
 }
-
-console.log("Highlighting system loaded");
