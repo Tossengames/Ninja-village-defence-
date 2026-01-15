@@ -3,13 +3,13 @@
 // ============================================
 
 const TILE = 60;
-const FLOOR = 0, WALL = 1, HIDE = 2, EXIT = 3, COIN = 5, TRAP = 6, RICE = 7, BOMB = 8;
+const FLOOR = 0, WALL = 1, HIDE = 2, EXIT = 3, COIN = 5, TRAP = 6, RICE = 7, BOMB = 8, GAS = 9;
 
 // Global game state
-let grid, player, enemies = [], activeBombs = [], turnCount = 1;
+let grid, player, enemies = [], activeBombs = [], activeGas = [], turnCount = 1;
 let selectMode = 'move', gameOver = false, playerTurn = true, shake = 0, mapDim = 12;
 let stats = { kills: 0, coins: 0, itemsUsed: 0, timesSpotted: 0, stealthKills: 0, timeBonus: 0 };
-let inv = { trap: 3, rice: 2, bomb: 1 };
+let inv = { trap: 3, rice: 2, bomb: 1, gas: 2 };
 let camX = 0, camY = 0, zoom = 1.0;
 let showMinimap = false;
 let showHighlights = true;
@@ -19,6 +19,8 @@ let hasReachedExit = false;
 let currentEnemyTurn = null;
 let combatSequence = false;
 let startTime = 0;
+let currentTurnEntity = null; // For camera focus
+let playerHasMovedThisTurn = false;
 
 // Player stats
 let playerHP = 10;
@@ -33,6 +35,7 @@ let explosionEffects = [];
 let footstepEffects = [];
 let damageEffects = [];
 let speechBubbles = [];
+let gasEffects = [];
 
 // Canvas and rendering
 const canvas = document.getElementById('game');
@@ -49,6 +52,7 @@ const modeColors = {
     'trap': { fill: 'rgba(255, 100, 100, 0.15)', border: 'rgba(255, 100, 100, 0.7)', glow: 'rgba(255, 100, 100, 0.3)' },
     'rice': { fill: 'rgba(255, 255, 100, 0.15)', border: 'rgba(255, 255, 100, 0.7)', glow: 'rgba(255, 255, 100, 0.3)' },
     'bomb': { fill: 'rgba(255, 50, 150, 0.15)', border: 'rgba(255, 50, 150, 0.7)', glow: 'rgba(255, 50, 150, 0.3)' },
+    'gas': { fill: 'rgba(153, 50, 204, 0.15)', border: 'rgba(153, 50, 204, 0.7)', glow: 'rgba(153, 50, 204, 0.3)' },
     'attack': { fill: 'rgba(255, 0, 0, 0.3)', border: 'rgba(255, 0, 0, 0.8)', glow: 'rgba(255, 0, 0, 0.5)' }
 };
 
@@ -69,6 +73,7 @@ function initGame() {
     hasReachedExit = false;
     playerHP = playerMaxHP;
     combatSequence = false;
+    playerHasMovedThisTurn = false;
     startTime = Date.now();
     stats = { kills: 0, coins: 0, itemsUsed: 0, timesSpotted: 0, stealthKills: 0, timeBonus: 0 };
     
@@ -80,9 +85,11 @@ function initGame() {
     footstepEffects = [];
     damageEffects = [];
     speechBubbles = [];
+    gasEffects = [];
     
     showHighlights = true;
     showLog = false;
+    currentTurnEntity = player;
     
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('toolbar').classList.remove('hidden');
@@ -171,7 +178,11 @@ function generateLevel() {
             chaseTurns: 0,
             chaseMemory: 5,
             color: enemyStats.color,
-            tint: enemyStats.tint
+            tint: enemyStats.tint,
+            isSleeping: false,
+            sleepTimer: 0,
+            ateRice: false,
+            riceDeathTimer: Math.floor(Math.random() * 5) + 1
         });
     }
 }
@@ -269,14 +280,24 @@ function gameLoop() {
                 drawSprite('floor', x, y);
                 const c = grid[y][x];
                 if(c !== FLOOR) {
-                    const spriteMap = ['','wall','hide','exit','','coin','trap','rice','bomb'];
+                    const spriteMap = ['','wall','hide','exit','','coin','trap','rice','bomb','gas'];
                     drawSprite(spriteMap[c] || '', x, y);
                 }
             }
         }
 
-        // Draw highlights
-        if(playerTurn) {
+        // Draw gas clouds
+        activeGas.forEach(g => {
+            drawGasEffect(g.x, g.y, g.t);
+        });
+
+        // Draw highlights (only during player turn and if hasn't moved yet)
+        if(playerTurn && !playerHasMovedThisTurn && selectMode === 'move') {
+            calculateHighlightedTiles();
+            highlightedTiles.forEach(tile => {
+                drawTileHighlight(tile.x, tile.y, tile.color);
+            });
+        } else if(playerTurn && selectMode !== 'move') {
             calculateHighlightedTiles();
             highlightedTiles.forEach(tile => {
                 drawTileHighlight(tile.x, tile.y, tile.color);
@@ -288,7 +309,11 @@ function gameLoop() {
             if(!e.alive) return;
             
             // Draw enemy tint
-            ctx.fillStyle = e.tint;
+            if(e.isSleeping) {
+                ctx.fillStyle = 'rgba(100, 100, 100, 0.5)';
+            } else {
+                ctx.fillStyle = e.tint;
+            }
             ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
             
             // Draw health bar
@@ -306,28 +331,30 @@ function gameLoop() {
             ctx.fillText(e.hp.toString(), e.ax * TILE + TILE/2, e.ay * TILE - 4);
             
             // Draw type indicator
-            ctx.fillStyle = e.color;
+            ctx.fillStyle = e.isSleeping ? "#888" : e.color;
             ctx.font = "bold 8px monospace";
             ctx.textAlign = "left";
             ctx.fillText(e.type.charAt(0), e.ax * TILE + 3, e.ay * TILE + 10);
             
             // Draw state tint
-            if(e.state === 'alerted' || e.state === 'chasing') {
-                ctx.fillStyle = "rgba(255, 50, 50, 0.3)";
-                ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
-            } else if(e.state === 'investigating') {
-                ctx.fillStyle = "rgba(255, 200, 50, 0.3)";
-                ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
-            } else if(e.state === 'eating') {
-                ctx.fillStyle = "rgba(50, 255, 50, 0.3)";
-                ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+            if(!e.isSleeping) {
+                if(e.state === 'alerted' || e.state === 'chasing') {
+                    ctx.fillStyle = "rgba(255, 50, 50, 0.3)";
+                    ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+                } else if(e.state === 'investigating') {
+                    ctx.fillStyle = "rgba(255, 200, 50, 0.3)";
+                    ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+                } else if(e.state === 'eating') {
+                    ctx.fillStyle = "rgba(50, 255, 50, 0.3)";
+                    ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+                }
             }
             
             // Draw sprite
             drawSprite('guard', e.ax, e.ay);
             
             // Draw vision cone (visual only) - MAX 3 TILES
-            if(!player.isHidden && e.state !== 'dead') {
+            if(!player.isHidden && e.state !== 'dead' && !e.isSleeping) {
                 drawVisionConeVisual(e);
             }
         });
@@ -362,6 +389,14 @@ function gameLoop() {
         
         updateVFX();
         
+        // Camera focus on current turn entity
+        if(currentTurnEntity) {
+            const targetX = (canvas.width/2) - (currentTurnEntity.ax*TILE + TILE/2)*zoom;
+            const targetY = (canvas.height/2) - (currentTurnEntity.ay*TILE + TILE/2)*zoom;
+            camX += (targetX - camX) * 0.1;
+            camY += (targetY - camY) * 0.1;
+        }
+        
         shake *= 0.8;
         requestAnimationFrame(gameLoop);
     } catch (error) {
@@ -393,8 +428,21 @@ function drawTileHighlight(x, y, colorSet, pulse = true) {
     }
 }
 
+function drawGasEffect(x, y, timer) {
+    const alpha = 0.3 + 0.2 * Math.sin(Date.now() / 500);
+    ctx.fillStyle = `rgba(153, 50, 204, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x*TILE + TILE/2, y*TILE + TILE/2, TILE * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 20px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(timer.toString(), x*TILE + TILE/2, y*TILE + TILE/2 + 7);
+}
+
 function drawVisionConeVisual(e) {
-    const drawRange = 3; // Fixed to 3 tiles as requested
+    const drawRange = 3;
     const baseA = Math.atan2(e.dir.y, e.dir.x);
     const visionAngle = Math.PI / 3;
     
@@ -403,11 +451,13 @@ function drawVisionConeVisual(e) {
     ctx.rotate(baseA);
     
     // Draw cone fill
-    ctx.fillStyle = e.state === 'alerted' || e.state === 'chasing' ? 
-                   'rgba(255, 0, 0, 0.2)' : 
-                   e.state === 'investigating' ?
-                   'rgba(255, 165, 0, 0.2)' :
-                   'rgba(255, 100, 100, 0.15)';
+    if(e.state === 'alerted' || e.state === 'chasing') {
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+    } else if(e.state === 'investigating') {
+        ctx.fillStyle = 'rgba(255, 165, 0, 0.2)';
+    } else {
+        ctx.fillStyle = 'rgba(255, 100, 100, 0.15)';
+    }
     
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -421,30 +471,29 @@ function drawVisionConeVisual(e) {
     ctx.closePath();
     ctx.fill();
     
-    // Draw cone outline
+    // Draw ONLY SIDE outlines (no center line)
     ctx.strokeStyle = e.state === 'alerted' || e.state === 'chasing' ? 
                      '#ff0000' : 
                      e.state === 'investigating' ?
                      '#ff9900' :
                      '#ff6666';
     ctx.lineWidth = 2;
+    
+    // Left side line
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(Math.cos(visionAngle) * drawRange * TILE, Math.sin(visionAngle) * drawRange * TILE);
-    ctx.lineTo(Math.cos(-visionAngle) * drawRange * TILE, Math.sin(-visionAngle) * drawRange * TILE);
-    ctx.closePath();
     ctx.stroke();
     
-    // Draw center line
-    ctx.strokeStyle = e.state === 'alerted' || e.state === 'chasing' ? 
-                     '#ff4444' : 
-                     e.state === 'investigating' ?
-                     '#ffaa44' :
-                     '#ff8888';
-    ctx.lineWidth = 1;
+    // Right side line
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(drawRange * TILE, 0);
+    ctx.lineTo(Math.cos(-visionAngle) * drawRange * TILE, Math.sin(-visionAngle) * drawRange * TILE);
+    ctx.stroke();
+    
+    // Arc connecting the sides (optional)
+    ctx.beginPath();
+    ctx.arc(0, 0, drawRange * TILE, -visionAngle, visionAngle);
     ctx.stroke();
     
     ctx.restore();
@@ -480,24 +529,31 @@ function drawMinimap() {
     ctx.fill();
     
     enemies.filter(e => e.alive).forEach(e => {
-        const enemyColor = e.state === 'alerted' || e.state === 'chasing' ? e.color :
-                          e.state === 'investigating' ? "#ff9900" :
-                          e.state === 'eating' ? "#00ff00" : e.color;
+        let enemyColor;
+        if(e.isSleeping) {
+            enemyColor = "#888";
+        } else if(e.state === 'alerted' || e.state === 'chasing') {
+            enemyColor = e.color;
+        } else if(e.state === 'investigating') {
+            enemyColor = "#ff9900";
+        } else if(e.state === 'eating') {
+            enemyColor = "#00ff00";
+        } else {
+            enemyColor = e.color;
+        }
         ctx.fillStyle = enemyColor;
         ctx.fillRect(mx + e.x*ms, my + 5 + e.y*ms, ms, ms);
     });
 }
 
 // ============================================
-// CAMERA & UI FUNCTIONS (UNLIMITED PAN)
+// CAMERA & UI FUNCTIONS
 // ============================================
 
 function centerCamera() {
     camX = (canvas.width/2) - (player.x*TILE + TILE/2)*zoom;
     camY = (canvas.height/2) - (player.y*TILE + TILE/2)*zoom;
 }
-
-// REMOVED clampCamera() - NO LIMITS ON PANNING
 
 function toggleMinimap() { 
     showMinimap = !showMinimap;
@@ -507,10 +563,11 @@ function updateToolCounts() {
     document.getElementById('trapCount').textContent = inv.trap;
     document.getElementById('riceCount').textContent = inv.rice;
     document.getElementById('bombCount').textContent = inv.bomb;
+    document.getElementById('gasCount').textContent = inv.gas;
 }
 
 // ============================================
-// INPUT HANDLING (IMPROVED UNLIMITED PAN)
+// INPUT HANDLING
 // ============================================
 
 let lastDist = 0, isDragging = false, lastTouch = {x:0, y:0};
@@ -572,11 +629,11 @@ canvas.addEventListener('touchend', function(e) {
     
     const dist = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
     
-    if(selectMode === 'move' && dist <= 3) {
+    if(selectMode === 'move' && dist <= 3 && !playerHasMovedThisTurn) {
         handlePlayerMove(tx, ty);
-    } else if(selectMode === 'attack' && dist === 1) {
+    } else if(selectMode === 'attack' && dist === 1 && playerHasMovedThisTurn) {
         handleAttack(tx, ty);
-    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR) {
+    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR && playerHasMovedThisTurn) {
         handleItemPlacement(tx, ty, selectMode);
     }
 }, {passive: false});
@@ -624,11 +681,11 @@ canvas.addEventListener('mouseup', function(e) {
     
     const dist = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
     
-    if(selectMode === 'move' && dist <= 3) {
+    if(selectMode === 'move' && dist <= 3 && !playerHasMovedThisTurn) {
         handlePlayerMove(tx, ty);
-    } else if(selectMode === 'attack' && dist === 1) {
+    } else if(selectMode === 'attack' && dist === 1 && playerHasMovedThisTurn) {
         handleAttack(tx, ty);
-    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR) {
+    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR && playerHasMovedThisTurn) {
         handleItemPlacement(tx, ty, selectMode);
     }
 });
@@ -663,7 +720,6 @@ canvas.addEventListener('wheel', function(e) {
 // ============================================
 
 function log(msg, color="#aaa") {
-    // Log function now does nothing since we removed on-screen logs
     return;
 }
 
@@ -712,9 +768,11 @@ function autoSwitchToMove() {
 }
 
 function playerWait() { 
-    if(playerTurn) { 
+    if(playerTurn && playerHasMovedThisTurn) { 
         playerTurn = false; 
+        playerHasMovedThisTurn = false;
         createSpeechBubble(player.x, player.y, "⏳ WAITING", "#aaaaaa", 1.5);
+        currentTurnEntity = null;
         setTimeout(() => {
             endTurn();
         }, 800);
@@ -741,6 +799,7 @@ function showGameOverScreen() {
 
 function hasLineOfSight(e, px, py) {
     if(hasReachedExit) return false;
+    if(e.isSleeping) return false;
     
     const dx = px - e.x;
     const dy = py - e.y;
@@ -783,6 +842,12 @@ async function endTurn() {
         return true;
     });
 
+    // Process Gas
+    activeGas = activeGas.filter(g => {
+        g.t--;
+        return g.t > 0;
+    });
+
     for(let b of exploding) {
         await wait(600);
         
@@ -792,7 +857,7 @@ async function endTurn() {
         
         // Alert nearby enemies to the sound
         enemies.forEach(e => {
-            if(e.alive && e.state !== 'dead') {
+            if(e.alive && e.state !== 'dead' && !e.isSleeping) {
                 const dist = Math.hypot(e.x - b.x, e.y - b.y);
                 if(dist <= e.hearingRange) {
                     e.hasHeardSound = true;
@@ -821,6 +886,7 @@ async function endTurn() {
     // Process enemies with proper waits
     for(let e of enemies.filter(g => g.alive)) {
         currentEnemyTurn = e;
+        currentTurnEntity = e;
         
         await wait(800);
         
@@ -830,11 +896,13 @@ async function endTurn() {
     }
     
     currentEnemyTurn = null;
+    currentTurnEntity = player;
     
     await wait(400);
     
     turnCount++; 
     playerTurn = true;
+    playerHasMovedThisTurn = false;
 }
 
 async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
@@ -899,7 +967,7 @@ function wait(ms) {
 }
 
 // ============================================
-// TENCHU-STYLE VICTORY STATS (UPDATED)
+// TENCHU-STYLE VICTORY STATS
 // ============================================
 
 function showTenchuStyleVictoryStats() {
