@@ -15,7 +15,7 @@ async function processEnemyTurn(e) {
         }
     }
     
-    // Check trap (instant kill)
+    // Check trap instantly (before enemy moves)
     if(grid[e.y][e.x] === TRAP) {
         grid[e.y][e.x] = FLOOR;
         e.alive = false;
@@ -139,8 +139,12 @@ async function patrolBehavior(e) {
         {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
     ];
     
+    // Check if target tile has another enemy OR the player
     function isTileBlocked(x, y) {
+        // Don't walk on player
         if(x === player.x && y === player.y) return true;
+        
+        // Don't walk on other enemies
         return enemies.some(other => 
             other.alive && other !== e && other.x === x && other.y === y
         );
@@ -159,6 +163,7 @@ async function patrolBehavior(e) {
     let nx = e.x + e.dir.x;
     let ny = e.y + e.dir.y;
     
+    // If can't move in current direction, choose random
     if(nx < 0 || nx >= mapDim || ny < 0 || ny >= mapDim || 
        grid[ny][nx] === WALL || isTileBlocked(nx, ny)) {
         const validDirs = directions.filter(dir => {
@@ -174,6 +179,8 @@ async function patrolBehavior(e) {
             ny = e.y + dir.y;
             e.dir = dir;
         } else {
+            // Can't move anywhere - just turn in place
+            e.dir = directions[Math.floor(Math.random() * directions.length)];
             return;
         }
     }
@@ -185,10 +192,14 @@ async function patrolBehavior(e) {
         return;
     }
     
-    await animMove(e, nx, ny, e.speed, () => {
-        e.x = nx;
-        e.y = ny;
-    });
+    // SAFETY CHECK: Make sure we're not trying to move to an invalid tile
+    if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && 
+       grid[ny][nx] !== WALL && !isTileBlocked(nx, ny)) {
+        await animMove(e, nx, ny, e.speed, () => {
+            e.x = nx;
+            e.y = ny;
+        });
+    }
 }
 
 async function chaseBehavior(e) {
@@ -201,11 +212,15 @@ async function chaseBehavior(e) {
     e.chaseTurns--;
     
     if(e.lastSeenPlayer) {
+        // Don't walk on player - stop 1 tile away
         const dx = e.lastSeenPlayer.x - e.x;
         const dy = e.lastSeenPlayer.y - e.y;
         const dist = Math.max(Math.abs(dx), Math.abs(dy));
         
         if(dist <= 1) {
+            // Already adjacent to last seen position
+            // Look around for player
+            e.dir = {x: Math.sign(dx) || e.dir.x, y: Math.sign(dy) || e.dir.y};
             return;
         }
         
@@ -220,17 +235,44 @@ async function chaseBehavior(e) {
         const nx = e.x + moveX;
         const ny = e.y + moveY;
         
-        const isBlocked = enemies.some(other => 
-            other.alive && other !== e && other.x === nx && other.y === ny
-        ) || (nx === player.x && ny === player.y);
+        // Check if tile is blocked by another enemy or player
+        function isTileBlocked(x, y) {
+            if(x === player.x && y === player.y) return true;
+            return enemies.some(other => 
+                other.alive && other !== e && other.x === x && other.y === y
+            );
+        }
         
+        // SAFETY CHECK before moving
         if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && 
-           grid[ny][nx] !== WALL && !isBlocked) {
+           grid[ny][nx] !== WALL && !isTileBlocked(nx, ny)) {
             await animMove(e, nx, ny, e.speed * 1.5, () => {
                 e.x = nx;
                 e.y = ny;
                 e.dir = {x: moveX, y: moveY};
             });
+        } else {
+            // Can't move toward player, try alternative direction
+            const altDirections = [
+                {x: 0, y: Math.sign(dy)},
+                {x: Math.sign(dx), y: 0},
+                {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
+            ];
+            
+            for(const dir of altDirections) {
+                const altX = e.x + dir.x;
+                const altY = e.y + dir.y;
+                
+                if(altX >= 0 && altX < mapDim && altY >= 0 && altY < mapDim && 
+                   grid[altY][altX] !== WALL && !isTileBlocked(altX, altY)) {
+                    await animMove(e, altX, altY, e.speed * 1.5, () => {
+                        e.x = altX;
+                        e.y = altY;
+                        e.dir = dir;
+                    });
+                    break;
+                }
+            }
         }
     }
 }
@@ -265,12 +307,17 @@ async function investigateBehavior(e) {
         const nx = e.x + moveX;
         const ny = e.y + moveY;
         
-        const isBlocked = enemies.some(other => 
-            other.alive && other !== e && other.x === nx && other.y === ny
-        ) || (nx === player.x && ny === player.y);
+        // Check if tile is blocked
+        function isTileBlocked(x, y) {
+            if(x === player.x && y === player.y) return true;
+            return enemies.some(other => 
+                other.alive && other !== e && other.x === x && other.y === y
+            );
+        }
         
+        // SAFETY CHECK
         if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && 
-           grid[ny][nx] !== WALL && !isBlocked) {
+           grid[ny][nx] !== WALL && !isTileBlocked(nx, ny)) {
             await animMove(e, nx, ny, e.speed * 1.2, () => {
                 e.x = nx;
                 e.y = ny;
@@ -286,6 +333,7 @@ async function eatBehavior(e) {
         const dy = e.investigationTarget.y - e.y;
         
         if(Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+            // Reached rice
             grid[e.investigationTarget.y][e.investigationTarget.x] = FLOOR;
             e.ateRice = true;
             e.state = 'patrolling';
@@ -304,12 +352,17 @@ async function eatBehavior(e) {
         const nx = e.x + moveX;
         const ny = e.y + moveY;
         
-        const isBlocked = enemies.some(other => 
-            other.alive && other !== e && other.x === nx && other.y === ny
-        ) || (nx === player.x && ny === player.y);
+        // Check if tile is blocked
+        function isTileBlocked(x, y) {
+            if(x === player.x && y === player.y) return true;
+            return enemies.some(other => 
+                other.alive && other !== e && other.x === x && other.y === y
+            );
+        }
         
+        // SAFETY CHECK
         if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && 
-           grid[ny][nx] !== WALL && !isBlocked) {
+           grid[ny][nx] !== WALL && !isTileBlocked(nx, ny)) {
             await animMove(e, nx, ny, e.speed * 1.2, () => {
                 e.x = nx;
                 e.y = ny;
