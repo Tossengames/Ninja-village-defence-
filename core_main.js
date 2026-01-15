@@ -22,7 +22,7 @@ let startTime = 0;
 let currentTurnEntity = null;
 let playerHasMovedThisTurn = false;
 let playerUsedActionThisTurn = false;
-let cameraFocusEnabled = true; // Allow user to override camera focus
+let cameraFocusEnabled = true;
 let isUserDragging = false;
 let dragStartX = 0, dragStartY = 0;
 
@@ -298,8 +298,13 @@ function gameLoop() {
             drawGasEffect(g.x, g.y, g.t);
         });
 
-        // Draw highlights during player turn
-        if(playerTurn) {
+        // Draw highlights during player turn (only if not moved yet)
+        if(playerTurn && !playerHasMovedThisTurn && selectMode === 'move') {
+            calculateHighlightedTiles();
+            highlightedTiles.forEach(tile => {
+                drawTileHighlight(tile.x, tile.y, tile.color);
+            });
+        } else if(playerTurn && selectMode !== 'move') {
             calculateHighlightedTiles();
             highlightedTiles.forEach(tile => {
                 drawTileHighlight(tile.x, tile.y, tile.color);
@@ -434,7 +439,7 @@ function drawGasEffect(x, y, timer) {
     const alpha = 0.3 + 0.2 * Math.sin(Date.now() / 500);
     ctx.fillStyle = `rgba(153, 50, 204, ${alpha})`;
     ctx.beginPath();
-    ctx.arc(x*TILE + TILE/2, y*TILE + TILE/2, TILE * 0.8, 0, Math.PI * 2);
+    ctx.arc(x*TILE + TILE/2, y*TILE + TILE/2, TILE * 1.2, 0, Math.PI * 2); // Bigger than bomb
     ctx.fill();
     
     ctx.fillStyle = "#fff";
@@ -569,7 +574,7 @@ function updateToolCounts() {
 }
 
 // ============================================
-// INPUT HANDLING (IMPROVED DRAG & CAMERA)
+// INPUT HANDLING
 // ============================================
 
 let lastDist = 0, isDragging = false, lastTouch = {x:0, y:0};
@@ -608,7 +613,7 @@ canvas.addEventListener('touchmove', function(e) {
         if(Math.abs(dx) > 5 || Math.abs(dy) > 5) {
             isDragging = true; 
             isUserDragging = true;
-            cameraFocusEnabled = false; // User is controlling camera
+            cameraFocusEnabled = false;
         }
         
         if(isDragging) {
@@ -624,7 +629,6 @@ canvas.addEventListener('touchend', function(e) {
     if(isDragging) {
         isDragging = false;
         setTimeout(() => {
-            // Re-enable camera focus after 2 seconds if user doesn't drag again
             if(!isUserDragging) {
                 cameraFocusEnabled = true;
             }
@@ -657,7 +661,6 @@ canvas.addEventListener('touchend', function(e) {
         handleItemPlacement(tx, ty, selectMode);
     }
     
-    // Re-enable camera focus after interaction
     cameraFocusEnabled = true;
     isUserDragging = false;
 }, {passive: false});
@@ -745,7 +748,6 @@ canvas.addEventListener('wheel', function(e) {
         zoom = Math.max(0.3, zoom - zoomSpeed);
     }
     
-    // Adjust camera to zoom toward mouse position
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
@@ -852,7 +854,7 @@ function showGameOverScreen() {
 }
 
 // ============================================
-// LINE OF SIGHT - STRAIGHT LINE VISION
+// LINE OF SIGHT - CONE VISION ONLY (NOT BEHIND)
 // ============================================
 
 function hasLineOfSight(e, px, py) {
@@ -865,13 +867,28 @@ function hasLineOfSight(e, px, py) {
     
     if(distance > e.visionRange) return false;
     
-    // Check line of sight in straight line (any direction, not just cone)
+    // Check if target is within vision cone (60 degrees)
+    const angleToPlayer = Math.atan2(dy, dx);
+    const enemyAngle = Math.atan2(e.dir.y, e.dir.x);
+    
+    // Calculate angle difference (wrap around)
+    let angleDiff = Math.abs(angleToPlayer - enemyAngle);
+    if(angleDiff > Math.PI) {
+        angleDiff = 2 * Math.PI - angleDiff;
+    }
+    
+    // Only see in front (within 60 degrees)
+    if(angleDiff > Math.PI / 3) { // 60 degrees
+        return false;
+    }
+    
+    // Check line of sight
     const steps = Math.max(Math.abs(dx), Math.abs(dy));
     for(let i = 1; i <= steps; i++) {
         const tx = Math.round(e.x + (dx / steps) * i);
         const ty = Math.round(e.y + (dy / steps) * i);
         
-        if(tx === px && ty === py) break; // Reached target
+        if(tx === px && ty === py) break;
         
         if(tx < 0 || tx >= mapDim || ty < 0 || ty >= mapDim) return false;
         if(grid[ty][tx] === WALL) return false;
@@ -881,7 +898,7 @@ function hasLineOfSight(e, px, py) {
 }
 
 // ============================================
-// TURN PROCESSING (WITH DELAYS)
+// TURN PROCESSING
 // ============================================
 
 async function endTurn() {
@@ -901,9 +918,14 @@ async function endTurn() {
     });
 
     // Process Gas
+    let gasExploding = [];
     activeGas = activeGas.filter(g => {
         g.t--;
-        return g.t > 0;
+        if(g.t <= 0) { 
+            gasExploding.push(g); 
+            return false; 
+        }
+        return true;
     });
 
     for(let b of exploding) {
@@ -940,23 +962,45 @@ async function endTurn() {
             createDeathEffect(e.x, e.y);
         }
     }
+    
+    // Process Gas explosions
+    for(let g of gasExploding) {
+        await wait(600);
+        
+        grid[g.y][g.x] = FLOOR; 
+        shake = 15; 
+        
+        // Gas has bigger range than bomb (2 tiles)
+        const enemiesInGas = enemies.filter(e => 
+            e.alive && Math.abs(e.x-g.x)<=2 && Math.abs(e.y-g.y)<=2
+        );
+        
+        for(let e of enemiesInGas) {
+            if(!e.isSleeping) {
+                await wait(300);
+                e.isSleeping = true;
+                e.sleepTimer = Math.floor(Math.random() * 5) + 2; // 2-6 turns
+                createSpeechBubble(e.x, e.y, "💤 Sleeping...", "#9932cc", 1.5);
+            }
+        }
+    }
 
     // Process enemies with proper waits
     for(let e of enemies.filter(g => g.alive)) {
         currentEnemyTurn = e;
         currentTurnEntity = e;
         
-        await wait(800 + Math.random() * 400); // Random delay before enemy moves
+        await wait(800 + Math.random() * 400);
         
         await processEnemyTurn(e);
         
-        await wait(500); // Small delay before next enemy
+        await wait(500);
     }
     
     currentEnemyTurn = null;
     currentTurnEntity = player;
     
-    await wait(600); // Delay before player turn
+    await wait(600);
     
     turnCount++; 
     playerTurn = true;
@@ -993,9 +1037,11 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
         return true;
     }
     
-    // Enemy counterattacks if in range
+    // Enemy counterattacks if in range AND can see player
     const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-    if(dist <= enemy.attackRange) {
+    const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
+    
+    if(dist <= enemy.attackRange && canSeePlayer) {
         createSpeechBubble(enemy.x, enemy.y, `${enemy.type} ATTACK!`, enemy.color, 1.5);
         await wait(600);
         
