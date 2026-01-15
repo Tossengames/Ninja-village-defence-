@@ -2,6 +2,8 @@
 // TILE HIGHLIGHTING SYSTEM (UPDATED)
 // ============================================
 
+console.log("Loading highlighting system...");
+
 function calculateHighlightedTiles() {
     highlightedTiles = [];
     if(!playerTurn) return;
@@ -82,3 +84,5 @@ function calculateHighlightedTiles() {
         }
     }
 }
+
+console.log("Highlighting system loaded");
