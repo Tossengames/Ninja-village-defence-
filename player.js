@@ -4,15 +4,43 @@
 
 async function handlePlayerMove(targetX, targetY) {
     if(!playerTurn || gameOver || combatSequence) return;
+    if(playerHasMovedThisTurn) return; // Player already moved this turn
     
     if(hasReachedExit) return;
     
-    const path = findPath(player.x, player.y, targetX, targetY);
-    if(!path || path.length === 0) return;
+    // Find direct path to target (no pathfinding - move directly if highlighted)
+    const dx = targetX - player.x;
+    const dy = targetY - player.y;
+    const dist = Math.max(Math.abs(dx), Math.abs(dy));
+    
+    if(dist > 3) return; // Too far
+    
+    // Check if path is clear (simple line check)
+    let canMove = true;
+    const steps = Math.max(Math.abs(dx), Math.abs(dy));
+    
+    for(let i = 1; i <= steps; i++) {
+        const tx = player.x + Math.round(dx * i / steps);
+        const ty = player.y + Math.round(dy * i / steps);
+        
+        if(grid[ty][tx] === WALL || grid[ty][tx] === undefined) {
+            canMove = false;
+            break;
+        }
+        
+        const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
+        if(enemyAtTile) {
+            canMove = false;
+            break;
+        }
+    }
+    
+    if(!canMove) return;
     
     if(grid[targetY][targetX] === EXIT) {
         hasReachedExit = true;
         playerTurn = false;
+        playerHasMovedThisTurn = false;
         
         animMove(player, targetX, targetY, 0.2, () => {
             player.x = targetX;
@@ -27,63 +55,55 @@ async function handlePlayerMove(targetX, targetY) {
         return;
     }
     
-    let stepsTaken = 0;
+    const tile = grid[targetY][targetX];
     
-    async function takeStep() {
-        if(stepsTaken >= path.length) {
-            setTimeout(() => {
-                playerTurn = false;
-                checkForImmediateAttack();
-            }, 500);
-            return;
-        }
-        
-        const step = path[stepsTaken];
-        const tile = grid[step.y][step.x];
-        
-        if(tile === COIN) {
-            stats.coins++;
-            grid[step.y][step.x] = FLOOR;
-            createCoinPickupEffect(step.x, step.y);
-        }
-        
-        const wasHidden = player.isHidden;
-        player.isHidden = (tile === HIDE);
-        if(player.isHidden !== wasHidden) {
-            createHideEffect(step.x, step.y, player.isHidden);
-        }
-        
-        await new Promise(resolve => {
-            animMove(player, step.x, step.y, 0.2, () => {
-                player.x = step.x;
-                player.y = step.y;
-                stepsTaken++;
-                resolve();
-            });
+    if(tile === COIN) {
+        stats.coins++;
+        grid[targetY][targetX] = FLOOR;
+        createCoinPickupEffect(targetX, targetY);
+    }
+    
+    const wasHidden = player.isHidden;
+    player.isHidden = (tile === HIDE);
+    if(player.isHidden !== wasHidden) {
+        createHideEffect(targetX, targetY, player.isHidden);
+    }
+    
+    // If player hides after being spotted, enemies lose track
+    if(player.isHidden && !wasHidden) {
+        enemies.forEach(e => {
+            if(e.state === 'alerted' || e.state === 'chasing') {
+                e.state = 'investigating';
+                e.investigationTarget = {x: targetX, y: targetY};
+                e.investigationTurns = 3;
+                createSpeechBubble(e.x, e.y, "Where'd he go?", "#ff9900", 1.5);
+            }
         });
+    }
+    
+    animMove(player, targetX, targetY, 0.2, () => {
+        player.x = targetX;
+        player.y = targetY;
         
-        await new Promise(resolve => setTimeout(resolve, 50));
-        takeStep();
-    }
-    
-    takeStep();
-}
-
-function checkForImmediateAttack() {
-    const adjacentEnemies = enemies.filter(e => 
-        e.alive && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
-    );
-    
-    if(adjacentEnemies.length > 0 && !combatSequence) {
-        playerTurn = true;
-        setMode('attack');
-    } else {
-        endTurn();
-    }
+        // Player has moved, can now use items or attack
+        playerHasMovedThisTurn = true;
+        
+        // Switch to attack mode if enemy adjacent
+        const adjacentEnemies = enemies.filter(e => 
+            e.alive && !e.isSleeping && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
+        );
+        
+        if(adjacentEnemies.length > 0) {
+            setMode('attack');
+        } else {
+            setMode('move');
+        }
+    });
 }
 
 async function handleAttack(targetX, targetY) {
     if(!playerTurn || gameOver || combatSequence) return;
+    if(!playerHasMovedThisTurn) return; // Must move first
     
     const enemy = enemies.find(e => e.alive && e.x === targetX && e.y === targetY);
     if(!enemy) {
@@ -91,47 +111,34 @@ async function handleAttack(targetX, targetY) {
         return;
     }
     
-    const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
+    // If enemy is sleeping, can't attack (must be awake)
+    if(enemy.isSleeping) {
+        createSpeechBubble(player.x, player.y, "Enemy is sleeping!", "#9932cc", 1);
+        return;
+    }
     
     playerTurn = false;
+    playerHasMovedThisTurn = false;
     
-    if(canSeePlayer || enemy.state === 'alerted' || enemy.state === 'chasing') {
+    // Check if enemy is alerted/chasing or can see player
+    const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
+    
+    if(enemy.state === 'alerted' || enemy.state === 'chasing' || canSeePlayer) {
+        // Normal combat
         createSpeechBubble(player.x, player.y, `⚔️ VS ${enemy.type}`, "#ff3333", 1);
         
         const enemyDied = await processCombatSequence(true, enemy, 2);
         
         if(!enemyDied && !gameOver) {
-            const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-            if(dist <= 1) {
-                createSpeechBubble(player.x, player.y, "🗡️ COUNTER!", "#00d2ff", 1);
-                await new Promise(resolve => setTimeout(resolve, 300));
-                
-                enemy.hp -= 2;
-                enemy.hp = Math.max(0, enemy.hp);
-                createDamageEffect(enemy.x, enemy.y, 2);
-                createSpeechBubble(enemy.x, enemy.y, `-2`, "#ff0000", 1);
-                
-                await new Promise(resolve => setTimeout(resolve, 500));
-                
-                if(enemy.hp <= 0) {
-                    enemy.alive = false;
-                    enemy.state = 'dead';
-                    enemy.hp = 0;
-                    stats.kills++;
-                    createDeathEffect(enemy.x, enemy.y);
-                }
-            }
-            
-            if(!gameOver) {
-                await new Promise(resolve => setTimeout(resolve, 300));
-                endTurn();
-            }
+            await new Promise(resolve => setTimeout(resolve, 300));
+            endTurn();
         } else if(!gameOver) {
             autoSwitchToMove();
             await new Promise(resolve => setTimeout(resolve, 300));
             endTurn();
         }
     } else {
+        // STEALTH KILL - INSTANT KILL if enemy not alerted
         createSpeechBubble(player.x, player.y, "🗡️ STEALTH KILL!", "#00ff00", 1);
         await new Promise(resolve => setTimeout(resolve, 300));
         
@@ -146,8 +153,6 @@ async function handleAttack(targetX, targetY) {
         
         autoSwitchToMove();
         
-        await checkEnemyAttacks();
-        
         if(!gameOver) {
             await new Promise(resolve => setTimeout(resolve, 300));
             endTurn();
@@ -155,36 +160,9 @@ async function handleAttack(targetX, targetY) {
     }
 }
 
-async function checkEnemyAttacks() {
-    const attackingEnemies = enemies.filter(e => 
-        e.alive && (e.state === 'alerted' || e.state === 'chasing') && 
-        Math.hypot(e.x - player.x, e.y - player.y) <= e.attackRange
-    );
-    
-    for(let e of attackingEnemies) {
-        createSpeechBubble(e.x, e.y, `🎯 ATTACKING!`, e.color, 1);
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        playerHP -= e.damage;
-        playerHP = Math.max(0, playerHP);
-        createDamageEffect(player.x, player.y, e.damage, true);
-        createSpeechBubble(player.x, player.y, `-${e.damage} HP`, "#ff66ff", 1);
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        if(playerHP <= 0) {
-            playerHP = 0;
-            gameOver = true;
-            setTimeout(() => {
-                showGameOverScreen();
-            }, 500);
-            return;
-        }
-    }
-}
-
 function handleItemPlacement(x, y, type) {
     if(!playerTurn || gameOver || combatSequence) return;
+    if(!playerHasMovedThisTurn) return; // Must move first
     
     if(inv[type] <= 0) return;
     
@@ -192,7 +170,7 @@ function handleItemPlacement(x, y, type) {
     
     const enemyAtTile = enemies.find(e => e.alive && e.x === x && e.y === y);
     const hasItem = grid[y][x] === TRAP || grid[y][x] === RICE || grid[y][x] === BOMB || 
-                    grid[y][x] === COIN || grid[y][x] === HIDE || grid[y][x] === EXIT;
+                    grid[y][x] === GAS || grid[y][x] === COIN || grid[y][x] === HIDE || grid[y][x] === EXIT;
     
     if(enemyAtTile || hasItem) return;
     
@@ -215,98 +193,13 @@ function handleItemPlacement(x, y, type) {
             activeBombs.push({x: x, y: y, t: 3});
             createSpeechBubble(x, y, "💣 BOMB SET", "#ff3296", 1);
             break;
+        case 'gas':
+            grid[y][x] = GAS;
+            activeGas.push({x: x, y: y, t: Math.floor(Math.random() * 3) + 1});
+            createGasEffect(x, y);
+            break;
     }
     
-    playerTurn = false;
-    autoSwitchToMove();
-    
-    setTimeout(() => {
-        endTurn();
-    }, 300);
-}
-
-// A* Pathfinding Algorithm (same as before)
-function findPath(startX, startY, targetX, targetY) {
-    if(startX === targetX && startY === targetY) return [];
-    
-    const openSet = [];
-    const closedSet = new Set();
-    const startNode = {x: startX, y: startY, g: 0, h: 0, f: 0, parent: null};
-    
-    openSet.push(startNode);
-    
-    while(openSet.length > 0) {
-        let lowestIndex = 0;
-        for(let i = 1; i < openSet.length; i++) {
-            if(openSet[i].f < openSet[lowestIndex].f) {
-                lowestIndex = i;
-            }
-        }
-        
-        const current = openSet[lowestIndex];
-        
-        if(current.x === targetX && current.y === targetY) {
-            const path = [];
-            let temp = current;
-            while(temp) {
-                path.push({x: temp.x, y: temp.y});
-                temp = temp.parent;
-            }
-            return path.reverse().slice(1);
-        }
-        
-        openSet.splice(lowestIndex, 1);
-        closedSet.add(`${current.x},${current.y}`);
-        
-        const neighbors = [
-            {x: current.x, y: current.y - 1},
-            {x: current.x, y: current.y + 1},
-            {x: current.x - 1, y: current.y},
-            {x: current.x + 1, y: current.y}
-        ];
-        
-        for(const neighbor of neighbors) {
-            if(neighbor.x < 0 || neighbor.x >= mapDim || neighbor.y < 0 || neighbor.y >= mapDim) {
-                continue;
-            }
-            
-            if(grid[neighbor.y][neighbor.x] === WALL || grid[neighbor.y][neighbor.x] === undefined) {
-                continue;
-            }
-            
-            const enemyAtTile = enemies.find(e => e.alive && e.x === neighbor.x && e.y === neighbor.y);
-            if(enemyAtTile) {
-                continue;
-            }
-            
-            if(closedSet.has(`${neighbor.x},${neighbor.y}`)) {
-                continue;
-            }
-            
-            const gScore = current.g + 1;
-            const hScore = Math.abs(neighbor.x - targetX) + Math.abs(neighbor.y - targetY);
-            const fScore = gScore + hScore;
-            
-            let existingNode = openSet.find(n => n.x === neighbor.x && n.y === neighbor.y);
-            if(existingNode) {
-                if(gScore < existingNode.g) {
-                    existingNode.g = gScore;
-                    existingNode.f = gScore + existingNode.h;
-                    existingNode.parent = current;
-                }
-            } else {
-                const newNode = {
-                    x: neighbor.x,
-                    y: neighbor.y,
-                    g: gScore,
-                    h: hScore,
-                    f: fScore,
-                    parent: current
-                };
-                openSet.push(newNode);
-            }
-        }
-    }
-    
-    return null;
+    // Player can continue to use other items or attack
+    // Don't end turn automatically
 }
