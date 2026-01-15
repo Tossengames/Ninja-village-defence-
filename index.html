@@ -17,7 +17,7 @@
         <button id="mapToggle" onclick="toggleMinimap()">Toggle Map</button>
     </div>
     
-    <!-- Toolbar (Bottom Center) -->
+    <!-- Toolbar (Bottom Center) - FIXED POSITION -->
     <div id="toolbar" class="hidden">
         <div class="tool-btn" id="btnMove" onclick="setMode('move')">
             <span>👣</span>
@@ -41,6 +41,11 @@
             <span>💣</span>
             Bomb
             <div class="tool-count" id="bombCount">1</div>
+        </div>
+        <div class="tool-btn" id="btnGas" onclick="setMode('gas')">
+            <span>💨</span>
+            Gas
+            <div class="tool-count" id="gasCount">2</div>
         </div>
         <div class="tool-btn" onclick="playerWait()">
             <span>⏳</span>
