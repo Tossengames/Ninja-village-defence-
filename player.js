@@ -21,20 +21,19 @@ async function handlePlayerMove(targetX, targetY) {
         hasReachedExit = true;
         playerTurn = false;
         
-        setTimeout(() => {
-            // Return to menu on win
-            document.getElementById('menu').classList.remove('hidden');
-            document.getElementById('toolbar').classList.add('hidden');
-            document.getElementById('rangeIndicator').classList.add('hidden');
-            document.getElementById('logToggle').classList.add('hidden');
-            document.getElementById('hpDisplay').classList.add('hidden');
-            document.getElementById('ui-controls').classList.add('hidden');
-            log("Mission complete! Great job!", "#0f0");
-        }, 500);
-        
         animMove(player, targetX, targetY, 0.2, () => {
             player.x = targetX;
             player.y = targetY;
+            
+            // Wait then show victory screen
+            setTimeout(() => {
+                document.getElementById('toolbar').classList.add('hidden');
+                document.getElementById('rangeIndicator').classList.add('hidden');
+                document.getElementById('logToggle').classList.add('hidden');
+                document.getElementById('hpDisplay').classList.add('hidden');
+                document.getElementById('ui-controls').classList.add('hidden');
+                showVictoryScreen();
+            }, 1000);
         });
         return;
     }
@@ -162,6 +161,7 @@ async function handleAttack(targetX, targetY) {
         enemy.alive = false;
         enemy.state = 'dead';
         stats.kills++;
+        stats.stealthKills++; // Track stealth kills separately
         createDeathEffect(targetX, targetY);
         
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -198,7 +198,7 @@ async function checkEnemyAttacks() {
         
         if(playerHP <= 0) {
             gameOver = true;
-            showGameOver();
+            showGameOverScreen(); // Use the new function name
             return;
         }
     }
