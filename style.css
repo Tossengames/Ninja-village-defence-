@@ -34,7 +34,7 @@ canvas {
     touch-action: none;
 }
 
-/* --- MISSION LOG (Top Left) --- */
+/* --- MISSION LOG (Hidden by default) --- */
 #missionLog {
     position: fixed;
     top: 15px;
@@ -77,10 +77,9 @@ canvas {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    max-width: 200px;
 }
 
-#mapToggle, #logToggle {
+#mapToggle {
     background: #222;
     color: var(--accent);
     border: 1px solid var(--accent);
@@ -94,68 +93,14 @@ canvas {
     min-width: 90px;
 }
 
-#mapToggle:hover, #logToggle:hover {
+#mapToggle:hover {
     background: #2a2a2a;
 }
 
-#mapToggle:active, #logToggle:active {
+#mapToggle:active {
     background: var(--accent);
     color: #000;
     transform: translateY(2px);
-}
-
-/* --- HP DISPLAY --- */
-#hpDisplay {
-    position: fixed;
-    top: 70px;
-    left: 15px;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 12px;
-    color: #fff;
-    z-index: 100;
-    pointer-events: none;
-    backdrop-filter: blur(5px);
-    border: 1px solid #333;
-}
-
-#hpDisplay span {
-    font-weight: bold;
-}
-
-/* Range Indicator */
-#rangeIndicator {
-    position: fixed;
-    bottom: 100px;
-    left: 15px;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 10px 15px;
-    border-radius: 8px;
-    font-size: 11px;
-    color: #aaa;
-    z-index: 100;
-    pointer-events: none;
-    backdrop-filter: blur(5px);
-    border: 1px solid #333;
-    max-width: 180px;
-}
-
-/* Camera Hint */
-.camera-hint {
-    position: fixed;
-    bottom: 120px;
-    left: 15px;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 11px;
-    color: #aaa;
-    z-index: 90;
-    pointer-events: none;
-    backdrop-filter: blur(5px);
-    border: 1px solid #333;
-    max-width: 200px;
 }
 
 /* --- TOOLBAR (Bottom Center) --- */
@@ -500,7 +445,7 @@ input[type="number"] {
         align-items: flex-end;
     }
     
-    #mapToggle, #logToggle {
+    #mapToggle {
         padding: 8px 12px;
         font-size: 11px;
         min-width: 80px;
