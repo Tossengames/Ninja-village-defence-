@@ -2,6 +2,8 @@
 // PLAYER MOVEMENT, ITEM PLACEMENT & ATTACK
 // ============================================
 
+console.log("Loading player system...");
+
 async function handlePlayerMove(targetX, targetY) {
     if(!playerTurn || gameOver || combatSequence) return;
     
@@ -349,3 +351,5 @@ function findPath(startX, startY, targetX, targetY) {
     
     return null;
 }
+
+console.log("Player system loaded");
