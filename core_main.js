@@ -13,7 +13,7 @@ let inv = { trap: 3, rice: 2, bomb: 1 };
 let camX = 0, camY = 0, zoom = 1.0;
 let showMinimap = false;
 let showHighlights = true;
-let showLog = true;
+let showLog = false; // Log hidden by default
 let highlightedTiles = [];
 let hasReachedExit = false;
 let currentEnemyTurn = null;
@@ -33,7 +33,6 @@ let explosionEffects = [];
 let footstepEffects = [];
 let damageEffects = [];
 let speechBubbles = [];
-let unitOutlines = [];
 
 // Canvas and rendering
 const canvas = document.getElementById('game');
@@ -81,17 +80,12 @@ function initGame() {
     footstepEffects = [];
     damageEffects = [];
     speechBubbles = [];
-    unitOutlines = [];
     
     showHighlights = true;
-    showLog = true;
+    showLog = false;
     
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('toolbar').classList.remove('hidden');
-    document.getElementById('rangeIndicator').classList.remove('hidden');
-    document.getElementById('cameraHint').classList.remove('hidden');
-    document.getElementById('logToggle').classList.remove('hidden');
-    document.getElementById('hpDisplay').classList.remove('hidden');
     document.getElementById('ui-controls').classList.remove('hidden');
     
     // Hide result screens
@@ -101,7 +95,7 @@ function initGame() {
     generateLevel();
     centerCamera();
     updateToolCounts();
-    updateHPDisplay();
+    
     requestAnimationFrame(gameLoop);
 }
 
@@ -138,7 +132,7 @@ function generateLevel() {
             ey = rand(mapDim); 
         } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
         
-        const visionRange = Math.floor(Math.random() * 3) + 2;
+        const visionRange = 3; // Fixed to 3 tiles as requested
         
         const typeRoll = Math.random();
         let enemyType, enemyStats;
@@ -194,7 +188,52 @@ function loadSprites() {
         const img = new Image();
         img.src = `sprites/${n}.png`;
         img.onload = () => { sprites[n] = img; };
-        img.onerror = () => { console.warn(`Failed to load sprite: ${n}.png`); };
+        img.onerror = () => {
+            // Create placeholder
+            const canvas = document.createElement('canvas');
+            canvas.width = TILE;
+            canvas.height = TILE;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = '#666';
+            ctx.fillRect(0, 0, TILE, TILE);
+            
+            if(n === 'player') {
+                ctx.fillStyle = '#00d2ff';
+                ctx.beginPath();
+                ctx.arc(TILE/2, TILE/2, TILE/3, 0, Math.PI * 2);
+                ctx.fill();
+            } else if(n === 'guard') {
+                ctx.fillStyle = '#ff3333';
+                ctx.beginPath();
+                ctx.arc(TILE/2, TILE/2, TILE/3, 0, Math.PI * 2);
+                ctx.fill();
+            } else if(n === 'coin') {
+                ctx.fillStyle = '#ffd700';
+                ctx.beginPath();
+                ctx.arc(TILE/2, TILE/2, TILE/3, 0, Math.PI * 2);
+                ctx.fill();
+            } else if(n === 'exit') {
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(5, 5, TILE-10, TILE-10);
+            } else if(n === 'trap') {
+                ctx.fillStyle = '#ff6666';
+                ctx.fillRect(10, 10, TILE-20, TILE-20);
+            } else if(n === 'rice') {
+                ctx.fillStyle = '#ffff66';
+                ctx.fillRect(15, 15, TILE-30, TILE-30);
+            } else if(n === 'bomb') {
+                ctx.fillStyle = '#ff3399';
+                ctx.beginPath();
+                ctx.arc(TILE/2, TILE/2, TILE/3, 0, Math.PI * 2);
+                ctx.fill();
+            } else if(n === 'hide') {
+                ctx.fillStyle = '#3333aa';
+                ctx.fillRect(0, 0, TILE, TILE);
+            }
+            
+            sprites[n] = canvas;
+        };
     });
 }
 
@@ -206,7 +245,8 @@ function drawSprite(n, x, y) {
     if(sprites[n]) {
         ctx.drawImage(sprites[n], x*TILE, y*TILE, TILE, TILE);
     } else {
-        ctx.fillStyle = '#666';
+        // Fallback rendering
+        ctx.fillStyle = '#444';
         ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
     }
 }
@@ -214,124 +254,119 @@ function drawSprite(n, x, y) {
 function gameLoop() {
     if(gameOver) return;
     
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.fillStyle = "#000"; 
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    
-    const s = (Math.random()-0.5)*shake;
-    ctx.translate(camX+s, camY+s); 
-    ctx.scale(zoom, zoom);
+    try {
+        ctx.setTransform(1,0,0,1,0,0);
+        ctx.fillStyle = "#000"; 
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        
+        const s = (Math.random()-0.5)*shake;
+        ctx.translate(camX+s, camY+s); 
+        ctx.scale(zoom, zoom);
 
-    // Draw grid
-    for(let y=0; y<mapDim; y++) {
-        for(let x=0; x<mapDim; x++) {
-            drawSprite('floor', x, y);
-            const c = grid[y][x];
-            if(c !== FLOOR) {
-                const spriteMap = ['','wall','hide','exit','','coin','trap','rice','bomb'];
-                drawSprite(spriteMap[c] || '', x, y);
+        // Draw grid
+        for(let y=0; y<mapDim; y++) {
+            for(let x=0; x<mapDim; x++) {
+                drawSprite('floor', x, y);
+                const c = grid[y][x];
+                if(c !== FLOOR) {
+                    const spriteMap = ['','wall','hide','exit','','coin','trap','rice','bomb'];
+                    drawSprite(spriteMap[c] || '', x, y);
+                }
             }
         }
-    }
 
-    // Draw highlights
-    if(playerTurn) {
-        calculateHighlightedTiles();
-        highlightedTiles.forEach(tile => {
-            drawTileHighlight(tile.x, tile.y, tile.color);
+        // Draw highlights
+        if(playerTurn) {
+            calculateHighlightedTiles();
+            highlightedTiles.forEach(tile => {
+                drawTileHighlight(tile.x, tile.y, tile.color);
+            });
+        }
+
+        // Draw enemies
+        enemies.forEach(e => {
+            if(!e.alive) return;
+            
+            // Draw enemy tint
+            ctx.fillStyle = e.tint;
+            ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+            
+            // Draw health bar
+            const healthPercent = e.hp / e.maxHP;
+            ctx.fillStyle = healthPercent > 0.5 ? "#0f0" : healthPercent > 0.25 ? "#ff0" : "#f00";
+            ctx.fillRect(e.ax * TILE + 5, e.ay * TILE - 8, (TILE - 10) * healthPercent, 4);
+            ctx.strokeStyle = "#333";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(e.ax * TILE + 5, e.ay * TILE - 8, TILE - 10, 4);
+            
+            // Draw HP text
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 10px monospace";
+            ctx.textAlign = "center";
+            ctx.fillText(e.hp.toString(), e.ax * TILE + TILE/2, e.ay * TILE - 4);
+            
+            // Draw type indicator
+            ctx.fillStyle = e.color;
+            ctx.font = "bold 8px monospace";
+            ctx.textAlign = "left";
+            ctx.fillText(e.type.charAt(0), e.ax * TILE + 3, e.ay * TILE + 10);
+            
+            // Draw state tint
+            if(e.state === 'alerted' || e.state === 'chasing') {
+                ctx.fillStyle = "rgba(255, 50, 50, 0.3)";
+                ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+            } else if(e.state === 'investigating') {
+                ctx.fillStyle = "rgba(255, 200, 50, 0.3)";
+                ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+            } else if(e.state === 'eating') {
+                ctx.fillStyle = "rgba(50, 255, 50, 0.3)";
+                ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+            }
+            
+            // Draw sprite
+            drawSprite('guard', e.ax, e.ay);
+            
+            // Draw vision cone (visual only) - MAX 3 TILES
+            if(!player.isHidden && e.state !== 'dead') {
+                drawVisionConeVisual(e);
+            }
         });
-    }
 
-    // Draw enemies
-    enemies.forEach(e => {
-        if(!e.alive) return;
-        
-        // Draw enemy tint
-        ctx.fillStyle = e.tint;
-        ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
-        
-        // Draw health bar
-        const healthPercent = e.hp / e.maxHP;
-        ctx.fillStyle = healthPercent > 0.5 ? "#0f0" : healthPercent > 0.25 ? "#ff0" : "#f00";
-        ctx.fillRect(e.ax * TILE + 5, e.ay * TILE - 8, (TILE - 10) * healthPercent, 4);
-        ctx.strokeStyle = "#333";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(e.ax * TILE + 5, e.ay * TILE - 8, TILE - 10, 4);
-        
-        // Draw HP text
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 10px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(e.hp.toString(), e.ax * TILE + TILE/2, e.ay * TILE - 4);
-        
-        // Draw type indicator
-        ctx.fillStyle = e.color;
-        ctx.font = "bold 8px monospace";
-        ctx.textAlign = "left";
-        ctx.fillText(e.type.charAt(0), e.ax * TILE + 3, e.ay * TILE + 10);
-        
-        // Draw state tint
-        if(e.state === 'alerted' || e.state === 'chasing') {
-            ctx.fillStyle = "rgba(255, 50, 50, 0.3)";
-            ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
-        } else if(e.state === 'investigating') {
-            ctx.fillStyle = "rgba(255, 200, 50, 0.3)";
-            ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
-        } else if(e.state === 'eating') {
-            ctx.fillStyle = "rgba(50, 255, 50, 0.3)";
-            ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
+        // Draw VFX
+        drawVFX();
+
+        // Draw player health bar
+        const playerHealthPercent = playerHP / playerMaxHP;
+        ctx.fillStyle = playerHealthPercent > 0.5 ? "#0f0" : playerHealthPercent > 0.25 ? "#ff0" : "#f00";
+        ctx.fillRect(player.ax * TILE + 5, player.ay * TILE - 8, (TILE - 10) * playerHealthPercent, 4);
+
+        // Draw player with shadow
+        ctx.shadowColor = player.isHidden ? 'rgba(0, 210, 255, 0.5)' : 'rgba(255, 255, 255, 0.3)';
+        ctx.shadowBlur = 15;
+        drawSprite('player', player.ax, player.ay);
+        ctx.shadowBlur = 0;
+
+        // Draw bombs
+        activeBombs.forEach(b => {
+            drawSprite('bomb', b.x, b.y);
+            ctx.fillStyle = b.t <= 1 ? "#ff0000" : "#ffffff";
+            ctx.font = "bold 20px monospace";
+            ctx.textAlign = "center";
+            ctx.fillText(b.t.toString(), b.x*TILE + TILE/2, b.y*TILE + TILE/2 + 7);
+        });
+
+        // Draw minimap
+        if(showMinimap) {
+            drawMinimap();
         }
         
-        // Draw sprite
-        drawSprite('guard', e.ax, e.ay);
+        updateVFX();
         
-        // Draw vision cone (visual only)
-        if(!player.isHidden && e.state !== 'dead') {
-            drawVisionConeVisual(e);
-        }
-    });
-
-    // Draw VFX
-    drawVFX();
-
-    // Draw player health bar
-    const playerHealthPercent = playerHP / playerMaxHP;
-    ctx.fillStyle = playerHealthPercent > 0.5 ? "#0f0" : playerHealthPercent > 0.25 ? "#ff0" : "#f00";
-    ctx.fillRect(player.ax * TILE + 5, player.ay * TILE - 8, (TILE - 10) * playerHealthPercent, 4);
-    ctx.strokeStyle = "#333";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(player.ax * TILE + 5, player.ay * TILE - 8, TILE - 10, 4);
-    
-    // Draw player HP text
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 10px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(playerHP.toString(), player.ax * TILE + TILE/2, player.ay * TILE - 4);
-
-    // Draw player with shadow
-    ctx.shadowColor = player.isHidden ? 'rgba(0, 210, 255, 0.5)' : 'rgba(255, 255, 255, 0.3)';
-    ctx.shadowBlur = 15;
-    drawSprite('player', player.ax, player.ay);
-    ctx.shadowBlur = 0;
-
-    // Draw bombs
-    activeBombs.forEach(b => {
-        drawSprite('bomb', b.x, b.y);
-        ctx.fillStyle = b.t <= 1 ? "#ff0000" : "#ffffff";
-        ctx.font = "bold 20px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(b.t.toString(), b.x*TILE + TILE/2, b.y*TILE + TILE/2 + 7);
-    });
-
-    // Draw minimap
-    if(showMinimap) {
-        drawMinimap();
+        shake *= 0.8;
+        requestAnimationFrame(gameLoop);
+    } catch (error) {
+        console.error("Error in game loop:", error);
     }
-    
-    updateVFX();
-    
-    shake *= 0.8;
-    requestAnimationFrame(gameLoop);
 }
 
 function drawTileHighlight(x, y, colorSet, pulse = true) {
@@ -359,7 +394,7 @@ function drawTileHighlight(x, y, colorSet, pulse = true) {
 }
 
 function drawVisionConeVisual(e) {
-    const drawRange = e.visionRange || 2;
+    const drawRange = 3; // Fixed to 3 tiles as requested
     const baseA = Math.atan2(e.dir.y, e.dir.x);
     const visionAngle = Math.PI / 3;
     
@@ -454,53 +489,18 @@ function drawMinimap() {
 }
 
 // ============================================
-// CAMERA & UI FUNCTIONS (IMPROVED)
+// CAMERA & UI FUNCTIONS (UNLIMITED PAN)
 // ============================================
 
 function centerCamera() {
     camX = (canvas.width/2) - (player.x*TILE + TILE/2)*zoom;
     camY = (canvas.height/2) - (player.y*TILE + TILE/2)*zoom;
-    clampCamera();
 }
 
-function centerOnUnit(x, y) {
-    camX = (canvas.width/2) - (x*TILE + TILE/2)*zoom;
-    camY = (canvas.height/2) - (y*TILE + TILE/2)*zoom;
-    clampCamera();
-}
-
-function clampCamera() {
-    const mapWidth = mapDim * TILE * zoom;
-    const mapHeight = mapDim * TILE * zoom;
-    
-    // Calculate bounds - allow camera to move until screen edge reaches map edge
-    const maxCamX = 0;
-    const minCamX = canvas.width - mapWidth;
-    const maxCamY = 0;
-    const minCamY = canvas.height - mapHeight;
-    
-    // Allow camera to move beyond map bounds by 100px for better view
-    camX = Math.min(maxCamX + 100, Math.max(minCamX - 100, camX));
-    camY = Math.min(maxCamY + 100, Math.max(minCamY - 100, camY));
-    
-    // If map is smaller than screen, keep it centered
-    if(mapWidth < canvas.width) {
-        camX = (canvas.width - mapWidth) / 2;
-    }
-    if(mapHeight < canvas.height) {
-        camY = (canvas.height - mapHeight) / 2;
-    }
-}
+// REMOVED clampCamera() - NO LIMITS ON PANNING
 
 function toggleMinimap() { 
-    showMinimap = !showMinimap; 
-    log("Minimap " + (showMinimap ? "ON" : "OFF"), showMinimap ? "#0f0" : "#f00");
-}
-
-function toggleLog() {
-    showLog = !showLog;
-    document.getElementById('missionLog').style.display = showLog ? 'flex' : 'none';
-    log("Log " + (showLog ? "ON" : "OFF"), showLog ? "#0f0" : "#f00");
+    showMinimap = !showMinimap;
 }
 
 function updateToolCounts() {
@@ -509,28 +509,14 @@ function updateToolCounts() {
     document.getElementById('bombCount').textContent = inv.bomb;
 }
 
-function updateHPDisplay() {
-    playerHP = Math.max(0, playerHP);
-    const hpPercent = playerHP / playerMaxHP;
-    const hpDisplay = document.getElementById('playerHP');
-    hpDisplay.textContent = `${playerHP}/${playerMaxHP}`;
-    
-    if(hpPercent > 0.5) {
-        hpDisplay.style.color = "#00ff00";
-    } else if(hpPercent > 0.25) {
-        hpDisplay.style.color = "#ffff00";
-    } else {
-        hpDisplay.style.color = "#ff0000";
-    }
-}
-
 // ============================================
-// INPUT HANDLING (IMPROVED)
+// INPUT HANDLING (IMPROVED UNLIMITED PAN)
 // ============================================
 
 let lastDist = 0, isDragging = false, lastTouch = {x:0, y:0};
 
-canvas.addEventListener('touchstart', e => {
+canvas.addEventListener('touchstart', function(e) {
+    e.preventDefault();
     if(e.touches.length === 2) {
         lastDist = Math.hypot(
             e.touches[0].pageX - e.touches[1].pageX, 
@@ -542,7 +528,7 @@ canvas.addEventListener('touchstart', e => {
     }
 }, {passive: false});
 
-canvas.addEventListener('touchmove', e => {
+canvas.addEventListener('touchmove', function(e) {
     e.preventDefault();
     if(e.touches.length === 2) {
         const dist = Math.hypot(
@@ -551,7 +537,6 @@ canvas.addEventListener('touchmove', e => {
         );
         zoom = Math.min(2, Math.max(0.3, zoom * (dist/lastDist)));
         lastDist = dist;
-        clampCamera();
     } else {
         const dx = e.touches[0].pageX - lastTouch.x;
         const dy = e.touches[0].pageY - lastTouch.y;
@@ -564,12 +549,12 @@ canvas.addEventListener('touchmove', e => {
             camX += dx; 
             camY += dy; 
             lastTouch = {x: e.touches[0].pageX, y: e.touches[0].pageY};
-            clampCamera();
         }
     }
 }, {passive: false});
 
-canvas.addEventListener('touchend', e => {
+canvas.addEventListener('touchend', function(e) {
+    e.preventDefault();
     if(isDragging || !playerTurn || gameOver || e.touches.length > 0) return;
     
     const rect = canvas.getBoundingClientRect();
@@ -581,15 +566,61 @@ canvas.addEventListener('touchend', e => {
     // Check if tile is highlighted
     const isHighlighted = highlightedTiles.some(t => t.x === tx && t.y === ty);
     
-    if(!isHighlighted) {
-        log("Invalid move!", "#f00");
-        return;
-    }
+    if(!isHighlighted) return;
     
-    if(grid[ty][tx] === WALL) {
-        log("Cannot move into wall!", "#f00");
-        return;
+    if(grid[ty][tx] === WALL) return;
+    
+    const dist = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
+    
+    if(selectMode === 'move' && dist <= 3) {
+        handlePlayerMove(tx, ty);
+    } else if(selectMode === 'attack' && dist === 1) {
+        handleAttack(tx, ty);
+    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR) {
+        handleItemPlacement(tx, ty, selectMode);
     }
+}, {passive: false});
+
+// Mouse support for testing
+canvas.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    isDragging = false;
+    lastTouch = {x: e.clientX, y: e.clientY};
+});
+
+canvas.addEventListener('mousemove', function(e) {
+    e.preventDefault();
+    if(e.buttons === 1) { // Left mouse button pressed
+        const dx = e.clientX - lastTouch.x;
+        const dy = e.clientY - lastTouch.y;
+        
+        if(Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+            isDragging = true;
+        }
+        
+        if(isDragging) {
+            camX += dx;
+            camY += dy;
+            lastTouch = {x: e.clientX, y: e.clientY};
+        }
+    }
+});
+
+canvas.addEventListener('mouseup', function(e) {
+    e.preventDefault();
+    if(isDragging || !playerTurn || gameOver) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const tx = Math.floor(((e.clientX - rect.left - camX)/zoom)/TILE);
+    const ty = Math.floor(((e.clientY - rect.top - camY)/zoom)/TILE);
+    
+    if(grid[ty]?.[tx] === undefined) return;
+    
+    const isHighlighted = highlightedTiles.some(t => t.x === tx && t.y === ty);
+    
+    if(!isHighlighted) return;
+    
+    if(grid[ty][tx] === WALL) return;
     
     const dist = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
     
@@ -602,19 +633,38 @@ canvas.addEventListener('touchend', e => {
     }
 });
 
+// Wheel zoom
+canvas.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    
+    const zoomSpeed = 0.1;
+    const oldZoom = zoom;
+    
+    if(e.deltaY < 0) {
+        zoom = Math.min(2.0, zoom + zoomSpeed);
+    } else {
+        zoom = Math.max(0.3, zoom - zoomSpeed);
+    }
+    
+    // Adjust camera to zoom toward mouse position
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    const worldX = (mouseX - camX) / oldZoom;
+    const worldY = (mouseY - camY) / oldZoom;
+    
+    camX = mouseX - worldX * zoom;
+    camY = mouseY - worldY * zoom;
+});
+
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
 
 function log(msg, color="#aaa") {
-    if(!showLog) return;
-    
-    const logDiv = document.getElementById('missionLog');
-    const d = document.createElement('div');
-    d.style.color = color;
-    d.innerText = `> ${msg}`;
-    logDiv.prepend(d);
-    if(logDiv.children.length > 5) logDiv.lastChild.remove();
+    // Log function now does nothing since we removed on-screen logs
+    return;
 }
 
 function animMove(obj, tx, ty, speed, cb) {
@@ -644,7 +694,7 @@ function animMove(obj, tx, ty, speed, cb) {
             obj.y = ty; 
             obj.ax = tx; 
             obj.ay = ty; 
-            cb(); 
+            if(cb) cb(); 
         }
     }
     step();
@@ -653,7 +703,8 @@ function animMove(obj, tx, ty, speed, cb) {
 function setMode(m) {
     selectMode = m;
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
+    const btn = document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1));
+    if(btn) btn.classList.add('active');
 }
 
 function autoSwitchToMove() {
@@ -672,6 +723,8 @@ function playerWait() {
 
 function showVictoryScreen() {
     document.getElementById('resultScreen').classList.remove('hidden');
+    document.getElementById('toolbar').classList.add('hidden');
+    document.getElementById('ui-controls').classList.add('hidden');
     showTenchuStyleVictoryStats();
 }
 
@@ -679,10 +732,6 @@ function showGameOverScreen() {
     gameOver = true;
     document.getElementById('gameOverScreen').classList.remove('hidden');
     document.getElementById('toolbar').classList.add('hidden');
-    document.getElementById('rangeIndicator').classList.add('hidden');
-    document.getElementById('cameraHint').classList.add('hidden');
-    document.getElementById('logToggle').classList.add('hidden');
-    document.getElementById('hpDisplay').classList.add('hidden');
     document.getElementById('ui-controls').classList.add('hidden');
 }
 
@@ -715,7 +764,7 @@ function hasLineOfSight(e, px, py) {
 }
 
 // ============================================
-// TURN PROCESSING (WITH WAITS)
+// TURN PROCESSING
 // ============================================
 
 async function endTurn() {
@@ -772,7 +821,6 @@ async function endTurn() {
     // Process enemies with proper waits
     for(let e of enemies.filter(g => g.alive)) {
         currentEnemyTurn = e;
-        centerOnUnit(e.x, e.y);
         
         await wait(800);
         
@@ -782,7 +830,6 @@ async function endTurn() {
     }
     
     currentEnemyTurn = null;
-    centerCamera();
     
     await wait(400);
     
@@ -829,13 +876,11 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
         createDamageEffect(player.x, player.y, enemy.damage, true);
         createSpeechBubble(player.x, player.y, `-${enemy.damage}`, "#ff66ff", 1.5);
         shake = 15;
-        updateHPDisplay();
         
         await wait(800);
         
         if(playerHP <= 0) {
             playerHP = 0;
-            updateHPDisplay();
             setTimeout(() => {
                 showGameOverScreen();
             }, 500);
@@ -993,7 +1038,6 @@ function showTenchuStyleVictoryStats() {
 window.addEventListener('load', () => {
     loadSprites();
     initAudio();
-    log("Game loaded. Press START MISSION to begin.", "#0f0");
 });
 
 // Export functions
@@ -1017,4 +1061,3 @@ window.playerWait = playerWait;
 window.wait = wait;
 window.initGame = initGame;
 window.toggleMinimap = toggleMinimap;
-window.toggleLog = toggleLog;
