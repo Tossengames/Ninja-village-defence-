@@ -371,8 +371,8 @@ function gameLoop() {
 
         // Draw player health bar
         const playerHealthPercent = playerHP / playerMaxHP;
-        ctx.fillStyle = playerHealthPercent > 0.5 ? "#0f0" : playerHealthPercent > 0.25 ? "#ff0" : "#f00";
-        ctx.fillRect(player.ax * TILE + 5, player.ay * TILE - 8, (TILE - 10) * playerHealthPercent, 4);
+    ctx.fillStyle = playerHealthPercent > 0.5 ? "#0f0" : playerHealthPercent > 0.25 ? "#ff0" : "#f00";
+    ctx.fillRect(player.ax * TILE + 5, player.ay * TILE - 8, (TILE - 10) * playerHealthPercent, 4);
 
         // Draw player with shadow
         ctx.shadowColor = player.isHidden ? 'rgba(0, 210, 255, 0.5)' : 'rgba(255, 255, 255, 0.3)';
@@ -942,7 +942,7 @@ async function endTurn() {
                 if(dist <= e.hearingRange) {
                     e.hasHeardSound = true;
                     e.soundLocation = {x: b.x, y: b.y};
-                    e.investigationTurns = 3;
+                    e.investigationTurns = 5;
                     e.state = 'investigating';
                     createSpeechBubble(e.x, e.y, "What was that?", "#ff9900", 1.5);
                 }
@@ -1073,11 +1073,7 @@ function wait(ms) {
 }
 
 // ============================================
-// TENCHU-STYLE VICTORY STATS
-// ============================================
-
-// ============================================
-// TENCHU-STYLE VICTORY STATS
+// TENCHU-STYLE VICTORY STATS (UPDATED)
 // ============================================
 
 function showTenchuStyleVictoryStats() {
@@ -1114,9 +1110,6 @@ function showTenchuStyleVictoryStats() {
     score = Math.max(500, score - spottedPenalty); // Minimum 500
     
     // NO PENALTY for items used - items are tactical tools!
-    // const itemPenalty = stats.itemsUsed * 200; // REMOVED
-    // score = Math.max(0, score - itemPenalty); // REMOVED
-    
     // BONUS for not using items (stealthy approach)
     const itemBonus = (10 - Math.min(stats.itemsUsed, 10)) * 100; // Bonus for using fewer items
     score += itemBonus;
@@ -1207,55 +1200,6 @@ function showTenchuStyleVictoryStats() {
             <span class="stat-value"></span>
             <span class="stat-points" style="color: #00ff00;">+${itemBonus.toLocaleString()}</span>
         </div>
-        <div class="stat-row total">
-            <span class="stat-label">TOTAL SCORE</span>
-            <span class="stat-value"></span>
-            <span class="stat-points" style="color: ${rankColor}; font-size: 18px; font-weight: bold;">${score.toLocaleString()}</span>
-        </div>
-        <div class="rank-description" style="color: ${rankColor}; margin-top: 15px; font-style: italic; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 5px;">
-            ${rankDescription}
-        </div>
-    `;
-}
-    
-    // Set rank text
-    rankLabel.innerHTML = `${rankIcon} ${rank}`;
-    rankLabel.style.color = rankColor;
-    rankLabel.style.textShadow = `0 0 10px ${rankColor}`;
-    
-    // Show detailed stats in Tenchu style
-    statsTable.innerHTML = `
-        <div class="stat-row">
-            <span class="stat-label">MISSION TIME</span>
-            <span class="stat-value">${minutes}:${seconds.toString().padStart(2, '0')}</span>
-            <span class="stat-points">+${stats.timeBonus.toLocaleString()}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">GUARDS ELIMINATED</span>
-            <span class="stat-value">${stats.kills}</span>
-            <span class="stat-points">+${killPoints.toLocaleString()}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">STEALTH KILLS</span>
-            <span class="stat-value">${stats.stealthKills}</span>
-            <span class="stat-points" style="color: #00ff00;">+${stealthBonus.toLocaleString()}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">GOLD COLLECTED</span>
-            <span class="stat-value">${stats.coins}</span>
-            <span class="stat-points">+${coinPoints.toLocaleString()}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">TIMES SPOTTED</span>
-            <span class="stat-value">${stats.timesSpotted}</span>
-            <span class="stat-points" style="color: #ff0000;">-${spottedPenalty.toLocaleString()}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">ITEMS USED</span>
-            <span class="stat-value">${stats.itemsUsed}</span>
-            <span class="stat-points" style="color: #ff6600;">-${itemPenalty.toLocaleString()}</span>
-        </div>
-        <div class="stat-divider"></div>
         <div class="stat-row total">
             <span class="stat-label">TOTAL SCORE</span>
             <span class="stat-value"></span>
