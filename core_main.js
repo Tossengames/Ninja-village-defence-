@@ -13,14 +13,18 @@ let inv = { trap: 3, rice: 2, bomb: 1, gas: 2 };
 let camX = 0, camY = 0, zoom = 1.0;
 let showMinimap = false;
 let showHighlights = true;
-let showLog = false; // Log hidden by default
+let showLog = false;
 let highlightedTiles = [];
 let hasReachedExit = false;
 let currentEnemyTurn = null;
 let combatSequence = false;
 let startTime = 0;
-let currentTurnEntity = null; // For camera focus
+let currentTurnEntity = null;
 let playerHasMovedThisTurn = false;
+let playerUsedActionThisTurn = false;
+let cameraFocusEnabled = true; // Allow user to override camera focus
+let isUserDragging = false;
+let dragStartX = 0, dragStartY = 0;
 
 // Player stats
 let playerHP = 10;
@@ -74,6 +78,7 @@ function initGame() {
     playerHP = playerMaxHP;
     combatSequence = false;
     playerHasMovedThisTurn = false;
+    playerUsedActionThisTurn = false;
     startTime = Date.now();
     stats = { kills: 0, coins: 0, itemsUsed: 0, timesSpotted: 0, stealthKills: 0, timeBonus: 0 };
     
@@ -90,6 +95,8 @@ function initGame() {
     showHighlights = true;
     showLog = false;
     currentTurnEntity = player;
+    cameraFocusEnabled = true;
+    isUserDragging = false;
     
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('toolbar').classList.remove('hidden');
@@ -139,7 +146,7 @@ function generateLevel() {
             ey = rand(mapDim); 
         } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
         
-        const visionRange = 3; // Fixed to 3 tiles as requested
+        const visionRange = 3;
         
         const typeRoll = Math.random();
         let enemyType, enemyStats;
@@ -291,13 +298,8 @@ function gameLoop() {
             drawGasEffect(g.x, g.y, g.t);
         });
 
-        // Draw highlights (only during player turn and if hasn't moved yet)
-        if(playerTurn && !playerHasMovedThisTurn && selectMode === 'move') {
-            calculateHighlightedTiles();
-            highlightedTiles.forEach(tile => {
-                drawTileHighlight(tile.x, tile.y, tile.color);
-            });
-        } else if(playerTurn && selectMode !== 'move') {
+        // Draw highlights during player turn
+        if(playerTurn) {
             calculateHighlightedTiles();
             highlightedTiles.forEach(tile => {
                 drawTileHighlight(tile.x, tile.y, tile.color);
@@ -353,7 +355,7 @@ function gameLoop() {
             // Draw sprite
             drawSprite('guard', e.ax, e.ay);
             
-            // Draw vision cone (visual only) - MAX 3 TILES
+            // Draw vision cone (visual only)
             if(!player.isHidden && e.state !== 'dead' && !e.isSleeping) {
                 drawVisionConeVisual(e);
             }
@@ -389,12 +391,12 @@ function gameLoop() {
         
         updateVFX();
         
-        // Camera focus on current turn entity
-        if(currentTurnEntity) {
+        // Camera focus on current turn entity (only if not dragging)
+        if(currentTurnEntity && cameraFocusEnabled && !isUserDragging) {
             const targetX = (canvas.width/2) - (currentTurnEntity.ax*TILE + TILE/2)*zoom;
             const targetY = (canvas.height/2) - (currentTurnEntity.ay*TILE + TILE/2)*zoom;
-            camX += (targetX - camX) * 0.1;
-            camY += (targetY - camY) * 0.1;
+            camX += (targetX - camX) * 0.05; // Slower camera movement
+            camY += (targetY - camY) * 0.05;
         }
         
         shake *= 0.8;
@@ -471,7 +473,7 @@ function drawVisionConeVisual(e) {
     ctx.closePath();
     ctx.fill();
     
-    // Draw ONLY SIDE outlines (no center line)
+    // Draw ONLY SIDE outlines
     ctx.strokeStyle = e.state === 'alerted' || e.state === 'chasing' ? 
                      '#ff0000' : 
                      e.state === 'investigating' ?
@@ -491,7 +493,7 @@ function drawVisionConeVisual(e) {
     ctx.lineTo(Math.cos(-visionAngle) * drawRange * TILE, Math.sin(-visionAngle) * drawRange * TILE);
     ctx.stroke();
     
-    // Arc connecting the sides (optional)
+    // Arc connecting the sides
     ctx.beginPath();
     ctx.arc(0, 0, drawRange * TILE, -visionAngle, visionAngle);
     ctx.stroke();
@@ -567,7 +569,7 @@ function updateToolCounts() {
 }
 
 // ============================================
-// INPUT HANDLING
+// INPUT HANDLING (IMPROVED DRAG & CAMERA)
 // ============================================
 
 let lastDist = 0, isDragging = false, lastTouch = {x:0, y:0};
@@ -579,9 +581,13 @@ canvas.addEventListener('touchstart', function(e) {
             e.touches[0].pageX - e.touches[1].pageX, 
             e.touches[0].pageY - e.touches[1].pageY
         );
+        isUserDragging = false;
     } else {
         isDragging = false;
+        isUserDragging = false;
         lastTouch = {x: e.touches[0].pageX, y: e.touches[0].pageY};
+        dragStartX = lastTouch.x;
+        dragStartY = lastTouch.y;
     }
 }, {passive: false});
 
@@ -594,12 +600,15 @@ canvas.addEventListener('touchmove', function(e) {
         );
         zoom = Math.min(2, Math.max(0.3, zoom * (dist/lastDist)));
         lastDist = dist;
+        isUserDragging = true;
     } else {
         const dx = e.touches[0].pageX - lastTouch.x;
         const dy = e.touches[0].pageY - lastTouch.y;
         
         if(Math.abs(dx) > 5 || Math.abs(dy) > 5) {
             isDragging = true; 
+            isUserDragging = true;
+            cameraFocusEnabled = false; // User is controlling camera
         }
         
         if(isDragging) {
@@ -612,7 +621,18 @@ canvas.addEventListener('touchmove', function(e) {
 
 canvas.addEventListener('touchend', function(e) {
     e.preventDefault();
-    if(isDragging || !playerTurn || gameOver || e.touches.length > 0) return;
+    if(isDragging) {
+        isDragging = false;
+        setTimeout(() => {
+            // Re-enable camera focus after 2 seconds if user doesn't drag again
+            if(!isUserDragging) {
+                cameraFocusEnabled = true;
+            }
+        }, 2000);
+        return;
+    }
+    
+    if(!playerTurn || gameOver || e.touches.length > 0) return;
     
     const rect = canvas.getBoundingClientRect();
     const tx = Math.floor(((lastTouch.x - rect.left - camX)/zoom)/TILE);
@@ -629,20 +649,27 @@ canvas.addEventListener('touchend', function(e) {
     
     const dist = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
     
-    if(selectMode === 'move' && dist <= 3 && !playerHasMovedThisTurn) {
+    if(selectMode === 'move' && dist <= 3) {
         handlePlayerMove(tx, ty);
-    } else if(selectMode === 'attack' && dist === 1 && playerHasMovedThisTurn) {
+    } else if(selectMode === 'attack' && dist === 1) {
         handleAttack(tx, ty);
-    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR && playerHasMovedThisTurn) {
+    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR) {
         handleItemPlacement(tx, ty, selectMode);
     }
+    
+    // Re-enable camera focus after interaction
+    cameraFocusEnabled = true;
+    isUserDragging = false;
 }, {passive: false});
 
 // Mouse support for testing
 canvas.addEventListener('mousedown', function(e) {
     e.preventDefault();
     isDragging = false;
+    isUserDragging = false;
     lastTouch = {x: e.clientX, y: e.clientY};
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
 });
 
 canvas.addEventListener('mousemove', function(e) {
@@ -653,6 +680,8 @@ canvas.addEventListener('mousemove', function(e) {
         
         if(Math.abs(dx) > 5 || Math.abs(dy) > 5) {
             isDragging = true;
+            isUserDragging = true;
+            cameraFocusEnabled = false;
         }
         
         if(isDragging) {
@@ -665,7 +694,17 @@ canvas.addEventListener('mousemove', function(e) {
 
 canvas.addEventListener('mouseup', function(e) {
     e.preventDefault();
-    if(isDragging || !playerTurn || gameOver) return;
+    if(isDragging) {
+        isDragging = false;
+        setTimeout(() => {
+            if(!isUserDragging) {
+                cameraFocusEnabled = true;
+            }
+        }, 2000);
+        return;
+    }
+    
+    if(!playerTurn || gameOver) return;
     
     const rect = canvas.getBoundingClientRect();
     const tx = Math.floor(((e.clientX - rect.left - camX)/zoom)/TILE);
@@ -681,13 +720,16 @@ canvas.addEventListener('mouseup', function(e) {
     
     const dist = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
     
-    if(selectMode === 'move' && dist <= 3 && !playerHasMovedThisTurn) {
+    if(selectMode === 'move' && dist <= 3) {
         handlePlayerMove(tx, ty);
-    } else if(selectMode === 'attack' && dist === 1 && playerHasMovedThisTurn) {
+    } else if(selectMode === 'attack' && dist === 1) {
         handleAttack(tx, ty);
-    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR && playerHasMovedThisTurn) {
+    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR) {
         handleItemPlacement(tx, ty, selectMode);
     }
+    
+    cameraFocusEnabled = true;
+    isUserDragging = false;
 });
 
 // Wheel zoom
@@ -713,6 +755,13 @@ canvas.addEventListener('wheel', function(e) {
     
     camX = mouseX - worldX * zoom;
     camY = mouseY - worldY * zoom;
+    
+    isUserDragging = true;
+    cameraFocusEnabled = false;
+    setTimeout(() => {
+        cameraFocusEnabled = true;
+        isUserDragging = false;
+    }, 2000);
 });
 
 // ============================================
@@ -761,6 +810,13 @@ function setMode(m) {
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     const btn = document.getElementById('btn' + m.charAt(0).toUpperCase() + m.slice(1));
     if(btn) btn.classList.add('active');
+    
+    // When user clicks any button, focus camera on player
+    if(playerTurn) {
+        cameraFocusEnabled = true;
+        currentTurnEntity = player;
+        isUserDragging = false;
+    }
 }
 
 function autoSwitchToMove() {
@@ -768,11 +824,13 @@ function autoSwitchToMove() {
 }
 
 function playerWait() { 
-    if(playerTurn && playerHasMovedThisTurn) { 
+    if(playerTurn) { 
         playerTurn = false; 
         playerHasMovedThisTurn = false;
+        playerUsedActionThisTurn = false;
         createSpeechBubble(player.x, player.y, "⏳ WAITING", "#aaaaaa", 1.5);
-        currentTurnEntity = null;
+        autoSwitchToMove();
+        
         setTimeout(() => {
             endTurn();
         }, 800);
@@ -823,7 +881,7 @@ function hasLineOfSight(e, px, py) {
 }
 
 // ============================================
-// TURN PROCESSING
+// TURN PROCESSING (WITH DELAYS)
 // ============================================
 
 async function endTurn() {
@@ -888,21 +946,23 @@ async function endTurn() {
         currentEnemyTurn = e;
         currentTurnEntity = e;
         
-        await wait(800);
+        await wait(800 + Math.random() * 400); // Random delay before enemy moves
         
         await processEnemyTurn(e);
         
-        await wait(500);
+        await wait(500); // Small delay before next enemy
     }
     
     currentEnemyTurn = null;
     currentTurnEntity = player;
     
-    await wait(400);
+    await wait(600); // Delay before player turn
     
     turnCount++; 
     playerTurn = true;
     playerHasMovedThisTurn = false;
+    playerUsedActionThisTurn = false;
+    autoSwitchToMove();
 }
 
 async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
