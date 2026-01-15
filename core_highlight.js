@@ -1,13 +1,30 @@
 // ============================================
-// TILE HIGHLIGHTING SYSTEM
+// TILE HIGHLIGHTING SYSTEM (UPDATED)
 // ============================================
 
 function calculateHighlightedTiles() {
     highlightedTiles = [];
     if(!playerTurn) return;
     
-    const range = 2;
     const colorSet = modeColors[selectMode];
+    
+    // Different ranges for different modes
+    let range;
+    switch(selectMode) {
+        case 'move':
+            range = 3; // Player can move 3 tiles
+            break;
+        case 'attack':
+            range = 1; // Attack only adjacent tiles
+            break;
+        case 'trap':
+        case 'rice':
+        case 'bomb':
+            range = 2; // Items can be placed 2 tiles away
+            break;
+        default:
+            range = 2;
+    }
     
     for(let dy = -range; dy <= range; dy++) {
         for(let dx = -range; dx <= range; dx++) {
@@ -22,8 +39,8 @@ function calculateHighlightedTiles() {
             const tile = grid[ty][tx];
             
             if(selectMode === 'move') {
-                // Only highlight walkable, non-occupied tiles
-                if(tile !== WALL && tile !== undefined) {
+                // Only highlight walkable, non-occupied tiles within 3 range
+                if(dist <= 3 && tile !== WALL && tile !== undefined) {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                     if(!enemyAtTile) {
                         highlightedTiles.push({
@@ -36,7 +53,7 @@ function calculateHighlightedTiles() {
                     }
                 }
             } else if(selectMode === 'attack') {
-                // Only highlight adjacent tiles with enemies
+                // Only highlight adjacent tiles with enemies (range = 1)
                 if(dist === 1) {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                     if(enemyAtTile) {
@@ -48,8 +65,8 @@ function calculateHighlightedTiles() {
                     }
                 }
             } else if(selectMode === 'trap' || selectMode === 'rice' || selectMode === 'bomb') {
-                // Only highlight empty floor tiles for item placement
-                if(tile === FLOOR) {
+                // Highlight empty floor tiles within 2 range
+                if(dist <= 2 && tile === FLOOR) {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                     const hasItem = tile === TRAP || tile === RICE || tile === BOMB || tile === COIN || tile === HIDE || tile === EXIT;
                     
