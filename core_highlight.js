@@ -63,15 +63,15 @@ function calculateHighlightedTiles() {
                         // Check if enemy can see player for stealth kill
                         const canSeePlayer = hasLineOfSight(enemyAtTile, player.x, player.y) && !player.isHidden;
                         
-                        // ENHANCED STEALTH KILL INDICATOR
+                        // ENHANCED STEALTH KILL INDICATOR - PURPLE/CRIMSON
                         if(!canSeePlayer) {
-                            // STEALTH KILL AVAILABLE - More visible indicator
+                            // STEALTH KILL AVAILABLE - New purple/crimson indicator
                             highlightedTiles.push({
                                 x: tx, y: ty,
                                 color: {
-                                    fill: 'rgba(0, 255, 0, 0.4)',      // Brighter green fill
-                                    border: 'rgba(0, 255, 0, 1.0)',    // Solid green border
-                                    glow: 'rgba(0, 255, 100, 0.7)'     // Bright green glow
+                                    fill: 'rgba(153, 50, 204, 0.3)',    // Purple fill
+                                    border: 'rgba(220, 20, 60, 1.0)',   // Crimson border
+                                    glow: 'rgba(138, 43, 226, 0.6)'     // Blue-violet glow
                                 },
                                 type: 'stealth',
                                 enemyType: enemyAtTile.type,
@@ -257,7 +257,7 @@ function drawTurnIndicator() {
 }
 
 // ============================================
-// ENHANCED TILE HIGHLIGHT DRAWING
+// ENHANCED TILE HIGHLIGHT DRAWING - PURPLE/CRIMSON
 // ============================================
 
 // Override the drawTileHighlight function for stealth kills
@@ -285,14 +285,14 @@ const originalDrawTileHighlight = window.drawTileHighlight || function(x, y, col
     }
 };
 
-// New enhanced drawTileHighlight
+// New enhanced drawTileHighlight with purple/crimson stealth kill
 window.drawTileHighlight = function(x, y, colorSet, pulse = true) {
     // Find if this is a stealth kill tile
     const tileInfo = highlightedTiles.find(t => t.x === x && t.y === y);
     const isStealthKill = tileInfo && tileInfo.type === 'stealth';
     
     if(isStealthKill) {
-        // STEALTH KILL - Special enhanced rendering
+        // STEALTH KILL - New purple/crimson effect
         drawStealthKillHighlight(x, y, tileInfo);
     } else {
         // Regular highlight
@@ -304,43 +304,84 @@ function drawStealthKillHighlight(x, y, tileInfo) {
     const time = Date.now() / 1000;
     const pulse = Math.sin(time * 8) * 0.5 + 0.5; // Fast, intense pulsing
     
-    // Inner fill with pulse
-    ctx.fillStyle = `rgba(0, 255, 0, ${0.4 * pulse})`;
-    ctx.fillRect(x*TILE + 4, y*TILE + 4, TILE - 8, TILE - 8);
-    
-    // Thick pulsing border
-    ctx.strokeStyle = `rgba(0, 255, 0, ${pulse})`;
-    ctx.lineWidth = 4;
-    ctx.strokeRect(x*TILE + 2, y*TILE + 2, TILE - 4, TILE - 4);
-    
-    // Multiple glow layers
-    ctx.strokeStyle = `rgba(0, 255, 100, ${0.7 * pulse})`;
-    ctx.lineWidth = 2;
-    for(let i = 0; i < 5; i++) {
-        const offset = i * 3 * pulse;
-        ctx.strokeRect(
-            x*TILE + 1 - offset, 
-            y*TILE + 1 - offset, 
-            TILE - 2 + offset*2, 
-            TILE - 2 + offset*2
-        );
-    }
-    
-    // Add ninja star icon in center
+    // Create a diamond shape instead of square
     const centerX = x * TILE + TILE/2;
     const centerY = y * TILE + TILE/2;
+    const size = TILE/2 - 2;
     
+    // Inner diamond fill with purple gradient
+    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size * 1.5);
+    gradient.addColorStop(0, `rgba(153, 50, 204, ${0.7 * pulse})`);
+    gradient.addColorStop(1, `rgba(138, 43, 226, ${0.3 * pulse})`);
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY - size);
+    ctx.lineTo(centerX + size, centerY);
+    ctx.lineTo(centerX, centerY + size);
+    ctx.lineTo(centerX - size, centerY);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Crimson border diamond
+    ctx.strokeStyle = `rgba(220, 20, 60, ${pulse})`;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY - size);
+    ctx.lineTo(centerX + size, centerY);
+    ctx.lineTo(centerX, centerY + size);
+    ctx.lineTo(centerX - size, centerY);
+    ctx.closePath();
+    ctx.stroke();
+    
+    // Pulsing outer glow
+    for(let i = 0; i < 4; i++) {
+        const glowSize = size + 5 + i * 5 * pulse;
+        const alpha = 0.4 - i * 0.1;
+        
+        ctx.strokeStyle = `rgba(138, 43, 226, ${alpha * pulse})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY - glowSize);
+        ctx.lineTo(centerX + glowSize, centerY);
+        ctx.lineTo(centerX, centerY + glowSize);
+        ctx.lineTo(centerX - glowSize, centerY);
+        ctx.closePath();
+        ctx.stroke();
+    }
+    
+    // Add shadow dagger icon in center with pulse
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(time * 3); // Spinning effect
     
-    ctx.fillStyle = `rgba(0, 255, 0, ${pulse})`;
-    ctx.font = '20px Arial';
+    // Shadow
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.5 * pulse})`;
+    ctx.font = '22px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    ctx.fillText('🗡️', 2, 2);
+    
+    // Main icon
+    ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`; // Gold color
     ctx.fillText('🗡️', 0, 0);
     
     ctx.restore();
+    
+    // Add floating particles
+    if(Math.random() < 0.3) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * size;
+        particles.push({
+            x: centerX + Math.cos(angle) * dist,
+            y: centerY + Math.sin(angle) * dist,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: (Math.random() - 0.5) * 0.5,
+            life: 1.0,
+            color: `rgba(220, 20, 60, ${0.8})`, // Crimson particles
+            size: Math.random() * 2 + 1
+        });
+    }
 }
 
 // ============================================
