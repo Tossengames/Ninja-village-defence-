@@ -71,6 +71,25 @@
         </div>
     </div>
     
+    <!-- Victory Screen (Tenchu-style) -->
+    <div id="resultScreen" class="overlay-screen hidden">
+        <div class="result-scroll">
+            <h1>MISSION COMPLETE</h1>
+            <div class="rank-text" id="rankLabel">RANK</div>
+            <div id="statsTable"></div>
+            <button class="reload-btn" onclick="window.location.reload()">NEW MISSION</button>
+        </div>
+    </div>
+    
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="overlay-screen hidden">
+        <div class="result-scroll">
+            <h1>MISSION FAILED</h1>
+            <div class="fail-text">You have been defeated.<br>Better luck next time!</div>
+            <button class="reload-btn" onclick="window.location.reload()">TRY AGAIN</button>
+        </div>
+    </div>
+    
     <script src="core_main.js"></script>
     <script src="core_vfx.js"></script>
     <script src="core_highlight.js"></script>
