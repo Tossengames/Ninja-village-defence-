@@ -2,12 +2,16 @@
 // VFX & AUDIO SYSTEM
 // ============================================
 
+console.log("Loading VFX system...");
+
 function initAudio() {
+    console.log("Initializing audio...");
     try {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         gainNode = audioContext.createGain();
         gainNode.connect(audioContext.destination);
         gainNode.gain.value = 0.3;
+        console.log("Audio initialized successfully");
     } catch (e) {
         console.log("Audio not supported:", e);
     }
@@ -475,3 +479,5 @@ function drawVFX() {
         ctx.fillText(b.text, b.x, b.y);
     });
 }
+
+console.log("VFX system loaded");
