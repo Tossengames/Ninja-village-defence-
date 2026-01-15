@@ -27,80 +27,90 @@ function playSound(type, options = {}) {
             case 'explosion':
                 oscillator.type = 'sawtooth';
                 oscillator.frequency.setValueAtTime(80, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + 0.3);
+                oscillator.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + 0.5);
                 gain.gain.setValueAtTime(0.5, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.7);
                 oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.5);
+                oscillator.stop(audioContext.currentTime + 0.7);
                 break;
                 
             case 'coin':
                 oscillator.type = 'sine';
                 oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(1046.5, audioContext.currentTime + 0.15);
+                oscillator.frequency.exponentialRampToValueAtTime(1046.5, audioContext.currentTime + 0.2);
                 gain.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
                 oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.2);
+                oscillator.stop(audioContext.currentTime + 0.3);
                 break;
                 
             case 'step':
                 oscillator.type = 'square';
                 oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.08);
+                oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.1);
                 gain.gain.setValueAtTime(0.1, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.08);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
                 oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.08);
+                oscillator.stop(audioContext.currentTime + 0.1);
                 break;
                 
             case 'death':
                 oscillator.type = 'sawtooth';
                 oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.6);
+                oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.8);
                 gain.gain.setValueAtTime(0.4, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.6);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
                 oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.6);
+                oscillator.stop(audioContext.currentTime + 0.8);
                 break;
                 
             case 'hide':
                 oscillator.type = 'sine';
                 oscillator.frequency.setValueAtTime(329.63, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(164.81, audioContext.currentTime + 0.2);
-                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.2);
-                break;
-                
-            case 'trap':
-                oscillator.type = 'triangle';
-                oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
-                oscillator.frequency.linearRampToValueAtTime(100, audioContext.currentTime + 0.3);
+                oscillator.frequency.exponentialRampToValueAtTime(164.81, audioContext.currentTime + 0.3);
                 gain.gain.setValueAtTime(0.2, audioContext.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
                 oscillator.start();
                 oscillator.stop(audioContext.currentTime + 0.3);
                 break;
                 
+            case 'trap':
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+                oscillator.frequency.linearRampToValueAtTime(100, audioContext.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.5);
+                break;
+                
             case 'alert':
                 oscillator.type = 'square';
                 oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
                 gain.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
                 oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.15);
+                oscillator.stop(audioContext.currentTime + 0.2);
                 break;
                 
             case 'attack':
                 oscillator.type = 'sawtooth';
                 oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(150, audioContext.currentTime + 0.15);
+                oscillator.frequency.exponentialRampToValueAtTime(150, audioContext.currentTime + 0.2);
                 gain.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
                 oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.15);
+                oscillator.stop(audioContext.currentTime + 0.2);
+                break;
+                
+            case 'hurt':
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.3);
                 break;
         }
         
@@ -121,21 +131,22 @@ function createBloodStain(x, y) {
 }
 
 function createDeathEffect(x, y) {
-    for(let i = 0; i < 15; i++) {
+    // Blood particles (RED, not pink)
+    for(let i = 0; i < 20; i++) {
         particles.push({
             x: x * TILE + TILE/2,
             y: y * TILE + TILE/2,
-            vx: (Math.random() - 0.5) * 8,
-            vy: (Math.random() - 0.5) * 8,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10,
             life: 1.0,
-            color: `rgb(${Math.floor(Math.random() * 100 + 155)}, 0, 0)`,
-            size: Math.random() * 5 + 3
+            color: `rgb(${Math.floor(Math.random() * 50 + 180)}, 0, 0)`,
+            size: Math.random() * 6 + 3
         });
     }
     
     createBloodStain(x, y);
     playSound('death');
-    createSpeechBubble(x, y, "💀 KILLED!", "#ff0000", 1);
+    createSpeechBubble(x, y, "💀 KILLED!", "#ff0000", 1.5);
 }
 
 function createExplosionEffect(x, y) {
@@ -163,7 +174,7 @@ function createExplosionEffect(x, y) {
     }
     
     playSound('explosion');
-    createSpeechBubble(x, y, "💥 BOOM!", "#ff9900", 1);
+    createSpeechBubble(x, y, "💥 BOOM!", "#ff9900", 1.5);
 }
 
 function createCoinPickupEffect(x, y) {
@@ -181,7 +192,7 @@ function createCoinPickupEffect(x, y) {
     });
     
     playSound('coin');
-    createSpeechBubble(x, y, "💰 +1 GOLD", "#ffd700", 1);
+    createSpeechBubble(x, y, "💰 +1 GOLD", "#ffd700", 1.5);
 }
 
 function createHideEffect(x, y, isHiding) {
@@ -196,7 +207,7 @@ function createHideEffect(x, y, isHiding) {
     
     if(isHiding) {
         playSound('hide');
-        createSpeechBubble(x, y, "🕶️ HIDING", "#00d2ff", 1);
+        createSpeechBubble(x, y, "🕶️ HIDING", "#00d2ff", 1.5);
     }
 }
 
@@ -227,34 +238,38 @@ function createTrapEffect(x, y) {
     }
     
     playSound('trap');
-    createSpeechBubble(x, y, "⚠️ TRAP!", "#ff6464", 1);
+    createSpeechBubble(x, y, "⚠️ TRAP!", "#ff6464", 1.5);
 }
 
 function createAlertEffect(x, y) {
-    particles.push({
-        x: x * TILE + TILE/2,
-        y: y * TILE + TILE/2,
-        vx: 0,
-        vy: 0,
-        life: 1.0,
-        color: 'rgba(255, 0, 0, 0.8)',
-        size: TILE/2,
-        pulse: true
-    });
+    // Red alert effect (no blood)
+    for(let i = 0; i < 8; i++) {
+        particles.push({
+            x: x * TILE + TILE/2,
+            y: y * TILE + TILE/2,
+            vx: (Math.random() - 0.5) * 2,
+            vy: (Math.random() - 0.5) * 2,
+            life: 1.0,
+            color: 'rgba(255, 50, 50, 0.8)',
+            size: Math.random() * 3 + 2,
+            pulse: true
+        });
+    }
     
     playSound('alert');
 }
 
 function createDamageEffect(x, y, damage, isPlayer = false) {
-    for(let i = 0; i < 8; i++) {
+    // Red damage particles for enemies, purple for player
+    for(let i = 0; i < 12; i++) {
         particles.push({
             x: x * TILE + TILE/2,
             y: y * TILE + TILE/2,
-            vx: (Math.random() - 0.5) * 6,
-            vy: (Math.random() - 0.5) * 6,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8,
             life: 1.0,
-            color: isPlayer ? 'rgba(255, 100, 255, 0.8)' : 'rgba(255, 100, 100, 0.8)',
-            size: Math.random() * 3 + 2
+            color: isPlayer ? 'rgba(200, 50, 200, 0.8)' : 'rgba(255, 50, 50, 0.8)',
+            size: Math.random() * 4 + 2
         });
     }
     
@@ -263,13 +278,14 @@ function createDamageEffect(x, y, damage, isPlayer = false) {
         y: y * TILE + TILE/2 - 20,
         value: `-${damage}`,
         life: 1.0,
-        color: isPlayer ? '#ff66ff' : '#ff6666'
+        color: isPlayer ? '#ff66ff' : '#ff3333',
+        size: 18
     });
     
-    playSound(isPlayer ? 'attack' : 'attack');
+    playSound(isPlayer ? 'hurt' : 'attack');
 }
 
-function createSpeechBubble(x, y, text, color = "#ffffff", duration = 1) {
+function createSpeechBubble(x, y, text, color = "#ffffff", duration = 1.5) {
     speechBubbles.push({
         x: x * TILE + TILE/2,
         y: y * TILE - 50,
@@ -287,7 +303,7 @@ function updateVFX() {
         p.x += p.vx;
         p.y += p.vy;
         p.vy += 0.2;
-        p.life -= 0.03;
+        p.life -= 0.02;
         return p.life > 0;
     });
     
@@ -324,7 +340,7 @@ function updateVFX() {
     });
     
     speechBubbles = speechBubbles.filter(b => {
-        b.life -= 0.04;
+        b.life -= 0.02;
         b.scale = Math.min(1, (b.maxLife - b.life) * 2);
         if(b.life < 0.3) {
             b.scale = b.life / 0.3;
@@ -336,6 +352,12 @@ function updateVFX() {
     bloodStains = bloodStains.filter(stain => {
         stain.life -= 1;
         return stain.life > 0;
+    });
+    
+    // Update unit outlines
+    unitOutlines = unitOutlines.filter(o => {
+        o.life -= 0.01;
+        return o.life > 0;
     });
 }
 
@@ -419,9 +441,13 @@ function drawVFX() {
     // Draw damage effects
     damageEffects.forEach(d => {
         ctx.fillStyle = d.color.replace('1.0', d.life.toString());
-        ctx.font = "bold 16px monospace";
+        ctx.font = `bold ${d.size}px monospace`;
         ctx.textAlign = "center";
         ctx.fillText(d.value, d.x, d.y);
+        
+        // Shadow for better visibility
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillText(d.value, d.x + 1, d.y + 1);
     });
     
     // Draw speech bubbles
