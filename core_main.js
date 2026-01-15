@@ -8,7 +8,7 @@ const FLOOR = 0, WALL = 1, HIDE = 2, EXIT = 3, COIN = 5, TRAP = 6, RICE = 7, BOM
 // Global game state
 let grid, player, enemies = [], activeBombs = [], turnCount = 1;
 let selectMode = 'move', gameOver = false, playerTurn = true, shake = 0, mapDim = 12;
-let stats = { kills: 0, coins: 0, itemsUsed: 0 };
+let stats = { kills: 0, coins: 0, itemsUsed: 0, timesSpotted: 0, stealthKills: 0, timeBonus: 0 };
 let inv = { trap: 3, rice: 2, bomb: 1 };
 let camX = 0, camY = 0, zoom = 1.0;
 let showMinimap = false;
@@ -18,6 +18,7 @@ let highlightedTiles = [];
 let hasReachedExit = false;
 let currentEnemyTurn = null;
 let combatSequence = false;
+let startTime = 0;
 
 // Player stats
 let playerHP = 10;
@@ -32,6 +33,7 @@ let explosionEffects = [];
 let footstepEffects = [];
 let damageEffects = [];
 let speechBubbles = [];
+let unitOutlines = []; // For highlighting current unit
 
 // Canvas and rendering
 const canvas = document.getElementById('game');
@@ -53,9 +55,9 @@ const modeColors = {
 
 // Enemy types with distinct colors
 const ENEMY_TYPES = {
-    NORMAL: { range: 1, hp: 10, speed: 0.12, damage: 2, color: '#ff3333', tint: 'rgba(255, 50, 50, 0.3)' },
-    ARCHER: { range: 3, hp: 8, speed: 0.10, damage: 1, color: '#33cc33', tint: 'rgba(50, 255, 50, 0.3)' },
-    SPEAR: { range: 2, hp: 12, speed: 0.11, damage: 3, color: '#3366ff', tint: 'rgba(50, 100, 255, 0.3)' }
+    NORMAL: { range: 1, hp: 10, speed: 0.08, damage: 2, color: '#ff3333', tint: 'rgba(255, 50, 50, 0.3)' },
+    ARCHER: { range: 3, hp: 8, speed: 0.06, damage: 1, color: '#33cc33', tint: 'rgba(50, 255, 50, 0.3)' },
+    SPEAR: { range: 2, hp: 12, speed: 0.07, damage: 3, color: '#3366ff', tint: 'rgba(50, 100, 255, 0.3)' }
 };
 
 // ============================================
@@ -68,6 +70,8 @@ function initGame() {
     hasReachedExit = false;
     playerHP = playerMaxHP;
     combatSequence = false;
+    startTime = Date.now();
+    stats = { kills: 0, coins: 0, itemsUsed: 0, timesSpotted: 0, stealthKills: 0, timeBonus: 0 };
     
     particles = [];
     bloodStains = [];
@@ -77,6 +81,7 @@ function initGame() {
     footstepEffects = [];
     damageEffects = [];
     speechBubbles = [];
+    unitOutlines = [];
     
     showHighlights = true;
     showLog = true;
@@ -87,6 +92,10 @@ function initGame() {
     document.getElementById('logToggle').classList.remove('hidden');
     document.getElementById('hpDisplay').classList.remove('hidden');
     document.getElementById('ui-controls').classList.remove('hidden');
+    
+    // Hide result screens
+    document.getElementById('resultScreen').classList.add('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
     
     generateLevel();
     centerCamera();
@@ -128,7 +137,7 @@ function generateLevel() {
             ey = rand(mapDim); 
         } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
         
-        const visionRange = Math.floor(Math.random() * 3) + 2; // Increased vision
+        const visionRange = Math.floor(Math.random() * 3) + 2;
         
         const typeRoll = Math.random();
         let enemyType, enemyStats;
@@ -165,7 +174,7 @@ function generateLevel() {
             returnToPatrolPos: {x: ex, y: ey},
             lastSeenPlayer: null,
             chaseTurns: 0,
-            chaseMemory: 5, // Reduced memory
+            chaseMemory: 5,
             color: enemyStats.color,
             tint: enemyStats.tint
         });
@@ -212,6 +221,7 @@ function gameLoop() {
     ctx.translate(camX+s, camY+s); 
     ctx.scale(zoom, zoom);
 
+    // Draw grid
     for(let y=0; y<mapDim; y++) {
         for(let x=0; x<mapDim; x++) {
             drawSprite('floor', x, y);
@@ -223,6 +233,7 @@ function gameLoop() {
         }
     }
 
+    // Draw highlights
     if(playerTurn) {
         calculateHighlightedTiles();
         highlightedTiles.forEach(tile => {
@@ -230,12 +241,15 @@ function gameLoop() {
         });
     }
 
+    // Draw enemies
     enemies.forEach(e => {
         if(!e.alive) return;
         
+        // Draw enemy tint
         ctx.fillStyle = e.tint;
         ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
         
+        // Draw health bar
         const healthPercent = e.hp / e.maxHP;
         ctx.fillStyle = healthPercent > 0.5 ? "#0f0" : healthPercent > 0.25 ? "#ff0" : "#f00";
         ctx.fillRect(e.ax * TILE + 5, e.ay * TILE - 8, (TILE - 10) * healthPercent, 4);
@@ -243,16 +257,19 @@ function gameLoop() {
         ctx.lineWidth = 1;
         ctx.strokeRect(e.ax * TILE + 5, e.ay * TILE - 8, TILE - 10, 4);
         
+        // Draw HP text
         ctx.fillStyle = "#fff";
         ctx.font = "bold 10px monospace";
         ctx.textAlign = "center";
         ctx.fillText(e.hp.toString(), e.ax * TILE + TILE/2, e.ay * TILE - 4);
         
+        // Draw type indicator
         ctx.fillStyle = e.color;
         ctx.font = "bold 8px monospace";
         ctx.textAlign = "left";
         ctx.fillText(e.type.charAt(0), e.ax * TILE + 3, e.ay * TILE + 10);
         
+        // Draw state tint
         if(e.state === 'alerted' || e.state === 'chasing') {
             ctx.fillStyle = "rgba(255, 50, 50, 0.3)";
             ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
@@ -264,11 +281,19 @@ function gameLoop() {
             ctx.fillRect(e.ax * TILE, e.ay * TILE, TILE, TILE);
         }
         
+        // Draw sprite
         drawSprite('guard', e.ax, e.ay);
+        
+        // Draw vision cone (visual only)
+        if(!player.isHidden && e.state !== 'dead') {
+            drawVisionConeVisual(e);
+        }
     });
 
+    // Draw VFX
     drawVFX();
 
+    // Draw player health bar
     const playerHealthPercent = playerHP / playerMaxHP;
     ctx.fillStyle = playerHealthPercent > 0.5 ? "#0f0" : playerHealthPercent > 0.25 ? "#ff0" : "#f00";
     ctx.fillRect(player.ax * TILE + 5, player.ay * TILE - 8, (TILE - 10) * playerHealthPercent, 4);
@@ -276,16 +301,19 @@ function gameLoop() {
     ctx.lineWidth = 1;
     ctx.strokeRect(player.ax * TILE + 5, player.ay * TILE - 8, TILE - 10, 4);
     
+    // Draw player HP text
     ctx.fillStyle = "#fff";
     ctx.font = "bold 10px monospace";
     ctx.textAlign = "center";
     ctx.fillText(playerHP.toString(), player.ax * TILE + TILE/2, player.ay * TILE - 4);
 
+    // Draw player with shadow
     ctx.shadowColor = player.isHidden ? 'rgba(0, 210, 255, 0.5)' : 'rgba(255, 255, 255, 0.3)';
     ctx.shadowBlur = 15;
     drawSprite('player', player.ax, player.ay);
     ctx.shadowBlur = 0;
 
+    // Draw bombs
     activeBombs.forEach(b => {
         drawSprite('bomb', b.x, b.y);
         ctx.fillStyle = b.t <= 1 ? "#ff0000" : "#ffffff";
@@ -294,6 +322,10 @@ function gameLoop() {
         ctx.fillText(b.t.toString(), b.x*TILE + TILE/2, b.y*TILE + TILE/2 + 7);
     });
 
+    // Draw unit outlines (for current turn)
+    drawUnitOutlines();
+
+    // Draw minimap
     if(showMinimap) {
         drawMinimap();
     }
@@ -326,6 +358,75 @@ function drawTileHighlight(x, y, colorSet, pulse = true) {
             TILE - 2 + offset*2
         );
     }
+}
+
+function drawVisionConeVisual(e) {
+    const drawRange = e.visionRange || 2;
+    
+    const gradient = ctx.createRadialGradient(
+        e.ax * TILE + 30, e.ay * TILE + 30, 5,
+        e.ax * TILE + 30, e.ay * TILE + 30, drawRange * TILE
+    );
+    
+    if(e.state === 'alerted' || e.state === 'chasing') {
+        gradient.addColorStop(0, 'rgba(255, 0, 0, 0.3)');
+        gradient.addColorStop(0.5, 'rgba(255, 50, 50, 0.2)');
+        gradient.addColorStop(1, 'rgba(255, 100, 100, 0)');
+    } else if(e.state === 'investigating') {
+        gradient.addColorStop(0, 'rgba(255, 165, 0, 0.3)');
+        gradient.addColorStop(0.5, 'rgba(255, 195, 50, 0.2)');
+        gradient.addColorStop(1, 'rgba(255, 235, 150, 0)');
+    } else {
+        gradient.addColorStop(0, 'rgba(255, 100, 100, 0.2)');
+        gradient.addColorStop(0.5, 'rgba(255, 150, 150, 0.1)');
+        gradient.addColorStop(1, 'rgba(255, 200, 200, 0)');
+    }
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    
+    const baseA = Math.atan2(e.dir.y, e.dir.x);
+    const visionAngle = Math.PI / 3;
+    
+    ctx.moveTo(e.ax * TILE + 30, e.ay * TILE + 30);
+    
+    const rayCount = 12;
+    for(let i = 0; i <= rayCount; i++) {
+        const angle = baseA - visionAngle + (2 * visionAngle * i / rayCount);
+        ctx.lineTo(
+            e.ax * TILE + 30 + Math.cos(angle) * drawRange * TILE,
+            e.ay * TILE + 30 + Math.sin(angle) * drawRange * TILE
+        );
+    }
+    
+    ctx.closePath();
+    ctx.fill();
+}
+
+function drawUnitOutlines() {
+    unitOutlines.forEach(outline => {
+        const pulse = Math.sin(Date.now() / 300) * 3 + 6;
+        ctx.strokeStyle = outline.color;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(
+            outline.x * TILE + 2 - pulse/2,
+            outline.y * TILE + 2 - pulse/2,
+            TILE - 4 + pulse,
+            TILE - 4 + pulse
+        );
+        
+        // Draw corner markers
+        ctx.fillStyle = outline.color;
+        const cornerSize = 6;
+        ctx.fillRect(outline.x * TILE + 2, outline.y * TILE + 2, cornerSize, 3);
+        ctx.fillRect(outline.x * TILE + 2, outline.y * TILE + 2, 3, cornerSize);
+        ctx.fillRect(outline.x * TILE + TILE - cornerSize - 2, outline.y * TILE + 2, cornerSize, 3);
+        ctx.fillRect(outline.x * TILE + TILE - 3, outline.y * TILE + 2, 3, cornerSize);
+        ctx.fillRect(outline.x * TILE + 2, outline.y * TILE + TILE - 3, cornerSize, 3);
+        ctx.fillRect(outline.x * TILE + 2, outline.y * TILE + TILE - cornerSize - 2, 3, cornerSize);
+        ctx.fillRect(outline.x * TILE + TILE - cornerSize - 2, outline.y * TILE + TILE - 3, cornerSize, 3);
+        ctx.fillRect(outline.x * TILE + TILE - 3, outline.y * TILE + TILE - cornerSize - 2, 3, cornerSize);
+    });
 }
 
 function drawMinimap() {
@@ -367,7 +468,7 @@ function drawMinimap() {
 }
 
 // ============================================
-// CAMERA & UI FUNCTIONS
+// CAMERA & UI FUNCTIONS (IMPROVED)
 // ============================================
 
 function centerCamera() {
@@ -386,20 +487,24 @@ function clampCamera() {
     const mapWidth = mapDim * TILE * zoom;
     const mapHeight = mapDim * TILE * zoom;
     
+    // Allow camera to move anywhere within map bounds
+    const minX = Math.min(0, canvas.width - mapWidth);
     const maxX = Math.max(0, canvas.width - mapWidth);
+    const minY = Math.min(0, canvas.height - mapHeight);
     const maxY = Math.max(0, canvas.height - mapHeight);
     
+    // Center padding when map is smaller than screen
     const padX = Math.max(0, (canvas.width - mapWidth) / 2);
     const padY = Math.max(0, (canvas.height - mapHeight) / 2);
     
     if(mapWidth > canvas.width) {
-        camX = Math.max(canvas.width - mapWidth - padX, Math.min(camX, padX));
+        camX = Math.max(minX - 50, Math.min(camX, maxX + 50));
     } else {
         camX = padX;
     }
     
     if(mapHeight > canvas.height) {
-        camY = Math.max(canvas.height - mapHeight - padY, Math.min(camY, padY));
+        camY = Math.max(minY - 50, Math.min(camY, maxY + 50));
     } else {
         camY = padY;
     }
@@ -427,7 +532,7 @@ function updateHPDisplay() {
 }
 
 // ============================================
-// INPUT HANDLING
+// INPUT HANDLING (IMPROVED)
 // ============================================
 
 let lastDist = 0, isDragging = false, lastTouch = {x:0, y:0};
@@ -458,11 +563,16 @@ canvas.addEventListener('touchmove', e => {
         const dx = e.touches[0].pageX - lastTouch.x;
         const dy = e.touches[0].pageY - lastTouch.y;
         
-        isDragging = true; 
-        camX += dx; 
-        camY += dy; 
-        lastTouch = {x: e.touches[0].pageX, y: e.touches[0].pageY};
-        clampCamera();
+        if(Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+            isDragging = true; 
+        }
+        
+        if(isDragging) {
+            camX += dx; 
+            camY += dy; 
+            lastTouch = {x: e.touches[0].pageX, y: e.touches[0].pageY};
+            clampCamera();
+        }
     }
 }, {passive: false});
 
@@ -473,19 +583,29 @@ canvas.addEventListener('touchend', e => {
     const tx = Math.floor(((lastTouch.x - rect.left - camX)/zoom)/TILE);
     const ty = Math.floor(((lastTouch.y - rect.top - camY)/zoom)/TILE);
     
-    if(grid[ty]?.[tx] === undefined || grid[ty][tx] === WALL) return;
+    if(grid[ty]?.[tx] === undefined) return;
+    
+    // Check if tile is highlighted
+    const isHighlighted = highlightedTiles.some(t => t.x === tx && t.y === ty);
+    
+    if(!isHighlighted) {
+        log("Invalid move!", "#f00");
+        return;
+    }
+    
+    if(grid[ty][tx] === WALL) {
+        log("Cannot move into wall!", "#f00");
+        return;
+    }
     
     const dist = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
-    const isValidMove = highlightedTiles.some(t => t.x === tx && t.y === ty);
-
-    if(selectMode === 'move' && dist <= 2 && isValidMove) {
+    
+    if(selectMode === 'move' && dist <= 2) {
         handlePlayerMove(tx, ty);
-    } else if(selectMode === 'attack' && dist === 1 && isValidMove) {
+    } else if(selectMode === 'attack' && dist === 1) {
         handleAttack(tx, ty);
-    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR && isValidMove) {
+    } else if(selectMode !== 'move' && selectMode !== 'attack' && dist <= 2 && grid[ty][tx] === FLOOR) {
         handleItemPlacement(tx, ty, selectMode);
-    } else if(!isValidMove) {
-        log("Out of range!", "#f00");
     }
 });
 
@@ -550,21 +670,22 @@ function autoSwitchToMove() {
 function playerWait() { 
     if(playerTurn) { 
         playerTurn = false; 
-        createSpeechBubble(player.x, player.y, "⏳ WAITING", "#aaaaaa", 1);
-        endTurn(); 
+        createSpeechBubble(player.x, player.y, "⏳ WAITING", "#aaaaaa", 1.5);
+        // Show outline on player during wait
+        unitOutlines.push({x: player.x, y: player.y, color: '#00d2ff', life: 1});
+        setTimeout(() => {
+            endTurn();
+        }, 800);
     } 
 }
 
-function showGameOver() {
-    // Simply go back to menu
-    document.getElementById('menu').classList.remove('hidden');
-    document.getElementById('toolbar').classList.add('hidden');
-    document.getElementById('rangeIndicator').classList.add('hidden');
-    document.getElementById('logToggle').classList.add('hidden');
-    document.getElementById('hpDisplay').classList.add('hidden');
-    document.getElementById('ui-controls').classList.add('hidden');
-    gameOver = false;
-    log("Mission failed. Try again!", "#f00");
+function showVictoryScreen() {
+    document.getElementById('resultScreen').classList.remove('hidden');
+    showTenchuStyleVictoryStats();
+}
+
+function showGameOverScreen() {
+    document.getElementById('gameOverScreen').classList.remove('hidden');
 }
 
 // ============================================
@@ -596,21 +717,16 @@ function hasLineOfSight(e, px, py) {
 }
 
 // ============================================
-// TURN PROCESSING (FASTER)
+// TURN PROCESSING (WITH WAITS)
 // ============================================
 
 async function endTurn() {
     if(hasReachedExit) {
-        // Return to menu on win
-        document.getElementById('menu').classList.remove('hidden');
-        document.getElementById('toolbar').classList.add('hidden');
-        document.getElementById('rangeIndicator').classList.add('hidden');
-        document.getElementById('logToggle').classList.add('hidden');
-        document.getElementById('hpDisplay').classList.add('hidden');
-        document.getElementById('ui-controls').classList.add('hidden');
-        log("Mission complete! Great job!", "#0f0");
         return;
     }
+    
+    // Clear unit outlines
+    unitOutlines = [];
     
     // Process Bombs first
     let exploding = [];
@@ -624,12 +740,13 @@ async function endTurn() {
     });
 
     for(let b of exploding) {
-        await new Promise(resolve => setTimeout(resolve, 200)); // Faster
+        await wait(600); // Wait before explosion
         
         grid[b.y][b.x] = FLOOR; 
         shake = 20; 
         createExplosionEffect(b.x, b.y);
         
+        // Alert nearby enemies to the sound
         enemies.forEach(e => {
             if(e.alive && e.state !== 'dead') {
                 const dist = Math.hypot(e.x - b.x, e.y - b.y);
@@ -638,7 +755,7 @@ async function endTurn() {
                     e.soundLocation = {x: b.x, y: b.y};
                     e.investigationTurns = 3;
                     e.state = 'investigating';
-                    createSpeechBubble(e.x, e.y, "What was that?", "#ff9900", 1);
+                    createSpeechBubble(e.x, e.y, "What was that?", "#ff9900", 1.5);
                 }
             }
         });
@@ -648,7 +765,7 @@ async function endTurn() {
         );
         
         for(let e of enemiesInBlast) {
-            await new Promise(resolve => setTimeout(resolve, 150)); // Faster
+            await wait(400); // Wait between deaths
             e.alive = false; 
             e.state = 'dead';
             stats.kills++;
@@ -656,47 +773,57 @@ async function endTurn() {
         }
     }
 
-    // Process enemies faster
+    // Process enemies with proper waits
     for(let e of enemies.filter(g => g.alive)) {
         currentEnemyTurn = e;
         centerOnUnit(e.x, e.y);
         
-        // Faster wait before enemy moves
-        await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
+        // Show outline on current enemy
+        unitOutlines.push({x: e.x, y: e.y, color: e.color, life: 3});
+        
+        await wait(800); // Wait before enemy moves
         
         await processEnemyTurn(e);
         
-        // Faster wait after enemy moves
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // Clear outline
+        unitOutlines = unitOutlines.filter(o => !(o.x === e.x && o.y === e.y));
+        
+        await wait(500); // Wait after enemy moves
     }
     
     currentEnemyTurn = null;
     centerCamera();
     
-    // Faster return to player
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await wait(400); // Wait before returning to player
     
     turnCount++; 
     playerTurn = true;
+    
+    // Show outline on player at start of turn
+    unitOutlines.push({x: player.x, y: player.y, color: '#00d2ff', life: 1});
 }
 
 async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
     combatSequence = true;
     
     // Player attacks first
-    createSpeechBubble(player.x, player.y, "🗡️ ATTACK!", "#00d2ff", 1);
-    await new Promise(resolve => setTimeout(resolve, 300)); // Faster
+    createSpeechBubble(player.x, player.y, "🗡️ ATTACK!", "#00d2ff", 1.5);
+    await wait(600); // Wait before attack
     
     enemy.hp -= playerDamage;
     createDamageEffect(enemy.x, enemy.y, playerDamage);
-    createSpeechBubble(enemy.x, enemy.y, `-${playerDamage}`, "#ff0000", 1);
+    createSpeechBubble(enemy.x, enemy.y, `-${playerDamage}`, "#ff0000", 1.5);
+    shake = 10;
     
-    await new Promise(resolve => setTimeout(resolve, 500)); // Faster
+    await wait(800); // Wait after attack
     
     if(enemy.hp <= 0) {
         enemy.alive = false;
         enemy.state = 'dead';
         stats.kills++;
+        if(!playerAttack) {
+            stats.stealthKills++;
+        }
         createDeathEffect(enemy.x, enemy.y);
         combatSequence = false;
         return true;
@@ -705,19 +832,20 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
     // Enemy counterattacks if in range
     const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
     if(dist <= enemy.attackRange) {
-        createSpeechBubble(enemy.x, enemy.y, `${enemy.type} ATTACK!`, enemy.color, 1);
-        await new Promise(resolve => setTimeout(resolve, 300)); // Faster
+        createSpeechBubble(enemy.x, enemy.y, `${enemy.type} ATTACK!`, enemy.color, 1.5);
+        await wait(600); // Wait before enemy attack
         
         playerHP -= enemy.damage;
         createDamageEffect(player.x, player.y, enemy.damage, true);
-        createSpeechBubble(player.x, player.y, `-${enemy.damage}`, "#ff66ff", 1);
+        createSpeechBubble(player.x, player.y, `-${enemy.damage}`, "#ff66ff", 1.5);
+        shake = 15;
         updateHPDisplay();
         
-        await new Promise(resolve => setTimeout(resolve, 500)); // Faster
+        await wait(800); // Wait after enemy attack
         
         if(playerHP <= 0) {
             gameOver = true;
-            showGameOver();
+            showGameOverScreen();
             combatSequence = false;
             return false;
         }
@@ -725,6 +853,143 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
     
     combatSequence = false;
     return false;
+}
+
+// Helper function for waits
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ============================================
+// TENCHU-STYLE VICTORY STATS
+// ============================================
+
+function showTenchuStyleVictoryStats() {
+    const statsTable = document.getElementById('statsTable');
+    const rankLabel = document.getElementById('rankLabel');
+    const missionTime = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(missionTime / 60);
+    const seconds = missionTime % 60;
+    
+    // Calculate score based on Tenchu-style scoring
+    let score = 0;
+    
+    // Time bonus (faster = more points)
+    const maxTimeBonus = 5000;
+    const timeBonus = Math.max(0, maxTimeBonus - (missionTime * 10));
+    stats.timeBonus = Math.floor(timeBonus);
+    score += stats.timeBonus;
+    
+    // Kills
+    const killPoints = stats.kills * 100;
+    score += killPoints;
+    
+    // Stealth kills bonus
+    const stealthBonus = stats.stealthKills * 150;
+    score += stealthBonus;
+    
+    // Coins
+    const coinPoints = stats.coins * 50;
+    score += coinPoints;
+    
+    // Penalty for being spotted
+    const spottedPenalty = stats.timesSpotted * 200;
+    score = Math.max(0, score - spottedPenalty);
+    
+    // Penalty for items used
+    const itemPenalty = stats.itemsUsed * 50;
+    score = Math.max(0, score - itemPenalty);
+    
+    // Tenchu-style rankings
+    let rank = "NOVICE";
+    let rankDescription = "";
+    let rankColor = "#888";
+    let rankIcon = "🥷";
+    
+    if(score >= 10000) {
+        rank = "GRAND MASTER";
+        rankDescription = "Flawless execution. A true shadow warrior.";
+        rankColor = "#ffd700";
+        rankIcon = "👑";
+    } else if(score >= 7500) {
+        rank = "MASTER NINJA";
+        rankDescription = "Superior technique and perfect stealth.";
+        rankColor = "#c0c0c0";
+        rankIcon = "🥷";
+    } else if(score >= 5000) {
+        rank = "EXPERT";
+        rankDescription = "Skilled infiltration with few mistakes.";
+        rankColor = "#cd7f32";
+        rankIcon = "🗡️";
+    } else if(score >= 3000) {
+        rank = "ADEPT";
+        rankDescription = "Competent performance.";
+        rankColor = "#00ff00";
+        rankIcon = "🎯";
+    } else if(score >= 1500) {
+        rank = "ASSASSIN";
+        rankDescription = "Effective but not subtle.";
+        rankColor = "#ff4444";
+        rankIcon = "⚔️";
+    } else if(score >= 500) {
+        rank = "INITIATE";
+        rankDescription = "Basic skills demonstrated.";
+        rankColor = "#aaa";
+        rankIcon = "🛡️";
+    } else {
+        rank = "NOVICE";
+        rankDescription = "Survived the mission.";
+        rankColor = "#888";
+        rankIcon = "👣";
+    }
+    
+    // Set rank text
+    rankLabel.innerHTML = `${rankIcon} ${rank}`;
+    rankLabel.style.color = rankColor;
+    rankLabel.style.textShadow = `0 0 10px ${rankColor}`;
+    
+    // Show detailed stats in Tenchu style
+    statsTable.innerHTML = `
+        <div class="stat-row">
+            <span class="stat-label">MISSION TIME</span>
+            <span class="stat-value">${minutes}:${seconds.toString().padStart(2, '0')}</span>
+            <span class="stat-points">+${stats.timeBonus.toLocaleString()}</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">GUARDS ELIMINATED</span>
+            <span class="stat-value">${stats.kills}</span>
+            <span class="stat-points">+${killPoints.toLocaleString()}</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">STEALTH KILLS</span>
+            <span class="stat-value">${stats.stealthKills}</span>
+            <span class="stat-points">+${stealthBonus.toLocaleString()}</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">GOLD COLLECTED</span>
+            <span class="stat-value">${stats.coins}</span>
+            <span class="stat-points">+${coinPoints.toLocaleString()}</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">TIMES SPOTTED</span>
+            <span class="stat-value">${stats.timesSpotted}</span>
+            <span class="stat-points">-${spottedPenalty.toLocaleString()}</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">ITEMS USED</span>
+            <span class="stat-value">${stats.itemsUsed}</span>
+            <span class="stat-points">-${itemPenalty.toLocaleString()}</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-row total">
+            <span class="stat-label">TOTAL SCORE</span>
+            <span class="stat-value"></span>
+            <span class="stat-points" style="color: ${rankColor}; font-size: 18px;">${score.toLocaleString()}</span>
+        </div>
+        <div class="rank-description" style="color: ${rankColor}; margin-top: 15px; font-style: italic;">
+            ${rankDescription}
+        </div>
+    `;
 }
 
 // ============================================
@@ -736,3 +1001,23 @@ window.addEventListener('load', () => {
     initAudio();
     log("Game loaded. Press START MISSION to begin.", "#0f0");
 });
+
+// Export functions
+window.animMove = animMove;
+window.log = log;
+window.processCombatSequence = processCombatSequence;
+window.hasLineOfSight = hasLineOfSight;
+window.createSpeechBubble = createSpeechBubble;
+window.createFootstepEffect = createFootstepEffect;
+window.createDeathEffect = createDeathEffect;
+window.createExplosionEffect = createExplosionEffect;
+window.createCoinPickupEffect = createCoinPickupEffect;
+window.createHideEffect = createHideEffect;
+window.createTrapEffect = createTrapEffect;
+window.createAlertEffect = createAlertEffect;
+window.createDamageEffect = createDamageEffect;
+window.playSound = playSound;
+window.autoSwitchToMove = autoSwitchToMove;
+window.setMode = setMode;
+window.playerWait = playerWait;
+window.wait = wait;
