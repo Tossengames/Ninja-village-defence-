@@ -2,16 +2,12 @@
 // VFX & AUDIO SYSTEM
 // ============================================
 
-console.log("Loading VFX system...");
-
 function initAudio() {
-    console.log("Initializing audio...");
     try {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         gainNode = audioContext.createGain();
         gainNode.connect(audioContext.destination);
         gainNode.gain.value = 0.3;
-        console.log("Audio initialized successfully");
     } catch (e) {
         console.log("Audio not supported:", e);
     }
@@ -123,7 +119,7 @@ function playSound(type, options = {}) {
     }
 }
 
-// VFX Functions
+// VFX Functions (same as before, just the functions without console logs)
 function createBloodStain(x, y) {
     bloodStains.push({
         x: x * TILE + TILE/2,
@@ -135,7 +131,6 @@ function createBloodStain(x, y) {
 }
 
 function createDeathEffect(x, y) {
-    // Blood particles
     for(let i = 0; i < 20; i++) {
         particles.push({
             x: x * TILE + TILE/2,
@@ -246,7 +241,6 @@ function createTrapEffect(x, y) {
 }
 
 function createAlertEffect(x, y) {
-    // Red alert effect
     for(let i = 0; i < 8; i++) {
         particles.push({
             x: x * TILE + TILE/2,
@@ -264,7 +258,6 @@ function createAlertEffect(x, y) {
 }
 
 function createDamageEffect(x, y, damage, isPlayer = false) {
-    // Red damage particles for enemies, purple for player
     for(let i = 0; i < 12; i++) {
         particles.push({
             x: x * TILE + TILE/2,
@@ -443,7 +436,6 @@ function drawVFX() {
         ctx.textAlign = "center";
         ctx.fillText(d.value, d.x, d.y);
         
-        // Shadow for better visibility
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         ctx.fillText(d.value, d.x + 1, d.y + 1);
     });
@@ -479,5 +471,3 @@ function drawVFX() {
         ctx.fillText(b.text, b.x, b.y);
     });
 }
-
-console.log("VFX system loaded");
