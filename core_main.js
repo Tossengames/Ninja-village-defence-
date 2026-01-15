@@ -33,7 +33,7 @@ let explosionEffects = [];
 let footstepEffects = [];
 let damageEffects = [];
 let speechBubbles = [];
-let unitOutlines = []; // For highlighting current unit
+let unitOutlines = [];
 
 // Canvas and rendering
 const canvas = document.getElementById('game');
@@ -89,6 +89,7 @@ function initGame() {
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('toolbar').classList.remove('hidden');
     document.getElementById('rangeIndicator').classList.remove('hidden');
+    document.getElementById('cameraHint').classList.remove('hidden');
     document.getElementById('logToggle').classList.remove('hidden');
     document.getElementById('hpDisplay').classList.remove('hidden');
     document.getElementById('ui-controls').classList.remove('hidden');
@@ -322,9 +323,6 @@ function gameLoop() {
         ctx.fillText(b.t.toString(), b.x*TILE + TILE/2, b.y*TILE + TILE/2 + 7);
     });
 
-    // Draw unit outlines (for current turn)
-    drawUnitOutlines();
-
     // Draw minimap
     if(showMinimap) {
         drawMinimap();
@@ -362,71 +360,59 @@ function drawTileHighlight(x, y, colorSet, pulse = true) {
 
 function drawVisionConeVisual(e) {
     const drawRange = e.visionRange || 2;
-    
-    const gradient = ctx.createRadialGradient(
-        e.ax * TILE + 30, e.ay * TILE + 30, 5,
-        e.ax * TILE + 30, e.ay * TILE + 30, drawRange * TILE
-    );
-    
-    if(e.state === 'alerted' || e.state === 'chasing') {
-        gradient.addColorStop(0, 'rgba(255, 0, 0, 0.3)');
-        gradient.addColorStop(0.5, 'rgba(255, 50, 50, 0.2)');
-        gradient.addColorStop(1, 'rgba(255, 100, 100, 0)');
-    } else if(e.state === 'investigating') {
-        gradient.addColorStop(0, 'rgba(255, 165, 0, 0.3)');
-        gradient.addColorStop(0.5, 'rgba(255, 195, 50, 0.2)');
-        gradient.addColorStop(1, 'rgba(255, 235, 150, 0)');
-    } else {
-        gradient.addColorStop(0, 'rgba(255, 100, 100, 0.2)');
-        gradient.addColorStop(0.5, 'rgba(255, 150, 150, 0.1)');
-        gradient.addColorStop(1, 'rgba(255, 200, 200, 0)');
-    }
-    
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    
     const baseA = Math.atan2(e.dir.y, e.dir.x);
     const visionAngle = Math.PI / 3;
     
-    ctx.moveTo(e.ax * TILE + 30, e.ay * TILE + 30);
+    ctx.save();
+    ctx.translate(e.ax * TILE + 30, e.ay * TILE + 30);
+    ctx.rotate(baseA);
     
-    const rayCount = 12;
-    for(let i = 0; i <= rayCount; i++) {
-        const angle = baseA - visionAngle + (2 * visionAngle * i / rayCount);
+    // Draw cone fill
+    ctx.fillStyle = e.state === 'alerted' || e.state === 'chasing' ? 
+                   'rgba(255, 0, 0, 0.2)' : 
+                   e.state === 'investigating' ?
+                   'rgba(255, 165, 0, 0.2)' :
+                   'rgba(255, 100, 100, 0.15)';
+    
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    for(let i = 0; i <= 10; i++) {
+        const angle = -visionAngle + (2 * visionAngle * i / 10);
         ctx.lineTo(
-            e.ax * TILE + 30 + Math.cos(angle) * drawRange * TILE,
-            e.ay * TILE + 30 + Math.sin(angle) * drawRange * TILE
+            Math.cos(angle) * drawRange * TILE,
+            Math.sin(angle) * drawRange * TILE
         );
     }
-    
     ctx.closePath();
     ctx.fill();
-}
-
-function drawUnitOutlines() {
-    unitOutlines.forEach(outline => {
-        const pulse = Math.sin(Date.now() / 300) * 3 + 6;
-        ctx.strokeStyle = outline.color;
-        ctx.lineWidth = 3;
-        ctx.strokeRect(
-            outline.x * TILE + 2 - pulse/2,
-            outline.y * TILE + 2 - pulse/2,
-            TILE - 4 + pulse,
-            TILE - 4 + pulse
-        );
-        
-        // Draw corner markers
-        ctx.fillStyle = outline.color;
-        const cornerSize = 6;
-        ctx.fillRect(outline.x * TILE + 2, outline.y * TILE + 2, cornerSize, 3);
-        ctx.fillRect(outline.x * TILE + 2, outline.y * TILE + 2, 3, cornerSize);
-        ctx.fillRect(outline.x * TILE + TILE - cornerSize - 2, outline.y * TILE + 2, cornerSize, 3);
-        ctx.fillRect(outline.x * TILE + TILE - 3, outline.y * TILE + 2, 3, cornerSize);
-        ctx.fillRect(outline.x * TILE + 2, outline.y * TILE + TILE - 3, cornerSize, 3);
-        ctx.fillRect(outline.x * TILE + 2, outline.y * TILE + TILE - cornerSize - 2, 3, cornerSize);
-        ctx.fillRect(outline.x * TILE + TILE - cornerSize - 2, outline.y * TILE + TILE - 3, cornerSize, 3);
-        ctx.fillRect(outline.x * TILE + TILE - 3, outline.y * TILE + TILE - cornerSize - 2, 3, cornerSize);
-    });
+    
+    // Draw cone outline
+    ctx.strokeStyle = e.state === 'alerted' || e.state === 'chasing' ? 
+                     '#ff0000' : 
+                     e.state === 'investigating' ?
+                     '#ff9900' :
+                     '#ff6666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(visionAngle) * drawRange * TILE, Math.sin(visionAngle) * drawRange * TILE);
+    ctx.lineTo(Math.cos(-visionAngle) * drawRange * TILE, Math.sin(-visionAngle) * drawRange * TILE);
+    ctx.closePath();
+    ctx.stroke();
+    
+    // Draw center line
+    ctx.strokeStyle = e.state === 'alerted' || e.state === 'chasing' ? 
+                     '#ff4444' : 
+                     e.state === 'investigating' ?
+                     '#ffaa44' :
+                     '#ff8888';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(drawRange * TILE, 0);
+    ctx.stroke();
+    
+    ctx.restore();
 }
 
 function drawMinimap() {
@@ -487,26 +473,22 @@ function clampCamera() {
     const mapWidth = mapDim * TILE * zoom;
     const mapHeight = mapDim * TILE * zoom;
     
-    // Allow camera to move anywhere within map bounds
-    const minX = Math.min(0, canvas.width - mapWidth);
-    const maxX = Math.max(0, canvas.width - mapWidth);
-    const minY = Math.min(0, canvas.height - mapHeight);
-    const maxY = Math.max(0, canvas.height - mapHeight);
+    // Calculate bounds - allow camera to move until screen edge reaches map edge
+    const maxCamX = 0;
+    const minCamX = canvas.width - mapWidth;
+    const maxCamY = 0;
+    const minCamY = canvas.height - mapHeight;
     
-    // Center padding when map is smaller than screen
-    const padX = Math.max(0, (canvas.width - mapWidth) / 2);
-    const padY = Math.max(0, (canvas.height - mapHeight) / 2);
+    // Allow camera to move beyond map bounds by 100px for better view
+    camX = Math.min(maxCamX + 100, Math.max(minCamX - 100, camX));
+    camY = Math.min(maxCamY + 100, Math.max(minCamY - 100, camY));
     
-    if(mapWidth > canvas.width) {
-        camX = Math.max(minX - 50, Math.min(camX, maxX + 50));
-    } else {
-        camX = padX;
+    // If map is smaller than screen, keep it centered
+    if(mapWidth < canvas.width) {
+        camX = (canvas.width - mapWidth) / 2;
     }
-    
-    if(mapHeight > canvas.height) {
-        camY = Math.max(minY - 50, Math.min(camY, maxY + 50));
-    } else {
-        camY = padY;
+    if(mapHeight < canvas.height) {
+        camY = (canvas.height - mapHeight) / 2;
     }
 }
 
@@ -528,7 +510,18 @@ function updateToolCounts() {
 }
 
 function updateHPDisplay() {
-    document.getElementById('playerHP').textContent = `${playerHP}/${playerMaxHP}`;
+    playerHP = Math.max(0, playerHP);
+    const hpPercent = playerHP / playerMaxHP;
+    const hpDisplay = document.getElementById('playerHP');
+    hpDisplay.textContent = `${playerHP}/${playerMaxHP}`;
+    
+    if(hpPercent > 0.5) {
+        hpDisplay.style.color = "#00ff00";
+    } else if(hpPercent > 0.25) {
+        hpDisplay.style.color = "#ffff00";
+    } else {
+        hpDisplay.style.color = "#ff0000";
+    }
 }
 
 // ============================================
@@ -600,7 +593,7 @@ canvas.addEventListener('touchend', e => {
     
     const dist = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
     
-    if(selectMode === 'move' && dist <= 2) {
+    if(selectMode === 'move' && dist <= 3) {
         handlePlayerMove(tx, ty);
     } else if(selectMode === 'attack' && dist === 1) {
         handleAttack(tx, ty);
@@ -671,8 +664,6 @@ function playerWait() {
     if(playerTurn) { 
         playerTurn = false; 
         createSpeechBubble(player.x, player.y, "⏳ WAITING", "#aaaaaa", 1.5);
-        // Show outline on player during wait
-        unitOutlines.push({x: player.x, y: player.y, color: '#00d2ff', life: 1});
         setTimeout(() => {
             endTurn();
         }, 800);
@@ -685,7 +676,14 @@ function showVictoryScreen() {
 }
 
 function showGameOverScreen() {
+    gameOver = true;
     document.getElementById('gameOverScreen').classList.remove('hidden');
+    document.getElementById('toolbar').classList.add('hidden');
+    document.getElementById('rangeIndicator').classList.add('hidden');
+    document.getElementById('cameraHint').classList.add('hidden');
+    document.getElementById('logToggle').classList.add('hidden');
+    document.getElementById('hpDisplay').classList.add('hidden');
+    document.getElementById('ui-controls').classList.add('hidden');
 }
 
 // ============================================
@@ -725,9 +723,6 @@ async function endTurn() {
         return;
     }
     
-    // Clear unit outlines
-    unitOutlines = [];
-    
     // Process Bombs first
     let exploding = [];
     activeBombs = activeBombs.filter(b => {
@@ -740,7 +735,7 @@ async function endTurn() {
     });
 
     for(let b of exploding) {
-        await wait(600); // Wait before explosion
+        await wait(600);
         
         grid[b.y][b.x] = FLOOR; 
         shake = 20; 
@@ -765,9 +760,10 @@ async function endTurn() {
         );
         
         for(let e of enemiesInBlast) {
-            await wait(400); // Wait between deaths
+            await wait(400);
             e.alive = false; 
             e.state = 'dead';
+            e.hp = 0;
             stats.kills++;
             createDeathEffect(e.x, e.y);
         }
@@ -778,29 +774,20 @@ async function endTurn() {
         currentEnemyTurn = e;
         centerOnUnit(e.x, e.y);
         
-        // Show outline on current enemy
-        unitOutlines.push({x: e.x, y: e.y, color: e.color, life: 3});
-        
-        await wait(800); // Wait before enemy moves
+        await wait(800);
         
         await processEnemyTurn(e);
         
-        // Clear outline
-        unitOutlines = unitOutlines.filter(o => !(o.x === e.x && o.y === e.y));
-        
-        await wait(500); // Wait after enemy moves
+        await wait(500);
     }
     
     currentEnemyTurn = null;
     centerCamera();
     
-    await wait(400); // Wait before returning to player
+    await wait(400);
     
     turnCount++; 
     playerTurn = true;
-    
-    // Show outline on player at start of turn
-    unitOutlines.push({x: player.x, y: player.y, color: '#00d2ff', life: 1});
 }
 
 async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
@@ -808,18 +795,20 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
     
     // Player attacks first
     createSpeechBubble(player.x, player.y, "🗡️ ATTACK!", "#00d2ff", 1.5);
-    await wait(600); // Wait before attack
+    await wait(600);
     
     enemy.hp -= playerDamage;
+    enemy.hp = Math.max(0, enemy.hp);
     createDamageEffect(enemy.x, enemy.y, playerDamage);
     createSpeechBubble(enemy.x, enemy.y, `-${playerDamage}`, "#ff0000", 1.5);
     shake = 10;
     
-    await wait(800); // Wait after attack
+    await wait(800);
     
     if(enemy.hp <= 0) {
         enemy.alive = false;
         enemy.state = 'dead';
+        enemy.hp = 0;
         stats.kills++;
         if(!playerAttack) {
             stats.stealthKills++;
@@ -833,19 +822,23 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
     const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
     if(dist <= enemy.attackRange) {
         createSpeechBubble(enemy.x, enemy.y, `${enemy.type} ATTACK!`, enemy.color, 1.5);
-        await wait(600); // Wait before enemy attack
+        await wait(600);
         
         playerHP -= enemy.damage;
+        playerHP = Math.max(0, playerHP);
         createDamageEffect(player.x, player.y, enemy.damage, true);
         createSpeechBubble(player.x, player.y, `-${enemy.damage}`, "#ff66ff", 1.5);
         shake = 15;
         updateHPDisplay();
         
-        await wait(800); // Wait after enemy attack
+        await wait(800);
         
         if(playerHP <= 0) {
-            gameOver = true;
-            showGameOverScreen();
+            playerHP = 0;
+            updateHPDisplay();
+            setTimeout(() => {
+                showGameOverScreen();
+            }, 500);
             combatSequence = false;
             return false;
         }
@@ -861,7 +854,7 @@ function wait(ms) {
 }
 
 // ============================================
-// TENCHU-STYLE VICTORY STATS
+// TENCHU-STYLE VICTORY STATS (UPDATED)
 // ============================================
 
 function showTenchuStyleVictoryStats() {
@@ -874,30 +867,31 @@ function showTenchuStyleVictoryStats() {
     // Calculate score based on Tenchu-style scoring
     let score = 0;
     
-    // Time bonus (faster = more points)
-    const maxTimeBonus = 5000;
-    const timeBonus = Math.max(0, maxTimeBonus - (missionTime * 10));
+    // Time bonus (faster = more points, longer = subtract more)
+    const maxTimeBonus = 10000;
+    const timePenaltyPerSecond = 20;
+    const timeBonus = Math.max(0, maxTimeBonus - (missionTime * timePenaltyPerSecond));
     stats.timeBonus = Math.floor(timeBonus);
     score += stats.timeBonus;
     
-    // Kills
-    const killPoints = stats.kills * 100;
+    // Kills (normal kills are good)
+    const killPoints = stats.kills * 200;
     score += killPoints;
     
-    // Stealth kills bonus
-    const stealthBonus = stats.stealthKills * 150;
+    // Stealth kills bonus (BETTER than normal kills)
+    const stealthBonus = stats.stealthKills * 500;
     score += stealthBonus;
     
     // Coins
-    const coinPoints = stats.coins * 50;
+    const coinPoints = stats.coins * 100;
     score += coinPoints;
     
-    // Penalty for being spotted
-    const spottedPenalty = stats.timesSpotted * 200;
+    // PENALTY for being spotted (BAD THING - TENCHU STYLE)
+    const spottedPenalty = stats.timesSpotted * 1000;
     score = Math.max(0, score - spottedPenalty);
     
-    // Penalty for items used
-    const itemPenalty = stats.itemsUsed * 50;
+    // Penalty for items used (using items = less stealthy)
+    const itemPenalty = stats.itemsUsed * 200;
     score = Math.max(0, score - itemPenalty);
     
     // Tenchu-style rankings
@@ -906,32 +900,32 @@ function showTenchuStyleVictoryStats() {
     let rankColor = "#888";
     let rankIcon = "🥷";
     
-    if(score >= 10000) {
+    if(score >= 15000) {
         rank = "GRAND MASTER";
         rankDescription = "Flawless execution. A true shadow warrior.";
         rankColor = "#ffd700";
         rankIcon = "👑";
-    } else if(score >= 7500) {
+    } else if(score >= 12000) {
         rank = "MASTER NINJA";
         rankDescription = "Superior technique and perfect stealth.";
         rankColor = "#c0c0c0";
         rankIcon = "🥷";
-    } else if(score >= 5000) {
+    } else if(score >= 9000) {
         rank = "EXPERT";
         rankDescription = "Skilled infiltration with few mistakes.";
         rankColor = "#cd7f32";
         rankIcon = "🗡️";
-    } else if(score >= 3000) {
+    } else if(score >= 6000) {
         rank = "ADEPT";
         rankDescription = "Competent performance.";
         rankColor = "#00ff00";
         rankIcon = "🎯";
-    } else if(score >= 1500) {
+    } else if(score >= 3000) {
         rank = "ASSASSIN";
         rankDescription = "Effective but not subtle.";
         rankColor = "#ff4444";
         rankIcon = "⚔️";
-    } else if(score >= 500) {
+    } else if(score >= 1000) {
         rank = "INITIATE";
         rankDescription = "Basic skills demonstrated.";
         rankColor = "#aaa";
@@ -963,7 +957,7 @@ function showTenchuStyleVictoryStats() {
         <div class="stat-row">
             <span class="stat-label">STEALTH KILLS</span>
             <span class="stat-value">${stats.stealthKills}</span>
-            <span class="stat-points">+${stealthBonus.toLocaleString()}</span>
+            <span class="stat-points" style="color: #00ff00;">+${stealthBonus.toLocaleString()}</span>
         </div>
         <div class="stat-row">
             <span class="stat-label">GOLD COLLECTED</span>
@@ -973,20 +967,20 @@ function showTenchuStyleVictoryStats() {
         <div class="stat-row">
             <span class="stat-label">TIMES SPOTTED</span>
             <span class="stat-value">${stats.timesSpotted}</span>
-            <span class="stat-points">-${spottedPenalty.toLocaleString()}</span>
+            <span class="stat-points" style="color: #ff0000;">-${spottedPenalty.toLocaleString()}</span>
         </div>
         <div class="stat-row">
             <span class="stat-label">ITEMS USED</span>
             <span class="stat-value">${stats.itemsUsed}</span>
-            <span class="stat-points">-${itemPenalty.toLocaleString()}</span>
+            <span class="stat-points" style="color: #ff6600;">-${itemPenalty.toLocaleString()}</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-row total">
             <span class="stat-label">TOTAL SCORE</span>
             <span class="stat-value"></span>
-            <span class="stat-points" style="color: ${rankColor}; font-size: 18px;">${score.toLocaleString()}</span>
+            <span class="stat-points" style="color: ${rankColor}; font-size: 18px; font-weight: bold;">${score.toLocaleString()}</span>
         </div>
-        <div class="rank-description" style="color: ${rankColor}; margin-top: 15px; font-style: italic;">
+        <div class="rank-description" style="color: ${rankColor}; margin-top: 15px; font-style: italic; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 5px;">
             ${rankDescription}
         </div>
     `;
@@ -1021,3 +1015,6 @@ window.autoSwitchToMove = autoSwitchToMove;
 window.setMode = setMode;
 window.playerWait = playerWait;
 window.wait = wait;
+window.initGame = initGame;
+window.toggleMinimap = toggleMinimap;
+window.toggleLog = toggleLog;
