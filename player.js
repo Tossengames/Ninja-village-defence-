@@ -5,80 +5,120 @@
 async function handlePlayerMove(targetX, targetY) {
     if(!playerTurn || gameOver || combatSequence) return;
     
+    if(playerHasMovedThisTurn) {
+        createSpeechBubble(player.x, player.y, "Already moved this turn!", "#ff9900", 1);
+        return;
+    }
+    
     if(hasReachedExit) return;
     
     // Check if tile is highlighted (reachable)
     const isHighlighted = highlightedTiles.some(t => t.x === targetX && t.y === targetY);
     if(!isHighlighted) return;
     
-    if(playerHasMovedThisTurn) {
-        createSpeechBubble(player.x, player.y, "Already moved this turn!", "#ff9900", 1);
-        return;
-    }
+    const path = findPath(player.x, player.y, targetX, targetY);
+    if(!path || path.length === 0) return;
     
-    const tile = grid[targetY][targetX];
-    
-    if(tile === EXIT) {
+    if(grid[targetY][targetX] === EXIT) {
         hasReachedExit = true;
         playerTurn = false;
         playerHasMovedThisTurn = false;
         playerUsedActionThisTurn = false;
         
-        animMove(player, targetX, targetY, 0.2, () => {
-            player.x = targetX;
-            player.y = targetY;
+        // Move tile by tile to exit
+        let stepsTaken = 0;
+        
+        async function takeStep() {
+            if(stepsTaken >= path.length) {
+                setTimeout(() => {
+                    document.getElementById('toolbar').classList.add('hidden');
+                    document.getElementById('ui-controls').classList.add('hidden');
+                    showVictoryScreen();
+                }, 1000);
+                return;
+            }
             
-            setTimeout(() => {
-                document.getElementById('toolbar').classList.add('hidden');
-                document.getElementById('ui-controls').classList.add('hidden');
-                showVictoryScreen();
-            }, 1000);
-        });
+            const step = path[stepsTaken];
+            
+            await new Promise(resolve => {
+                animMove(player, step.x, step.y, 0.15, () => {
+                    player.x = step.x;
+                    player.y = step.y;
+                    stepsTaken++;
+                    resolve();
+                });
+            });
+            
+            await new Promise(resolve => setTimeout(resolve, 100));
+            takeStep();
+        }
+        
+        takeStep();
         return;
     }
     
-    if(tile === COIN) {
-        stats.coins++;
-        grid[targetY][targetX] = FLOOR;
-        createCoinPickupEffect(targetX, targetY);
-    }
+    // Move tile by tile along path (max 3 steps)
+    let stepsTaken = 0;
+    const maxSteps = Math.min(3, path.length);
     
-    const wasHidden = player.isHidden;
-    player.isHidden = (tile === HIDE);
-    if(player.isHidden !== wasHidden) {
-        createHideEffect(targetX, targetY, player.isHidden);
-    }
-    
-    // If player hides after being spotted, enemies lose track
-    if(player.isHidden && !wasHidden) {
-        enemies.forEach(e => {
-            if(e.state === 'alerted' || e.state === 'chasing') {
-                e.state = 'investigating';
-                e.investigationTarget = {x: targetX, y: targetY};
-                e.investigationTurns = 3;
-                createSpeechBubble(e.x, e.y, "Where'd he go?", "#ff9900", 1.5);
+    async function takeStep() {
+        if(stepsTaken >= maxSteps) {
+            playerHasMovedThisTurn = true;
+            
+            // Switch to attack mode if enemy adjacent
+            const adjacentEnemies = enemies.filter(e => 
+                e.alive && !e.isSleeping && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
+            );
+            
+            if(adjacentEnemies.length > 0) {
+                setMode('attack');
+            } else {
+                autoSwitchToMove();
             }
+            return;
+        }
+        
+        const step = path[stepsTaken];
+        const tile = grid[step.y][step.x];
+        
+        if(tile === COIN) {
+            stats.coins++;
+            grid[step.y][step.x] = FLOOR;
+            createCoinPickupEffect(step.x, step.y);
+        }
+        
+        const wasHidden = player.isHidden;
+        player.isHidden = (tile === HIDE);
+        if(player.isHidden !== wasHidden) {
+            createHideEffect(step.x, step.y, player.isHidden);
+        }
+        
+        // If player hides after being spotted, enemies lose track
+        if(player.isHidden && !wasHidden) {
+            enemies.forEach(e => {
+                if(e.state === 'alerted' || e.state === 'chasing') {
+                    e.state = 'investigating';
+                    e.investigationTarget = {x: step.x, y: step.y};
+                    e.investigationTurns = 3;
+                    createSpeechBubble(e.x, e.y, "Where'd he go?", "#ff9900", 1.5);
+                }
+            });
+        }
+        
+        await new Promise(resolve => {
+            animMove(player, step.x, step.y, 0.15, () => {
+                player.x = step.x;
+                player.y = step.y;
+                stepsTaken++;
+                resolve();
+            });
         });
+        
+        await new Promise(resolve => setTimeout(resolve, 100));
+        takeStep();
     }
     
-    animMove(player, targetX, targetY, 0.2, () => {
-        player.x = targetX;
-        player.y = targetY;
-        
-        // Player has moved
-        playerHasMovedThisTurn = true;
-        
-        // Switch to attack mode if enemy adjacent
-        const adjacentEnemies = enemies.filter(e => 
-            e.alive && !e.isSleeping && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
-        );
-        
-        if(adjacentEnemies.length > 0) {
-            setMode('attack');
-        } else {
-            autoSwitchToMove();
-        }
-    });
+    takeStep();
 }
 
 async function handleAttack(targetX, targetY) {
@@ -102,23 +142,30 @@ async function handleAttack(targetX, targetY) {
     }
     
     playerUsedActionThisTurn = true;
+    playerTurn = false; // Immediately end turn after attack
     
-    // Check if enemy is alerted/chasing or can see player
+    // Check if enemy can see player (CONE VISION ONLY)
     const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
     
     if(enemy.state === 'alerted' || enemy.state === 'chasing' || canSeePlayer) {
-        // Normal combat
-        createSpeechBubble(player.x, player.y, `⚔️ VS ${enemy.type}`, "#ff3333", 1);
+        // Normal combat - enemy can see player
+        createSpeechBubble(player.x, player.y, `⚔️ ATTACK!`, "#ff3333", 1);
         
         const enemyDied = await processCombatSequence(true, enemy, 2);
         
         if(!enemyDied && !gameOver) {
             autoSwitchToMove();
+            setTimeout(() => {
+                endTurn();
+            }, 500);
         } else if(!gameOver) {
             autoSwitchToMove();
+            setTimeout(() => {
+                endTurn();
+            }, 500);
         }
     } else {
-        // STEALTH KILL - INSTANT KILL if enemy not alerted
+        // STEALTH KILL - INSTANT KILL if enemy can't see player
         createSpeechBubble(player.x, player.y, "🗡️ STEALTH KILL!", "#00ff00", 1);
         await new Promise(resolve => setTimeout(resolve, 300));
         
@@ -130,6 +177,9 @@ async function handleAttack(targetX, targetY) {
         createDeathEffect(targetX, targetY);
         
         autoSwitchToMove();
+        setTimeout(() => {
+            endTurn();
+        }, 500);
     }
 }
 
@@ -160,6 +210,7 @@ function handleItemPlacement(x, y, type) {
     inv[type]--;
     stats.itemsUsed++;
     playerUsedActionThisTurn = true;
+    playerTurn = false; // Immediately end turn after item use
     updateToolCounts();
     
     switch(type) {
@@ -185,4 +236,7 @@ function handleItemPlacement(x, y, type) {
     }
     
     autoSwitchToMove();
+    setTimeout(() => {
+        endTurn();
+    }, 500);
 }
