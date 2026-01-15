@@ -131,7 +131,7 @@ function createBloodStain(x, y) {
 }
 
 function createDeathEffect(x, y) {
-    // Blood particles (RED, not pink)
+    // Blood particles
     for(let i = 0; i < 20; i++) {
         particles.push({
             x: x * TILE + TILE/2,
@@ -242,7 +242,7 @@ function createTrapEffect(x, y) {
 }
 
 function createAlertEffect(x, y) {
-    // Red alert effect (no blood)
+    // Red alert effect
     for(let i = 0; i < 8; i++) {
         particles.push({
             x: x * TILE + TILE/2,
@@ -352,12 +352,6 @@ function updateVFX() {
     bloodStains = bloodStains.filter(stain => {
         stain.life -= 1;
         return stain.life > 0;
-    });
-    
-    // Update unit outlines
-    unitOutlines = unitOutlines.filter(o => {
-        o.life -= 0.01;
-        return o.life > 0;
     });
 }
 
