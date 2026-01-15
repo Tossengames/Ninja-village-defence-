@@ -296,116 +296,167 @@ input[type="number"] {
     display: none !important;
 }
 
-/* --- VICTORY SCREEN --- */
+/* --- TENCHU-STYLE VICTORY SCREEN --- */
 #resultScreen .result-scroll {
-    background: rgba(20, 20, 20, 0.95);
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
     border: 2px solid var(--accent);
     padding: 30px;
-    border-radius: 20px;
+    border-radius: 15px;
     max-width: 500px;
-    width: 100%;
-    box-shadow: 0 0 50px rgba(212, 175, 55, 0.3);
+    width: 90%;
+    box-shadow: 0 0 50px rgba(212, 175, 55, 0.4);
     animation: fadeIn 0.5s ease-out;
+    position: relative;
+    overflow: hidden;
     box-sizing: border-box;
+}
+
+#resultScreen .result-scroll::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
 }
 
 #resultScreen h1 {
     color: var(--accent);
-    letter-spacing: 6px;
-    font-size: 28px;
-    margin-bottom: 20px;
-    text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+    letter-spacing: 8px;
+    font-size: 32px;
+    margin-bottom: 30px;
+    text-align: center;
+    text-shadow: 0 0 20px rgba(212, 175, 55, 0.7);
+    text-transform: uppercase;
 }
 
 .rank-text {
     font-size: 36px;
     color: var(--accent);
     letter-spacing: 6px;
-    margin-bottom: 20px;
-    text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+    margin: 20px 0;
+    text-align: center;
+    text-shadow: 0 0 20px currentColor;
     animation: glow 2s infinite;
     text-transform: uppercase;
     font-weight: bold;
+    padding: 10px 20px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.5);
+    display: inline-block;
+}
+
+/* Stats table (Tenchu style) */
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 14px;
+}
+
+.stat-row:last-child {
+    border-bottom: none;
+}
+
+.stat-row.total {
+    font-size: 16px;
+    font-weight: bold;
+    margin-top: 10px;
+    padding-top: 15px;
+    border-top: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.stat-label {
+    color: #aaa;
+    text-align: left;
+    flex: 1;
+}
+
+.stat-value {
+    color: #fff;
+    text-align: center;
+    flex: 0.5;
+    font-weight: bold;
+}
+
+.stat-points {
+    color: #0f0;
+    text-align: right;
+    flex: 1;
+    font-family: monospace;
+}
+
+.stat-row:nth-child(4) .stat-points,
+.stat-row:nth-child(5) .stat-points,
+.stat-row:nth-child(6) .stat-points {
+    color: #f00;
+}
+
+.stat-divider {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    margin: 15px 0;
+}
+
+.rank-description {
+    text-align: center;
+    font-size: 13px;
+    margin-top: 20px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+    border-left: 3px solid var(--accent);
 }
 
 /* --- GAME OVER SCREEN --- */
 #gameOverScreen .result-scroll {
-    background: rgba(20, 20, 20, 0.95);
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
     border: 2px solid var(--red);
-    padding: 30px;
-    border-radius: 20px;
-    max-width: 500px;
-    width: 100%;
-    box-shadow: 0 0 50px rgba(255, 50, 50, 0.3);
+    padding: 40px 30px;
+    border-radius: 15px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 0 50px rgba(255, 50, 50, 0.4);
     animation: fadeIn 0.5s ease-out;
+    text-align: center;
     box-sizing: border-box;
 }
 
 #gameOverScreen h1 {
     color: var(--red);
-    letter-spacing: 8px;
+    letter-spacing: 6px;
     font-size: 36px;
-    text-shadow: 0 0 20px rgba(255, 50, 50, 0.5);
-    animation: pulse-highlight 1s infinite;
-}
-
-/* Result Screen Stats */
-#statsTable {
-    background: rgba(255,255,255,0.05);
-    padding: 20px;
-    border-radius: 15px;
-    margin: 20px 0;
-    font-size: 14px;
-    border: 1px solid rgba(255,255,255,0.1);
-    box-sizing: border-box;
-}
-
-#statsTable div {
-    margin: 10px 0;
-    display: flex;
-    justify-content: space-between;
-    padding: 5px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-
-#statsTable div:last-child {
-    border-bottom: none;
-}
-
-#statsTable div span:first-child {
-    color: #aaa;
-}
-
-#statsTable div span:last-child {
-    color: #fff;
-    font-weight: bold;
-}
-
-.reload-btn {
-    width: 100%;
-    padding: 18px;
-    background: linear-gradient(to bottom, var(--accent), #b8941f);
-    color: #000;
-    border: none;
-    font-weight: bold;
-    border-radius: 10px;
-    cursor: pointer;
-    margin-top: 25px;
-    font-size: 18px;
-    letter-spacing: 2px;
-    transition: all 0.2s;
-    box-shadow: 0 6px 0 #b8941f;
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px rgba(255, 50, 50, 0.7);
     text-transform: uppercase;
 }
 
-.reload-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 0 #b8941f;
+#gameOverScreen .fail-text {
+    color: #aaa;
+    font-size: 16px;
+    margin-bottom: 30px;
+    line-height: 1.5;
 }
 
-.reload-btn:active {
-    transform: translateY(6px);
-    box-shadow: 0 0 0 #b8941f;
+/* Toolbar positioning fix */
+#toolbar {
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 85vw;
+    z-index: 100;
+}
+
+/* Ensure game view is not covered */
+#ui-controls {
+    z-index: 101;
+}
+
+#missionLog {
+    z-index: 102;
 }
 
 /* Rank-specific colors */
@@ -414,24 +465,19 @@ input[type="number"] {
     text-shadow: 0 0 30px rgba(255, 215, 0, 0.7);
 }
 
-.rank-text[data-rank="Shadow Master"] {
+.rank-text[data-rank="Master Ninja"] {
     color: #c0c0c0;
     text-shadow: 0 0 25px rgba(192, 192, 192, 0.7);
 }
 
-.rank-text[data-rank="Master Ninja"] {
+.rank-text[data-rank="Expert"] {
     color: #cd7f32;
     text-shadow: 0 0 25px rgba(205, 127, 50, 0.7);
 }
 
-.rank-text[data-rank="Expert"] {
+.rank-text[data-rank="Adept"] {
     color: #00ff00;
     text-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
-}
-
-.rank-text[data-rank="Adept"] {
-    color: #00ccff;
-    text-shadow: 0 0 20px rgba(0, 204, 255, 0.5);
 }
 
 .rank-text[data-rank="Assassin"] {
@@ -447,15 +493,16 @@ input[type="number"] {
     color: #888;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
+/* Animations */
 @keyframes glow {
     0% { text-shadow: 0 0 10px currentColor; }
-    50% { text-shadow: 0 0 25px currentColor; }
+    50% { text-shadow: 0 0 25px currentColor, 0 0 35px currentColor; }
     100% { text-shadow: 0 0 10px currentColor; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes pulse-highlight {
@@ -498,5 +545,19 @@ input[type="number"] {
         padding: 8px 12px;
         font-size: 11px;
         min-width: 80px;
+    }
+    
+    .stat-row {
+        font-size: 12px;
+    }
+    
+    .rank-text {
+        font-size: 28px;
+    }
+    
+    #resultScreen h1,
+    #gameOverScreen h1 {
+        font-size: 24px;
+        letter-spacing: 4px;
     }
 }
