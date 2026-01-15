@@ -20,6 +20,7 @@ function calculateHighlightedTiles() {
         case 'trap':
         case 'rice':
         case 'bomb':
+        case 'gas':
             range = 2;
             break;
         default:
@@ -39,7 +40,7 @@ function calculateHighlightedTiles() {
             const tile = grid[ty][tx];
             
             if(selectMode === 'move') {
-                if(dist <= 3 && tile !== WALL && tile !== undefined) {
+                if(dist <= 3 && tile !== WALL && tile !== undefined && !playerHasMovedThisTurn) {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                     if(!enemyAtTile) {
                         highlightedTiles.push({
@@ -52,7 +53,7 @@ function calculateHighlightedTiles() {
                     }
                 }
             } else if(selectMode === 'attack') {
-                if(dist === 1) {
+                if(dist === 1 && playerHasMovedThisTurn) {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                     if(enemyAtTile) {
                         highlightedTiles.push({
@@ -62,10 +63,10 @@ function calculateHighlightedTiles() {
                         });
                     }
                 }
-            } else if(selectMode === 'trap' || selectMode === 'rice' || selectMode === 'bomb') {
-                if(dist <= 2 && tile === FLOOR) {
+            } else if(selectMode === 'trap' || selectMode === 'rice' || selectMode === 'bomb' || selectMode === 'gas') {
+                if(dist <= 2 && tile === FLOOR && playerHasMovedThisTurn) {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
-                    const hasItem = tile === TRAP || tile === RICE || tile === BOMB || tile === COIN || tile === HIDE || tile === EXIT;
+                    const hasItem = tile === TRAP || tile === RICE || tile === BOMB || tile === GAS || tile === COIN || tile === HIDE || tile === EXIT;
                     
                     if(!enemyAtTile && !hasItem) {
                         highlightedTiles.push({
