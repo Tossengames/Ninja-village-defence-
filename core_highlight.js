@@ -68,21 +68,21 @@ function calculateHighlightedTiles() {
                             // Sleeping enemy - instant stealth kill
                             highlightedTiles.push({
                                 x: tx, y: ty,
-                                color: modeColors.stealth, // Green for stealth
+                                color: modeColors.stealth,
                                 type: 'stealth'
                             });
                         } else if(canSeePlayer || isAlerted) {
                             // Normal combat
                             highlightedTiles.push({
                                 x: tx, y: ty,
-                                color: modeColors.attack, // Red for combat
+                                color: modeColors.attack,
                                 type: 'attack'
                             });
                         } else {
                             // Stealth kill (enemy can't see player)
                             highlightedTiles.push({
                                 x: tx, y: ty,
-                                color: modeColors.stealth, // Green for stealth
+                                color: modeColors.stealth,
                                 type: 'stealth'
                             });
                         }
@@ -107,7 +107,6 @@ function calculateHighlightedTiles() {
     }
 }
 
-// A* Pathfinding Algorithm
 function findPath(startX, startY, targetX, targetY) {
     if(startX === targetX && startY === targetY) return [];
     
@@ -192,3 +191,68 @@ function findPath(startX, startY, targetX, targetY) {
     
     return null;
 }
+
+// ============================================
+// TURN INDICATOR
+// ============================================
+
+function drawTurnIndicator() {
+    ctx.setTransform(1,0,0,1,0,0);
+    
+    const indicatorWidth = 300;
+    const indicatorHeight = 40;
+    const x = canvas.width / 2 - indicatorWidth / 2;
+    const y = 15;
+    
+    // Background
+    ctx.fillStyle = playerTurn ? 'rgba(0, 210, 255, 0.2)' : 'rgba(255, 50, 50, 0.2)';
+    ctx.fillRect(x, y, indicatorWidth, indicatorHeight);
+    ctx.strokeStyle = playerTurn ? '#00d2ff' : '#ff3333';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, indicatorWidth, indicatorHeight);
+    
+    // Text
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    if(playerTurn) {
+        ctx.fillText('🎮 PLAYER TURN', canvas.width / 2, y + indicatorHeight / 2);
+        
+        // Show what actions are available
+        ctx.font = '12px monospace';
+        if(!playerHasMovedThisTurn && !playerUsedActionThisTurn) {
+            ctx.fillText('Move (3 tiles) or use items', canvas.width / 2, y + indicatorHeight + 15);
+        } else if(playerHasMovedThisTurn && !playerUsedActionThisTurn) {
+            ctx.fillText('Attack or use items', canvas.width / 2, y + indicatorHeight + 15);
+        } else {
+            ctx.fillText('Click WAIT to end turn', canvas.width / 2, y + indicatorHeight + 15);
+        }
+    } else {
+        ctx.fillText('👾 ENEMY TURN', canvas.width / 2, y + indicatorHeight / 2);
+        ctx.font = '12px monospace';
+        ctx.fillText('Wait for enemies to move...', canvas.width / 2, y + indicatorHeight + 15);
+    }
+}
+
+// ============================================
+// OVERRIDE THE VFX UPDATE TO DRAW TURN INDICATOR
+// ============================================
+
+// Store the original updateVFX function
+const originalUpdateVFX = window.updateVFX;
+
+// Create a new updateVFX that also draws turn indicator
+window.updateVFX = function() {
+    // Call the original VFX update
+    if(originalUpdateVFX) originalUpdateVFX();
+    
+    // Draw turn indicator on top
+    drawTurnIndicator();
+};
+
+// Export functions
+window.calculateHighlightedTiles = calculateHighlightedTiles;
+window.findPath = findPath;
+window.drawTurnIndicator = drawTurnIndicator;
