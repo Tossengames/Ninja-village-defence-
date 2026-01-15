@@ -1,345 +1,187 @@
 // ============================================
-// ENEMY AI & BEHAVIOR
+// ENEMY AI & DETECTION SYSTEM
 // ============================================
 
 async function processEnemyTurn(e) {
-    if(!e.alive || combatSequence) return;
+    if(!e.alive) return;
     
-    // Show enemy status with cartoon bubble (20% chance)
-    if(Math.random() < 0.2) {
-        const status = getEnemyStatusText(e);
-        if(status) {
-            createSpeechBubble(e.x, e.y, status.emoji, "#ffffff", 1);
-            await new Promise(resolve => setTimeout(resolve, 150));
-        }
-    }
+    // Update enemy detection
+    const canSeePlayer = hasLineOfSight(e, player.x, player.y) && !player.isHidden;
     
-    // Check for player in straight line vision (no cone)
-    if(hasLineOfSight(e, player.x, player.y) && !player.isHidden) {
+    // TRACK WHEN PLAYER IS SPOTTED
+    if(canSeePlayer) {
+        // Player is spotted!
         if(e.state !== 'alerted' && e.state !== 'chasing') {
-            e.state = 'chasing';
-            e.lastSeenPlayer = {x: player.x, y: player.y};
-            e.chaseTurns = e.chaseMemory;
-            createSpeechBubble(e.x, e.y, "❗ SPOTTED!", e.color, 1);
-            
-            await new Promise(resolve => setTimeout(resolve, 200));
-        } else if(e.state === 'chasing') {
-            // Update last seen position
-            e.lastSeenPlayer = {x: player.x, y: player.y};
-            e.chaseTurns = e.chaseMemory; // Reset memory
+            stats.timesSpotted++; // Track being spotted
+            createAlertEffect(e.x, e.y);
+            createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 1.5);
+            playSound('alert');
         }
-    }
-    
-    // Check for sounds heard
-    if(e.hasHeardSound && e.soundLocation) {
-        if(e.state !== 'alerted' && e.state !== 'chasing') {
-            e.state = 'investigating';
-            e.investigationTarget = e.soundLocation;
-            e.investigationTurns = 3;
-            createSpeechBubble(e.x, e.y, "👂 HEARD NOISE", e.color, 1);
-            e.hasHeardSound = false;
-            
-            await new Promise(resolve => setTimeout(resolve, 150));
-        }
-    }
-    
-    // Check for trap before moving
-    if(grid[e.y][e.x] === TRAP) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-        e.alive = false;
-        e.state = 'dead';
-        stats.kills++;
-        grid[e.y][e.x] = FLOOR;
-        createTrapEffect(e.x, e.y);
-        createDeathEffect(e.x, e.y);
-        return;
+        
+        e.state = 'alerted';
+        e.lastSeenPlayer = {x: player.x, y: player.y};
+        e.chaseTurns = e.chaseMemory;
     }
     
     // State-based behavior
     switch(e.state) {
-        case 'chasing':
-            await handleChasingState(e);
+        case 'patrolling':
+            await patrolBehavior(e);
             break;
         case 'alerted':
-            await handleAlertedState(e);
-            break;
-        case 'investigating':
-            await handleInvestigatingState(e);
-            break;
-        case 'eating':
-            await handleEatingState(e);
-            break;
-        default:
-            await handlePatrollingState(e);
-            break;
-    }
-    
-    // Check for trap after moving
-    if(e.alive && grid[e.y][e.x] === TRAP) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-        e.alive = false;
-        e.state = 'dead';
-        stats.kills++;
-        grid[e.y][e.x] = FLOOR;
-        createTrapEffect(e.x, e.y);
-        createDeathEffect(e.x, e.y);
-        return;
-    }
-    
-    // Check for rice
-    if(e.alive && grid[e.y][e.x] === RICE) {
-        e.state = 'eating';
-        e.poisonTimer = Math.floor(Math.random() * 3) + 1;
-        grid[e.y][e.x] = FLOOR;
-        createSpeechBubble(e.x, e.y, "🍚 FOUND RICE!", "#33ff33", 1);
-        await new Promise(resolve => setTimeout(resolve, 200));
-        return;
-    }
-    
-    // Rice poisoning
-    if(e.alive && e.state === 'eating' && e.poisonTimer > 0) {
-        e.poisonTimer--;
-        
-        if(e.poisonTimer <= 0) {
-            await new Promise(resolve => setTimeout(resolve, 200));
-            e.alive = false;
-            e.state = 'dead';
-            stats.kills++;
-            createDeathEffect(e.x, e.y);
-            return;
-        } else {
-            createSpeechBubble(e.x, e.y, `🤢 SICK (${e.poisonTimer})`, "#ff00ff", 1);
-            await new Promise(resolve => setTimeout(resolve, 150));
-        }
-    }
-}
-
-function getEnemyStatusText(e) {
-    switch(e.state) {
-        case 'patrolling':
-            return { emoji: getRandomEmoji(['😴', '😐', '😪', '🥱']) };
-        case 'investigating':
-            return { emoji: getRandomEmoji(['👂', '🤔', '🔍', '🎯']) };
         case 'chasing':
-            return { emoji: getRandomEmoji(['❗', '👁️', '🎯', '⚡']) };
+            await chaseBehavior(e);
+            break;
+        case 'investigating':
+            await investigateBehavior(e);
+            break;
         case 'eating':
-            if(e.poisonTimer > 0) {
-                return { emoji: getRandomEmoji(['🤢', '😫', '🤮', '💀']) };
-            } else {
-                return { emoji: getRandomEmoji(['🍚', '😋', '🤤', '👍']) };
-            }
-        default:
-            return null;
+            await eatBehavior(e);
+            break;
     }
-}
-
-function getRandomEmoji(emojis) {
-    return emojis[Math.floor(Math.random() * emojis.length)];
-}
-
-async function handlePatrollingState(e) {
-    const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-    let validDirs = [];
     
-    for(let d of dirs) {
-        const nx = e.x + d.x;
-        const ny = e.y + d.y;
+    // Check for immediate attack after moving
+    const distToPlayer = Math.hypot(e.x - player.x, e.y - player.y);
+    if(distToPlayer <= e.attackRange && (e.state === 'alerted' || e.state === 'chasing')) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        createSpeechBubble(e.x, e.y, "ATTACK!", e.color, 1);
         
-        if(nx>=0 && nx<mapDim && ny>=0 && ny<mapDim && grid[ny][nx]!==WALL) {
-            const enemyAtPos = enemies.find(other => 
-                other.alive && other !== e && other.x === nx && other.y === ny
-            );
-            
-            const playerAtPos = (nx === player.x && ny === player.y);
-            
-            if(!enemyAtPos && !playerAtPos) {
-                validDirs.push(d);
-            }
+        playerHP -= e.damage;
+        playerHP = Math.max(0, playerHP);
+        createDamageEffect(player.x, player.y, e.damage, true);
+        createSpeechBubble(player.x, player.y, `-${e.damage}`, "#ff66ff", 1);
+        shake = 15;
+        updateHPDisplay();
+        
+        if(playerHP <= 0) {
+            playerHP = 0;
+            updateHPDisplay();
+            setTimeout(() => {
+                showGameOverScreen();
+            }, 500);
+            return;
         }
     }
+}
+
+async function patrolBehavior(e) {
+    const directions = [
+        {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1},
+        {x: 1, y: 1}, {x: -1, y: -1}, {x: 1, y: -1}, {x: -1, y: 1}
+    ];
     
-    if(validDirs.length > 0) {
-        const d = validDirs[Math.floor(Math.random()*validDirs.length)];
-        e.dir = d;
-        const nx = e.x + d.x;
-        const ny = e.y + d.y;
+    // Check for sounds
+    if(e.hasHeardSound && e.soundLocation) {
+        e.state = 'investigating';
+        e.investigationTarget = e.soundLocation;
+        e.investigationTurns = 5;
+        e.hasHeardSound = false;
+        createSpeechBubble(e.x, e.y, "Hmm?", "#ff9900", 1);
+        return;
+    }
+    
+    // Random patrol movement
+    const dir = directions[Math.floor(Math.random() * directions.length)];
+    const nx = e.x + dir.x;
+    const ny = e.y + dir.y;
+    
+    if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && grid[ny][nx] !== WALL) {
+        // Check for rice
+        if(grid[ny][nx] === RICE) {
+            e.state = 'eating';
+            grid[ny][nx] = FLOOR;
+            createSpeechBubble(e.x, e.y, "🍚 Rice!", "#ffff00", 1.5);
+            await animMove(e, e.x, e.y, e.speed, () => {});
+            return;
+        }
         
-        await new Promise(resolve => {
-            animMove(e, nx, ny, e.speed, () => {
-                e.x = nx;
-                e.y = ny;
-                e.returnToPatrolPos = {x: nx, y: ny};
-                resolve();
-            });
+        await animMove(e, nx, ny, e.speed, () => {
+            e.x = nx;
+            e.y = ny;
+            e.dir = dir;
         });
     }
 }
 
-async function handleChasingState(e) {
-    if(e.chaseTurns > 0) {
-        const distToLastSeen = Math.hypot(e.x - e.lastSeenPlayer.x, e.y - e.lastSeenPlayer.y);
+async function chaseBehavior(e) {
+    if(e.chaseTurns <= 0) {
+        // Return to patrol
+        e.state = 'patrolling';
+        createSpeechBubble(e.x, e.y, "Lost them...", "#aaa", 1);
+        return;
+    }
+    
+    e.chaseTurns--;
+    
+    // Move toward last seen player position
+    if(e.lastSeenPlayer) {
+        const dx = e.lastSeenPlayer.x - e.x;
+        const dy = e.lastSeenPlayer.y - e.y;
         
-        // If in attack range, attack
-        if(distToLastSeen <= e.attackRange || 
-           (hasLineOfSight(e, player.x, player.y) && !player.isHidden && Math.hypot(e.x - player.x, e.y - player.y) <= e.attackRange)) {
-            
-            createSpeechBubble(e.x, e.y, `${e.type} ATTACK!`, e.color, 1);
-            await new Promise(resolve => setTimeout(resolve, 200));
-            
-            playerHP -= e.damage;
-            createDamageEffect(player.x, player.y, e.damage, true);
-            createSpeechBubble(player.x, player.y, `-${e.damage}`, "#ff66ff", 1);
-            updateHPDisplay();
-            
-            await new Promise(resolve => setTimeout(resolve, 300));
-            
-            if(playerHP <= 0) {
-                gameOver = true;
-                showGameOver();
-                return;
-            }
-            
-            e.chaseTurns--;
+        let moveX = 0, moveY = 0;
+        
+        if(Math.abs(dx) > Math.abs(dy)) {
+            moveX = Math.sign(dx);
+        } else {
+            moveY = Math.sign(dy);
+        }
+        
+        const nx = e.x + moveX;
+        const ny = e.y + moveY;
+        
+        if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && grid[ny][nx] !== WALL) {
+            await animMove(e, nx, ny, e.speed * 1.5, () => {
+                e.x = nx;
+                e.y = ny;
+                e.dir = {x: moveX, y: moveY};
+            });
+        }
+    }
+}
+
+async function investigateBehavior(e) {
+    if(e.investigationTurns <= 0) {
+        e.state = 'patrolling';
+        createSpeechBubble(e.x, e.y, "Nothing...", "#aaa", 1);
+        return;
+    }
+    
+    e.investigationTurns--;
+    
+    if(e.investigationTarget) {
+        const dx = e.investigationTarget.x - e.x;
+        const dy = e.investigationTarget.y - e.y;
+        
+        if(Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+            // Reached investigation target
+            e.investigationTarget = null;
+            createSpeechBubble(e.x, e.y, "Nothing here", "#aaa", 1);
             return;
         }
         
-        // Move toward last seen player position
-        const dx = Math.sign(e.lastSeenPlayer.x - e.x);
-        const dy = Math.sign(e.lastSeenPlayer.y - e.y);
+        let moveX = 0, moveY = 0;
         
-        let moveX = e.x, moveY = e.y;
-        let moved = false;
-        
-        if(Math.abs(dx) > 0 && canMoveTo(e.x + dx, e.y, e)) {
-            moveX = e.x + dx;
-            e.dir = {x: dx, y: 0};
-            moved = true;
-        } else if(Math.abs(dy) > 0 && canMoveTo(e.x, e.y + dy, e)) {
-            moveY = e.y + dy;
-            e.dir = {x: 0, y: dy};
-            moved = true;
+        if(Math.abs(dx) > Math.abs(dy)) {
+            moveX = Math.sign(dx);
         } else {
-            const altDirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-            for(let d of altDirs) {
-                if(canMoveTo(e.x + d.x, e.y + d.y, e)) {
-                    moveX = e.x + d.x;
-                    moveY = e.y + d.y;
-                    e.dir = d;
-                    moved = true;
-                    break;
-                }
-            }
+            moveY = Math.sign(dy);
         }
         
-        if(moved && (moveX !== e.x || moveY !== e.y)) {
-            await new Promise(resolve => {
-                animMove(e, moveX, moveY, e.speed * 1.3, () => {
-                    e.x = moveX;
-                    e.y = moveY;
-                    resolve();
-                });
+        const nx = e.x + moveX;
+        const ny = e.y + moveY;
+        
+        if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && grid[ny][nx] !== WALL) {
+            await animMove(e, nx, ny, e.speed * 1.2, () => {
+                e.x = nx;
+                e.y = ny;
+                e.dir = {x: moveX, y: moveY};
             });
-        }
-        
-        e.chaseTurns--;
-        
-        // Check if player is still visible
-        if(hasLineOfSight(e, player.x, player.y) && !player.isHidden) {
-            e.lastSeenPlayer = {x: player.x, y: player.y};
-            e.chaseTurns = e.chaseMemory;
-        } else if(e.chaseTurns <= 0) {
-            e.state = 'investigating';
-            e.investigationTarget = e.lastSeenPlayer;
-            e.investigationTurns = 2;
-            createSpeechBubble(e.x, e.y, "👁️ LOST SIGHT", e.color, 1);
         }
     }
 }
 
-async function handleAlertedState(e) {
-    if(e.investigationTarget && e.investigationTurns > 0) {
-        const dx = Math.sign(e.investigationTarget.x - e.x);
-        const dy = Math.sign(e.investigationTarget.y - e.y);
-        
-        let moveX = e.x, moveY = e.y;
-        let moved = false;
-        
-        if(Math.abs(dx) > 0 && canMoveTo(e.x + dx, e.y, e)) {
-            moveX = e.x + dx;
-            e.dir = {x: dx, y: 0};
-            moved = true;
-        } else if(Math.abs(dy) > 0 && canMoveTo(e.x, e.y + dy, e)) {
-            moveY = e.y + dy;
-            e.dir = {x: 0, y: dy};
-            moved = true;
-        }
-        
-        if(moved && (moveX !== e.x || moveY !== e.y)) {
-            await new Promise(resolve => {
-                animMove(e, moveX, moveY, e.speed, () => {
-                    e.x = moveX;
-                    e.y = moveY;
-                    resolve();
-                });
-            });
-        }
-        
-        e.investigationTurns--;
-        if(e.investigationTurns <= 0) {
-            e.state = 'patrolling';
-            createSpeechBubble(e.x, e.y, "👁️ GIVING UP", e.color, 1);
-        }
-    }
-}
-
-async function handleInvestigatingState(e) {
-    if(e.investigationTarget && e.investigationTurns > 0) {
-        const dx = Math.sign(e.investigationTarget.x - e.x);
-        const dy = Math.sign(e.investigationTarget.y - e.y);
-        
-        let moveX = e.x, moveY = e.y;
-        let moved = false;
-        
-        if(Math.abs(dx) > 0 && canMoveTo(e.x + dx, e.y, e)) {
-            moveX = e.x + dx;
-            e.dir = {x: dx, y: 0};
-            moved = true;
-        } else if(Math.abs(dy) > 0 && canMoveTo(e.x, e.y + dy, e)) {
-            moveY = e.y + dy;
-            e.dir = {x: 0, y: dy};
-            moved = true;
-        }
-        
-        if(moved && (moveX !== e.x || moveY !== e.y)) {
-            await new Promise(resolve => {
-                animMove(e, moveX, moveY, e.speed, () => {
-                    e.x = moveX;
-                    e.y = moveY;
-                    resolve();
-                });
-            });
-        }
-        
-        e.investigationTurns--;
-        if(e.investigationTurns <= 0) {
-            e.state = 'patrolling';
-        }
-    }
-}
-
-async function handleEatingState(e) {
-    // Guard stays in place while eating
-}
-
-function canMoveTo(x, y, enemy) {
-    if(x < 0 || x >= mapDim || y < 0 || y >= mapDim) return false;
-    if(grid[y][x] === WALL) return false;
-    
-    const enemyAtPos = enemies.find(other => 
-        other.alive && other !== enemy && other.x === x && other.y === y
-    );
-    
-    const playerAtPos = (x === player.x && y === player.y);
-    
-    return !enemyAtPos && !playerAtPos;
+async function eatBehavior(e) {
+    createSpeechBubble(e.x, e.y, "Eating...", "#00ff00", 1);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    e.state = 'patrolling';
 }
