@@ -41,9 +41,9 @@ function calculateHighlightedTiles() {
             
             if(selectMode === 'move') {
                 if(dist <= 3 && tile !== WALL && tile !== undefined) {
-                    // Check if path is clear using simple line of sight
-                    const canReach = canPlayerReachTile(tx, ty);
-                    if(canReach) {
+                    // Use A* pathfinding to check if reachable
+                    const path = findPath(player.x, player.y, tx, ty);
+                    if(path && path.length <= 3) {
                         const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                         if(!enemyAtTile) {
                             highlightedTiles.push({
@@ -60,10 +60,16 @@ function calculateHighlightedTiles() {
                 if(dist === 1) {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                     if(enemyAtTile) {
+                        // Check if enemy can see player for stealth kill
+                        const canSeePlayer = hasLineOfSight(enemyAtTile, player.x, player.y) && !player.isHidden;
                         highlightedTiles.push({
                             x: tx, y: ty,
-                            color: colorSet,
-                            type: 'attack'
+                            color: canSeePlayer ? modeColors.attack : {
+                                fill: 'rgba(0, 255, 0, 0.3)',
+                                border: 'rgba(0, 255, 0, 0.8)',
+                                glow: 'rgba(0, 255, 0, 0.5)'
+                            },
+                            type: canSeePlayer ? 'attack' : 'stealth'
                         });
                     }
                 }
@@ -86,37 +92,88 @@ function calculateHighlightedTiles() {
     }
 }
 
-function canPlayerReachTile(tx, ty) {
-    const dx = tx - player.x;
-    const dy = ty - player.y;
-    const dist = Math.max(Math.abs(dx), Math.abs(dy));
+// A* Pathfinding Algorithm
+function findPath(startX, startY, targetX, targetY) {
+    if(startX === targetX && startY === targetY) return [];
     
-    if(dist === 0) return false; // Can't move to current tile
+    const openSet = [];
+    const closedSet = new Set();
+    const startNode = {x: startX, y: startY, g: 0, h: 0, f: 0, parent: null};
     
-    // Check straight line path
-    const steps = Math.max(Math.abs(dx), Math.abs(dy));
-    for(let i = 1; i <= steps; i++) {
-        const checkX = player.x + Math.round(dx * i / steps);
-        const checkY = player.y + Math.round(dy * i / steps);
-        
-        if(checkX < 0 || checkX >= mapDim || checkY < 0 || checkY >= mapDim) {
-            return false;
+    openSet.push(startNode);
+    
+    while(openSet.length > 0) {
+        let lowestIndex = 0;
+        for(let i = 1; i < openSet.length; i++) {
+            if(openSet[i].f < openSet[lowestIndex].f) {
+                lowestIndex = i;
+            }
         }
         
-        if(grid[checkY][checkX] === WALL) {
-            return false;
+        const current = openSet[lowestIndex];
+        
+        if(current.x === targetX && current.y === targetY) {
+            const path = [];
+            let temp = current;
+            while(temp) {
+                path.push({x: temp.x, y: temp.y});
+                temp = temp.parent;
+            }
+            return path.reverse().slice(1);
         }
         
-        const enemyAtTile = enemies.find(e => e.alive && e.x === checkX && e.y === checkY);
-        if(enemyAtTile) {
-            return false;
-        }
+        openSet.splice(lowestIndex, 1);
+        closedSet.add(`${current.x},${current.y}`);
         
-        // Check if it's the target tile
-        if(checkX === tx && checkY === ty) {
-            break;
+        const neighbors = [
+            {x: current.x, y: current.y - 1},
+            {x: current.x, y: current.y + 1},
+            {x: current.x - 1, y: current.y},
+            {x: current.x + 1, y: current.y}
+        ];
+        
+        for(const neighbor of neighbors) {
+            if(neighbor.x < 0 || neighbor.x >= mapDim || neighbor.y < 0 || neighbor.y >= mapDim) {
+                continue;
+            }
+            
+            if(grid[neighbor.y][neighbor.x] === WALL || grid[neighbor.y][neighbor.x] === undefined) {
+                continue;
+            }
+            
+            const enemyAtTile = enemies.find(e => e.alive && e.x === neighbor.x && e.y === neighbor.y);
+            if(enemyAtTile) {
+                continue;
+            }
+            
+            if(closedSet.has(`${neighbor.x},${neighbor.y}`)) {
+                continue;
+            }
+            
+            const gScore = current.g + 1;
+            const hScore = Math.abs(neighbor.x - targetX) + Math.abs(neighbor.y - targetY);
+            const fScore = gScore + hScore;
+            
+            let existingNode = openSet.find(n => n.x === neighbor.x && n.y === neighbor.y);
+            if(existingNode) {
+                if(gScore < existingNode.g) {
+                    existingNode.g = gScore;
+                    existingNode.f = gScore + existingNode.h;
+                    existingNode.parent = current;
+                }
+            } else {
+                const newNode = {
+                    x: neighbor.x,
+                    y: neighbor.y,
+                    g: gScore,
+                    h: hScore,
+                    f: fScore,
+                    parent: current
+                };
+                openSet.push(newNode);
+            }
         }
     }
     
-    return true;
+    return null;
 }
