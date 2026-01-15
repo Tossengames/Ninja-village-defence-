@@ -4,43 +4,25 @@
 
 async function handlePlayerMove(targetX, targetY) {
     if(!playerTurn || gameOver || combatSequence) return;
-    if(playerHasMovedThisTurn) return; // Player already moved this turn
     
     if(hasReachedExit) return;
     
-    // Find direct path to target (no pathfinding - move directly if highlighted)
-    const dx = targetX - player.x;
-    const dy = targetY - player.y;
-    const dist = Math.max(Math.abs(dx), Math.abs(dy));
+    // Check if tile is highlighted (reachable)
+    const isHighlighted = highlightedTiles.some(t => t.x === targetX && t.y === targetY);
+    if(!isHighlighted) return;
     
-    if(dist > 3) return; // Too far
-    
-    // Check if path is clear (simple line check)
-    let canMove = true;
-    const steps = Math.max(Math.abs(dx), Math.abs(dy));
-    
-    for(let i = 1; i <= steps; i++) {
-        const tx = player.x + Math.round(dx * i / steps);
-        const ty = player.y + Math.round(dy * i / steps);
-        
-        if(grid[ty][tx] === WALL || grid[ty][tx] === undefined) {
-            canMove = false;
-            break;
-        }
-        
-        const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
-        if(enemyAtTile) {
-            canMove = false;
-            break;
-        }
+    if(playerHasMovedThisTurn) {
+        createSpeechBubble(player.x, player.y, "Already moved this turn!", "#ff9900", 1);
+        return;
     }
     
-    if(!canMove) return;
+    const tile = grid[targetY][targetX];
     
-    if(grid[targetY][targetX] === EXIT) {
+    if(tile === EXIT) {
         hasReachedExit = true;
         playerTurn = false;
         playerHasMovedThisTurn = false;
+        playerUsedActionThisTurn = false;
         
         animMove(player, targetX, targetY, 0.2, () => {
             player.x = targetX;
@@ -54,8 +36,6 @@ async function handlePlayerMove(targetX, targetY) {
         });
         return;
     }
-    
-    const tile = grid[targetY][targetX];
     
     if(tile === COIN) {
         stats.coins++;
@@ -85,7 +65,7 @@ async function handlePlayerMove(targetX, targetY) {
         player.x = targetX;
         player.y = targetY;
         
-        // Player has moved, can now use items or attack
+        // Player has moved
         playerHasMovedThisTurn = true;
         
         // Switch to attack mode if enemy adjacent
@@ -96,14 +76,13 @@ async function handlePlayerMove(targetX, targetY) {
         if(adjacentEnemies.length > 0) {
             setMode('attack');
         } else {
-            setMode('move');
+            autoSwitchToMove();
         }
     });
 }
 
 async function handleAttack(targetX, targetY) {
     if(!playerTurn || gameOver || combatSequence) return;
-    if(!playerHasMovedThisTurn) return; // Must move first
     
     const enemy = enemies.find(e => e.alive && e.x === targetX && e.y === targetY);
     if(!enemy) {
@@ -117,8 +96,12 @@ async function handleAttack(targetX, targetY) {
         return;
     }
     
-    playerTurn = false;
-    playerHasMovedThisTurn = false;
+    if(playerUsedActionThisTurn) {
+        createSpeechBubble(player.x, player.y, "Already used action this turn!", "#ff9900", 1);
+        return;
+    }
+    
+    playerUsedActionThisTurn = true;
     
     // Check if enemy is alerted/chasing or can see player
     const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
@@ -130,12 +113,9 @@ async function handleAttack(targetX, targetY) {
         const enemyDied = await processCombatSequence(true, enemy, 2);
         
         if(!enemyDied && !gameOver) {
-            await new Promise(resolve => setTimeout(resolve, 300));
-            endTurn();
+            autoSwitchToMove();
         } else if(!gameOver) {
             autoSwitchToMove();
-            await new Promise(resolve => setTimeout(resolve, 300));
-            endTurn();
         }
     } else {
         // STEALTH KILL - INSTANT KILL if enemy not alerted
@@ -149,22 +129,17 @@ async function handleAttack(targetX, targetY) {
         stats.stealthKills++;
         createDeathEffect(targetX, targetY);
         
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
         autoSwitchToMove();
-        
-        if(!gameOver) {
-            await new Promise(resolve => setTimeout(resolve, 300));
-            endTurn();
-        }
     }
 }
 
 function handleItemPlacement(x, y, type) {
     if(!playerTurn || gameOver || combatSequence) return;
-    if(!playerHasMovedThisTurn) return; // Must move first
     
-    if(inv[type] <= 0) return;
+    if(inv[type] <= 0) {
+        createSpeechBubble(player.x, player.y, `No ${type} left!`, "#ff9900", 1);
+        return;
+    }
     
     if(grid[y][x] !== FLOOR) return;
     
@@ -172,10 +147,19 @@ function handleItemPlacement(x, y, type) {
     const hasItem = grid[y][x] === TRAP || grid[y][x] === RICE || grid[y][x] === BOMB || 
                     grid[y][x] === GAS || grid[y][x] === COIN || grid[y][x] === HIDE || grid[y][x] === EXIT;
     
-    if(enemyAtTile || hasItem) return;
+    if(enemyAtTile || hasItem) {
+        createSpeechBubble(player.x, player.y, "Can't place here!", "#ff9900", 1);
+        return;
+    }
+    
+    if(playerUsedActionThisTurn) {
+        createSpeechBubble(player.x, player.y, "Already used action this turn!", "#ff9900", 1);
+        return;
+    }
     
     inv[type]--;
     stats.itemsUsed++;
+    playerUsedActionThisTurn = true;
     updateToolCounts();
     
     switch(type) {
@@ -200,6 +184,5 @@ function handleItemPlacement(x, y, type) {
             break;
     }
     
-    // Player can continue to use other items or attack
-    // Don't end turn automatically
+    autoSwitchToMove();
 }
