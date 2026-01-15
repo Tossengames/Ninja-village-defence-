@@ -15,6 +15,18 @@ async function processEnemyTurn(e) {
         }
     }
     
+    // Check trap (instant kill)
+    if(grid[e.y][e.x] === TRAP) {
+        grid[e.y][e.x] = FLOOR;
+        e.alive = false;
+        e.state = 'dead';
+        e.hp = 0;
+        stats.kills++;
+        createDeathEffect(e.x, e.y);
+        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 1.5);
+        return;
+    }
+    
     // Check if enemy ate rice and should die
     if(e.ateRice) {
         e.riceDeathTimer--;
@@ -33,7 +45,7 @@ async function processEnemyTurn(e) {
     const gasAtTile = activeGas.find(g => g.x === e.x && g.y === e.y);
     if(gasAtTile && !e.isSleeping) {
         e.isSleeping = true;
-        e.sleepTimer = Math.floor(Math.random() * 5) + 1;
+        e.sleepTimer = Math.floor(Math.random() * 5) + 2; // 2-6 turns
         createSpeechBubble(e.x, e.y, "💤 Falling asleep!", "#9932cc", 1.5);
         return;
     }
@@ -54,7 +66,7 @@ async function processEnemyTurn(e) {
         e.chaseTurns = e.chaseMemory;
     }
     
-    // Check for rice in vision
+    // Check for rice in vision (CONE VISION ONLY)
     if(!e.isSleeping && !e.ateRice) {
         for(let dy = -e.visionRange; dy <= e.visionRange; dy++) {
             for(let dx = -e.visionRange; dx <= e.visionRange; dx++) {
@@ -64,7 +76,7 @@ async function processEnemyTurn(e) {
                     if(hasLineOfSight(e, tx, ty)) {
                         e.state = 'eating';
                         e.investigationTarget = {x: tx, y: ty};
-                        e.investigationTurns = 99; // Will reset when reaches rice
+                        e.investigationTurns = 99;
                         break;
                     }
                 }
@@ -86,7 +98,6 @@ async function processEnemyTurn(e) {
             await eatBehavior(e);
             break;
         case 'alerted':
-            // Alerted but lost sight - go to investigating
             e.state = 'investigating';
             e.investigationTarget = e.lastSeenPlayer;
             e.investigationTurns = 3;
@@ -94,10 +105,12 @@ async function processEnemyTurn(e) {
             break;
     }
     
-    // Attack if adjacent to player and chasing
+    // Attack if adjacent to player and chasing AND can see player
     if(!e.isSleeping && e.state === 'chasing') {
         const distToPlayer = Math.hypot(e.x - player.x, e.y - player.y);
-        if(distToPlayer <= e.attackRange) {
+        const canSeePlayerNow = hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+        
+        if(distToPlayer <= e.attackRange && canSeePlayerNow) {
             await new Promise(resolve => setTimeout(resolve, 300));
             createSpeechBubble(e.x, e.y, `🎯 ATTACKING!`, e.color, 1);
             
@@ -126,9 +139,8 @@ async function patrolBehavior(e) {
         {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
     ];
     
-    // Check if target tile has another enemy
     function isTileBlocked(x, y) {
-        if(x === player.x && y === player.y) return true; // Don't walk on player
+        if(x === player.x && y === player.y) return true;
         return enemies.some(other => 
             other.alive && other !== e && other.x === x && other.y === y
         );
@@ -147,7 +159,6 @@ async function patrolBehavior(e) {
     let nx = e.x + e.dir.x;
     let ny = e.y + e.dir.y;
     
-    // If can't move in current direction, choose random
     if(nx < 0 || nx >= mapDim || ny < 0 || ny >= mapDim || 
        grid[ny][nx] === WALL || isTileBlocked(nx, ny)) {
         const validDirs = directions.filter(dir => {
@@ -163,7 +174,6 @@ async function patrolBehavior(e) {
             ny = e.y + dir.y;
             e.dir = dir;
         } else {
-            // Can't move anywhere
             return;
         }
     }
@@ -191,13 +201,11 @@ async function chaseBehavior(e) {
     e.chaseTurns--;
     
     if(e.lastSeenPlayer) {
-        // Don't walk on player - stop 1 tile away
         const dx = e.lastSeenPlayer.x - e.x;
         const dy = e.lastSeenPlayer.y - e.y;
         const dist = Math.max(Math.abs(dx), Math.abs(dy));
         
         if(dist <= 1) {
-            // Already adjacent to last seen position
             return;
         }
         
@@ -212,7 +220,6 @@ async function chaseBehavior(e) {
         const nx = e.x + moveX;
         const ny = e.y + moveY;
         
-        // Check if tile is blocked by another enemy or player
         const isBlocked = enemies.some(other => 
             other.alive && other !== e && other.x === nx && other.y === ny
         ) || (nx === player.x && ny === player.y);
@@ -258,7 +265,6 @@ async function investigateBehavior(e) {
         const nx = e.x + moveX;
         const ny = e.y + moveY;
         
-        // Check if tile is blocked by another enemy or player
         const isBlocked = enemies.some(other => 
             other.alive && other !== e && other.x === nx && other.y === ny
         ) || (nx === player.x && ny === player.y);
@@ -280,7 +286,6 @@ async function eatBehavior(e) {
         const dy = e.investigationTarget.y - e.y;
         
         if(Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
-            // Reached rice
             grid[e.investigationTarget.y][e.investigationTarget.x] = FLOOR;
             e.ateRice = true;
             e.state = 'patrolling';
@@ -299,7 +304,6 @@ async function eatBehavior(e) {
         const nx = e.x + moveX;
         const ny = e.y + moveY;
         
-        // Check if tile is blocked by another enemy or player
         const isBlocked = enemies.some(other => 
             other.alive && other !== e && other.x === nx && other.y === ny
         ) || (nx === player.x && ny === player.y);
