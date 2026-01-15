@@ -2,24 +2,15 @@
 // PLAYER MOVEMENT, ITEM PLACEMENT & ATTACK
 // ============================================
 
-console.log("Loading player system...");
-
 async function handlePlayerMove(targetX, targetY) {
     if(!playerTurn || gameOver || combatSequence) return;
     
-    if(hasReachedExit) {
-        log("✅ Already escaped!", "#0f0");
-        return;
-    }
+    if(hasReachedExit) return;
     
     const path = findPath(player.x, player.y, targetX, targetY);
-    if(!path || path.length === 0) {
-        log("❌ No path available!", "#f00");
-        return;
-    }
+    if(!path || path.length === 0) return;
     
     if(grid[targetY][targetX] === EXIT) {
-        log("🚪 Exit reached!", "#0f0");
         hasReachedExit = true;
         playerTurn = false;
         
@@ -27,13 +18,8 @@ async function handlePlayerMove(targetX, targetY) {
             player.x = targetX;
             player.y = targetY;
             
-            // Wait then show victory screen
             setTimeout(() => {
                 document.getElementById('toolbar').classList.add('hidden');
-                document.getElementById('rangeIndicator').classList.add('hidden');
-                document.getElementById('cameraHint').classList.add('hidden');
-                document.getElementById('logToggle').classList.add('hidden');
-                document.getElementById('hpDisplay').classList.add('hidden');
                 document.getElementById('ui-controls').classList.add('hidden');
                 showVictoryScreen();
             }, 1000);
@@ -45,7 +31,6 @@ async function handlePlayerMove(targetX, targetY) {
     
     async function takeStep() {
         if(stepsTaken >= path.length) {
-            // Keep camera on player for 0.5 seconds after moving
             setTimeout(() => {
                 playerTurn = false;
                 checkForImmediateAttack();
@@ -56,21 +41,18 @@ async function handlePlayerMove(targetX, targetY) {
         const step = path[stepsTaken];
         const tile = grid[step.y][step.x];
         
-        // Check for coin pickup
         if(tile === COIN) {
             stats.coins++;
             grid[step.y][step.x] = FLOOR;
             createCoinPickupEffect(step.x, step.y);
         }
         
-        // Check for hide spot
         const wasHidden = player.isHidden;
         player.isHidden = (tile === HIDE);
         if(player.isHidden !== wasHidden) {
             createHideEffect(step.x, step.y, player.isHidden);
         }
         
-        // Normal move
         await new Promise(resolve => {
             animMove(player, step.x, step.y, 0.2, () => {
                 player.x = step.x;
@@ -80,7 +62,6 @@ async function handlePlayerMove(targetX, targetY) {
             });
         });
         
-        // Faster movement between steps
         await new Promise(resolve => setTimeout(resolve, 50));
         takeStep();
     }
@@ -89,18 +70,14 @@ async function handlePlayerMove(targetX, targetY) {
 }
 
 function checkForImmediateAttack() {
-    // Check if player can attack immediately after moving
     const adjacentEnemies = enemies.filter(e => 
         e.alive && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
     );
     
     if(adjacentEnemies.length > 0 && !combatSequence) {
-        // Player can attack immediately
         playerTurn = true;
         setMode('attack');
-        log("Enemy nearby! You can attack immediately.", "#ff9900");
     } else {
-        // No enemies nearby, proceed with enemy turn
         endTurn();
     }
 }
@@ -108,26 +85,22 @@ function checkForImmediateAttack() {
 async function handleAttack(targetX, targetY) {
     if(!playerTurn || gameOver || combatSequence) return;
     
-    // Check if target tile has an enemy
     const enemy = enemies.find(e => e.alive && e.x === targetX && e.y === targetY);
     if(!enemy) {
         createSpeechBubble(player.x, player.y, "❌ No enemy!", "#ff0000", 1);
         return;
     }
     
-    // Check if enemy can see player (straight line vision)
     const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
     
     playerTurn = false;
     
     if(canSeePlayer || enemy.state === 'alerted' || enemy.state === 'chasing') {
-        // Enemy sees player - normal combat (no instant kill)
         createSpeechBubble(player.x, player.y, `⚔️ VS ${enemy.type}`, "#ff3333", 1);
         
         const enemyDied = await processCombatSequence(true, enemy, 2);
         
         if(!enemyDied && !gameOver) {
-            // Player automatically counterattacks if in range
             const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
             if(dist <= 1) {
                 createSpeechBubble(player.x, player.y, "🗡️ COUNTER!", "#00d2ff", 1);
@@ -159,7 +132,6 @@ async function handleAttack(targetX, targetY) {
             endTurn();
         }
     } else {
-        // Enemy doesn't see player - STEALTH KILL (instant kill)
         createSpeechBubble(player.x, player.y, "🗡️ STEALTH KILL!", "#00ff00", 1);
         await new Promise(resolve => setTimeout(resolve, 300));
         
@@ -174,7 +146,6 @@ async function handleAttack(targetX, targetY) {
         
         autoSwitchToMove();
         
-        // Check for other enemy reactions
         await checkEnemyAttacks();
         
         if(!gameOver) {
@@ -185,7 +156,6 @@ async function handleAttack(targetX, targetY) {
 }
 
 async function checkEnemyAttacks() {
-    // Check if any alerted enemy can attack player
     const attackingEnemies = enemies.filter(e => 
         e.alive && (e.state === 'alerted' || e.state === 'chasing') && 
         Math.hypot(e.x - player.x, e.y - player.y) <= e.attackRange
@@ -199,13 +169,11 @@ async function checkEnemyAttacks() {
         playerHP = Math.max(0, playerHP);
         createDamageEffect(player.x, player.y, e.damage, true);
         createSpeechBubble(player.x, player.y, `-${e.damage} HP`, "#ff66ff", 1);
-        updateHPDisplay();
         
         await new Promise(resolve => setTimeout(resolve, 500));
         
         if(playerHP <= 0) {
             playerHP = 0;
-            updateHPDisplay();
             gameOver = true;
             setTimeout(() => {
                 showGameOverScreen();
@@ -218,24 +186,15 @@ async function checkEnemyAttacks() {
 function handleItemPlacement(x, y, type) {
     if(!playerTurn || gameOver || combatSequence) return;
     
-    if(inv[type] <= 0) {
-        createSpeechBubble(player.x, player.y, `❌ No ${type}s!`, "#f00", 1);
-        return;
-    }
+    if(inv[type] <= 0) return;
     
-    if(grid[y][x] !== FLOOR) {
-        createSpeechBubble(player.x, player.y, "❌ Can't place here!", "#f00", 1);
-        return;
-    }
+    if(grid[y][x] !== FLOOR) return;
     
     const enemyAtTile = enemies.find(e => e.alive && e.x === x && e.y === y);
     const hasItem = grid[y][x] === TRAP || grid[y][x] === RICE || grid[y][x] === BOMB || 
                     grid[y][x] === COIN || grid[y][x] === HIDE || grid[y][x] === EXIT;
     
-    if(enemyAtTile || hasItem) {
-        createSpeechBubble(player.x, player.y, "❌ Tile occupied!", "#f00", 1);
-        return;
-    }
+    if(enemyAtTile || hasItem) return;
     
     inv[type]--;
     stats.itemsUsed++;
@@ -266,7 +225,7 @@ function handleItemPlacement(x, y, type) {
     }, 300);
 }
 
-// A* Pathfinding Algorithm
+// A* Pathfinding Algorithm (same as before)
 function findPath(startX, startY, targetX, targetY) {
     if(startX === targetX && startY === targetY) return [];
     
@@ -351,5 +310,3 @@ function findPath(startX, startY, targetX, targetY) {
     
     return null;
 }
-
-console.log("Player system loaded");
