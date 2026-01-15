@@ -57,8 +57,7 @@ const modeColors = {
     'rice': { fill: 'rgba(255, 255, 100, 0.15)', border: 'rgba(255, 255, 100, 0.7)', glow: 'rgba(255, 255, 100, 0.3)' },
     'bomb': { fill: 'rgba(255, 50, 150, 0.15)', border: 'rgba(255, 50, 150, 0.7)', glow: 'rgba(255, 50, 150, 0.3)' },
     'gas': { fill: 'rgba(153, 50, 204, 0.15)', border: 'rgba(153, 50, 204, 0.7)', glow: 'rgba(153, 50, 204, 0.3)' },
-    'attack': { fill: 'rgba(255, 0, 0, 0.3)', border: 'rgba(255, 0, 0, 0.8)', glow: 'rgba(255, 0, 0, 0.5)' },
-    'stealth': { fill: 'rgba(0, 255, 0, 0.3)', border: 'rgba(0, 255, 0, 0.8)', glow: 'rgba(0, 255, 0, 0.5)' }
+    'attack': { fill: 'rgba(255, 0, 0, 0.3)', border: 'rgba(255, 0, 0, 0.8)', glow: 'rgba(255, 0, 0, 0.5)' }
 };
 
 // Enemy types with distinct colors
@@ -299,9 +298,6 @@ function gameLoop() {
             drawGasEffect(g.x, g.y, g.t);
         });
 
-        // Draw turn indicator (top center)
-        drawTurnIndicator();
-
         // Draw highlights during player turn (only if not moved yet)
         if(playerTurn && !playerHasMovedThisTurn && selectMode === 'move') {
             calculateHighlightedTiles();
@@ -404,7 +400,7 @@ function gameLoop() {
         if(currentTurnEntity && cameraFocusEnabled && !isUserDragging) {
             const targetX = (canvas.width/2) - (currentTurnEntity.ax*TILE + TILE/2)*zoom;
             const targetY = (canvas.height/2) - (currentTurnEntity.ay*TILE + TILE/2)*zoom;
-            camX += (targetX - camX) * 0.05;
+            camX += (targetX - camX) * 0.05; // Slower camera movement
             camY += (targetY - camY) * 0.05;
         }
         
@@ -412,44 +408,6 @@ function gameLoop() {
         requestAnimationFrame(gameLoop);
     } catch (error) {
         console.error("Error in game loop:", error);
-    }
-}
-
-function drawTurnIndicator() {
-    ctx.setTransform(1,0,0,1,0,0);
-    
-    const indicatorWidth = 300;
-    const indicatorHeight = 40;
-    const x = canvas.width / 2 - indicatorWidth / 2;
-    const y = 15;
-    
-    // Background
-    ctx.fillStyle = playerTurn ? 'rgba(0, 210, 255, 0.2)' : 'rgba(255, 50, 50, 0.2)';
-    ctx.fillRect(x, y, indicatorWidth, indicatorHeight);
-    ctx.strokeStyle = playerTurn ? '#00d2ff' : '#ff3333';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y, indicatorWidth, indicatorHeight);
-    
-    // Text
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    if(playerTurn) {
-        ctx.fillText('🎮 PLAYER TURN - Move or Use Action', canvas.width / 2, y + indicatorHeight / 2);
-        
-        // Show what actions are available
-        ctx.font = '12px monospace';
-        if(!playerHasMovedThisTurn) {
-            ctx.fillText('Click highlighted tiles to move (3 tiles max)', canvas.width / 2, y + indicatorHeight + 15);
-        } else if(!playerUsedActionThisTurn) {
-            ctx.fillText('You can still use an item or attack', canvas.width / 2, y + indicatorHeight + 15);
-        } else {
-            ctx.fillText('Click WAIT button to end turn', canvas.width / 2, y + indicatorHeight + 15);
-        }
-    } else {
-        ctx.fillText('👾 ENEMY TURN - Watching...', canvas.width / 2, y + indicatorHeight / 2);
     }
 }
 
@@ -481,7 +439,7 @@ function drawGasEffect(x, y, timer) {
     const alpha = 0.3 + 0.2 * Math.sin(Date.now() / 500);
     ctx.fillStyle = `rgba(153, 50, 204, ${alpha})`;
     ctx.beginPath();
-    ctx.arc(x*TILE + TILE/2, y*TILE + TILE/2, TILE * 1.2, 0, Math.PI * 2);
+    ctx.arc(x*TILE + TILE/2, y*TILE + TILE/2, TILE * 1.2, 0, Math.PI * 2); // Bigger than bomb
     ctx.fill();
     
     ctx.fillStyle = "#fff";
@@ -1034,18 +992,6 @@ async function endTurn() {
         
         await wait(800 + Math.random() * 400);
         
-        // Check trap instantly (before enemy moves)
-        if(grid[e.y][e.x] === TRAP) {
-            grid[e.y][e.x] = FLOOR;
-            e.alive = false;
-            e.state = 'dead';
-            e.hp = 0;
-            stats.kills++;
-            createDeathEffect(e.x, e.y);
-            createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 1.5);
-            continue; // Skip processing this enemy
-        }
-        
         await processEnemyTurn(e);
         
         await wait(500);
@@ -1091,11 +1037,11 @@ async function processCombatSequence(playerAttack, enemy, playerDamage = 2) {
         return true;
     }
     
-    // Enemy counterattacks if in range AND can see player AND not sleeping
+    // Enemy counterattacks if in range AND can see player
     const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
     const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
     
-    if(dist <= enemy.attackRange && canSeePlayer && !enemy.isSleeping) {
+    if(dist <= enemy.attackRange && canSeePlayer) {
         createSpeechBubble(enemy.x, enemy.y, `${enemy.type} ATTACK!`, enemy.color, 1.5);
         await wait(600);
         
@@ -1127,7 +1073,7 @@ function wait(ms) {
 }
 
 // ============================================
-// TENCHU-STYLE VICTORY STATS (BALANCED)
+// TENCHU-STYLE VICTORY STATS
 // ============================================
 
 function showTenchuStyleVictoryStats() {
@@ -1137,45 +1083,41 @@ function showTenchuStyleVictoryStats() {
     const minutes = Math.floor(missionTime / 60);
     const seconds = missionTime % 60;
     
-    // Calculate score based on BALANCED Tenchu-style scoring
+    // Calculate score based on Tenchu-style scoring
     let score = 0;
-    const baseScore = 5000; // Base score so it's never zero
     
-    // Time bonus (faster = more points, but not punishing)
-    const maxTimeBonus = 3000;
-    const timePenaltyPerSecond = 5; // Reduced from 20
+    // Time bonus (faster = more points, longer = subtract more)
+    const maxTimeBonus = 10000;
+    const timePenaltyPerSecond = 20;
     const timeBonus = Math.max(0, maxTimeBonus - (missionTime * timePenaltyPerSecond));
     stats.timeBonus = Math.floor(timeBonus);
     score += stats.timeBonus;
     
     // Kills (normal kills are good)
-    const killPoints = stats.kills * 300; // Increased from 200
+    const killPoints = stats.kills * 200;
     score += killPoints;
     
     // Stealth kills bonus (BETTER than normal kills)
-    const stealthBonus = stats.stealthKills * 800; // Increased from 500
+    const stealthBonus = stats.stealthKills * 500;
     score += stealthBonus;
     
     // Coins
-    const coinPoints = stats.coins * 150; // Increased from 100
+    const coinPoints = stats.coins * 100;
     score += coinPoints;
     
-    // PENALTY for being spotted (BAD THING - but not too harsh)
-    const spottedPenalty = stats.timesSpotted * 300; // Reduced from 1000
-    score = Math.max(baseScore, score - spottedPenalty); // Never below base
+    // PENALTY for being spotted (BAD THING - TENCHU STYLE)
+    const spottedPenalty = stats.timesSpotted * 1000;
+    score = Math.max(0, score - spottedPenalty);
     
-    // Small penalty for items used
-    const itemPenalty = stats.itemsUsed * 50; // Reduced from 200
-    score = Math.max(baseScore, score - itemPenalty);
+    // Penalty for items used (using items = less stealthy)
+    const itemPenalty = stats.itemsUsed * 200;
+    score = Math.max(0, score - itemPenalty);
     
-    // Add base score at the end
-    score += baseScore;
-    
-    // Tenchu-style rankings (Tenchu: Tenchu 2 ranks)
-    let rank = "THUG";
+    // Tenchu-style rankings
+    let rank = "NOVICE";
     let rankDescription = "";
     let rankColor = "#888";
-    let rankIcon = "👣";
+    let rankIcon = "🥷";
     
     if(score >= 15000) {
         rank = "GRAND MASTER";
@@ -1187,28 +1129,28 @@ function showTenchuStyleVictoryStats() {
         rankDescription = "Superior technique and perfect stealth.";
         rankColor = "#c0c0c0";
         rankIcon = "🥷";
-    } else if(score >= 10000) {
-        rank = "ASSASSIN";
-        rankDescription = "Deadly efficiency with few errors.";
+    } else if(score >= 9000) {
+        rank = "EXPERT";
+        rankDescription = "Skilled infiltration with few mistakes.";
         rankColor = "#cd7f32";
         rankIcon = "🗡️";
-    } else if(score >= 8000) {
-        rank = "NINJA";
-        rankDescription = "Skilled infiltration.";
+    } else if(score >= 6000) {
+        rank = "ADEPT";
+        rankDescription = "Competent performance.";
         rankColor = "#00ff00";
         rankIcon = "🎯";
-    } else if(score >= 6000) {
-        rank = "SHINOBI";
-        rankDescription = "Competent shadow work.";
-        rankColor = "#3366ff";
-        rankIcon = "⚔️";
-    } else if(score >= 4000) {
-        rank = "RONIN";
-        rankDescription = "Basic skills demonstrated.";
+    } else if(score >= 3000) {
+        rank = "ASSASSIN";
+        rankDescription = "Effective but not subtle.";
         rankColor = "#ff4444";
+        rankIcon = "⚔️";
+    } else if(score >= 1000) {
+        rank = "INITIATE";
+        rankDescription = "Basic skills demonstrated.";
+        rankColor = "#aaa";
         rankIcon = "🛡️";
     } else {
-        rank = "THUG";
+        rank = "NOVICE";
         rankDescription = "Survived the mission.";
         rankColor = "#888";
         rankIcon = "👣";
@@ -1244,17 +1186,12 @@ function showTenchuStyleVictoryStats() {
         <div class="stat-row">
             <span class="stat-label">TIMES SPOTTED</span>
             <span class="stat-value">${stats.timesSpotted}</span>
-            <span class="stat-points" style="color: #ff9900;">-${spottedPenalty.toLocaleString()}</span>
+            <span class="stat-points" style="color: #ff0000;">-${spottedPenalty.toLocaleString()}</span>
         </div>
         <div class="stat-row">
             <span class="stat-label">ITEMS USED</span>
             <span class="stat-value">${stats.itemsUsed}</span>
             <span class="stat-points" style="color: #ff6600;">-${itemPenalty.toLocaleString()}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">BASE SCORE</span>
-            <span class="stat-value"></span>
-            <span class="stat-points">+${baseScore.toLocaleString()}</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-row total">
