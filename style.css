@@ -103,7 +103,7 @@ canvas {
     transform: translateY(2px);
 }
 
-/* --- TOOLBAR (Bottom Center) --- */
+/* --- TOOLBAR (Bottom Center) - FIXED POSITION --- */
 #toolbar {
     position: fixed;
     bottom: 25px;
@@ -193,6 +193,18 @@ canvas {
     background: linear-gradient(145deg, #3a1e1e, #422a2a);
     box-shadow: 0 0 20px rgba(255, 0, 0, 0.6), 
                 inset 0 0 10px rgba(255, 0, 0, 0.2);
+}
+
+/* Gas button specific styling */
+#btnGas {
+    border-color: #8a2be2;
+}
+
+#btnGas.active {
+    border-color: #9932cc;
+    background: linear-gradient(145deg, #2e1a3a, #3a2a42);
+    box-shadow: 0 0 20px rgba(153, 50, 204, 0.6), 
+                inset 0 0 10px rgba(153, 50, 204, 0.2);
 }
 
 /* --- OVERLAY SCREENS --- */
