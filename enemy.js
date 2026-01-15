@@ -2,6 +2,8 @@
 // ENEMY AI & DETECTION SYSTEM
 // ============================================
 
+console.log("Loading enemy system...");
+
 async function processEnemyTurn(e) {
     if(!e.alive) return;
     
@@ -185,3 +187,5 @@ async function eatBehavior(e) {
     await new Promise(resolve => setTimeout(resolve, 800));
     e.state = 'patrolling';
 }
+
+console.log("Enemy system loaded");
