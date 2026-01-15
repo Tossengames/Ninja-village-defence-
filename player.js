@@ -29,6 +29,7 @@ async function handlePlayerMove(targetX, targetY) {
             setTimeout(() => {
                 document.getElementById('toolbar').classList.add('hidden');
                 document.getElementById('rangeIndicator').classList.add('hidden');
+                document.getElementById('cameraHint').classList.add('hidden');
                 document.getElementById('logToggle').classList.add('hidden');
                 document.getElementById('hpDisplay').classList.add('hidden');
                 document.getElementById('ui-controls').classList.add('hidden');
@@ -131,6 +132,7 @@ async function handleAttack(targetX, targetY) {
                 await new Promise(resolve => setTimeout(resolve, 300));
                 
                 enemy.hp -= 2;
+                enemy.hp = Math.max(0, enemy.hp);
                 createDamageEffect(enemy.x, enemy.y, 2);
                 createSpeechBubble(enemy.x, enemy.y, `-2`, "#ff0000", 1);
                 
@@ -139,6 +141,7 @@ async function handleAttack(targetX, targetY) {
                 if(enemy.hp <= 0) {
                     enemy.alive = false;
                     enemy.state = 'dead';
+                    enemy.hp = 0;
                     stats.kills++;
                     createDeathEffect(enemy.x, enemy.y);
                 }
@@ -160,8 +163,9 @@ async function handleAttack(targetX, targetY) {
         
         enemy.alive = false;
         enemy.state = 'dead';
+        enemy.hp = 0;
         stats.kills++;
-        stats.stealthKills++; // Track stealth kills separately
+        stats.stealthKills++;
         createDeathEffect(targetX, targetY);
         
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -190,6 +194,7 @@ async function checkEnemyAttacks() {
         await new Promise(resolve => setTimeout(resolve, 300));
         
         playerHP -= e.damage;
+        playerHP = Math.max(0, playerHP);
         createDamageEffect(player.x, player.y, e.damage, true);
         createSpeechBubble(player.x, player.y, `-${e.damage} HP`, "#ff66ff", 1);
         updateHPDisplay();
@@ -197,8 +202,12 @@ async function checkEnemyAttacks() {
         await new Promise(resolve => setTimeout(resolve, 500));
         
         if(playerHP <= 0) {
+            playerHP = 0;
+            updateHPDisplay();
             gameOver = true;
-            showGameOverScreen(); // Use the new function name
+            setTimeout(() => {
+                showGameOverScreen();
+            }, 500);
             return;
         }
     }
