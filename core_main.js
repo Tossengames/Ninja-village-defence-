@@ -1076,6 +1076,10 @@ function wait(ms) {
 // TENCHU-STYLE VICTORY STATS
 // ============================================
 
+// ============================================
+// TENCHU-STYLE VICTORY STATS
+// ============================================
+
 function showTenchuStyleVictoryStats() {
     const statsTable = document.getElementById('statsTable');
     const rankLabel = document.getElementById('rankLabel');
@@ -1083,78 +1087,136 @@ function showTenchuStyleVictoryStats() {
     const minutes = Math.floor(missionTime / 60);
     const seconds = missionTime % 60;
     
-    // Calculate score based on Tenchu-style scoring
-    let score = 0;
+    // Calculate score based on Tenchu-style scoring (BALANCED)
+    let score = 1000; // Base score - ensures never zero
     
-    // Time bonus (faster = more points, longer = subtract more)
-    const maxTimeBonus = 10000;
-    const timePenaltyPerSecond = 20;
+    // Time bonus (faster = more points, but not too punishing)
+    const maxTimeBonus = 5000;
+    const timePenaltyPerSecond = 5; // Reduced from 20
     const timeBonus = Math.max(0, maxTimeBonus - (missionTime * timePenaltyPerSecond));
     stats.timeBonus = Math.floor(timeBonus);
     score += stats.timeBonus;
     
     // Kills (normal kills are good)
-    const killPoints = stats.kills * 200;
+    const killPoints = stats.kills * 300; // Increased from 200
     score += killPoints;
     
     // Stealth kills bonus (BETTER than normal kills)
-    const stealthBonus = stats.stealthKills * 500;
+    const stealthBonus = stats.stealthKills * 800; // Increased from 500
     score += stealthBonus;
     
     // Coins
-    const coinPoints = stats.coins * 100;
+    const coinPoints = stats.coins * 150; // Increased from 100
     score += coinPoints;
     
-    // PENALTY for being spotted (BAD THING - TENCHU STYLE)
-    const spottedPenalty = stats.timesSpotted * 1000;
-    score = Math.max(0, score - spottedPenalty);
+    // SMALL PENALTY for being spotted (not too harsh)
+    const spottedPenalty = stats.timesSpotted * 200; // Reduced from 1000
+    score = Math.max(500, score - spottedPenalty); // Minimum 500
     
-    // Penalty for items used (using items = less stealthy)
-    const itemPenalty = stats.itemsUsed * 200;
-    score = Math.max(0, score - itemPenalty);
+    // NO PENALTY for items used - items are tactical tools!
+    // const itemPenalty = stats.itemsUsed * 200; // REMOVED
+    // score = Math.max(0, score - itemPenalty); // REMOVED
     
-    // Tenchu-style rankings
-    let rank = "NOVICE";
+    // BONUS for not using items (stealthy approach)
+    const itemBonus = (10 - Math.min(stats.itemsUsed, 10)) * 100; // Bonus for using fewer items
+    score += itemBonus;
+    
+    // Tenchu-style rankings (like Tenchu: Stealth Assassins)
+    let rank = "THUG";
     let rankDescription = "";
     let rankColor = "#888";
     let rankIcon = "🥷";
     
-    if(score >= 15000) {
+    if(score >= 20000) {
         rank = "GRAND MASTER";
         rankDescription = "Flawless execution. A true shadow warrior.";
         rankColor = "#ffd700";
         rankIcon = "👑";
-    } else if(score >= 12000) {
+    } else if(score >= 15000) {
         rank = "MASTER NINJA";
         rankDescription = "Superior technique and perfect stealth.";
         rankColor = "#c0c0c0";
         rankIcon = "🥷";
-    } else if(score >= 9000) {
-        rank = "EXPERT";
+    } else if(score >= 12000) {
+        rank = "EXPERT ASSASSIN";
         rankDescription = "Skilled infiltration with few mistakes.";
         rankColor = "#cd7f32";
         rankIcon = "🗡️";
-    } else if(score >= 6000) {
-        rank = "ADEPT";
-        rankDescription = "Competent performance.";
-        rankColor = "#00ff00";
-        rankIcon = "🎯";
-    } else if(score >= 3000) {
+    } else if(score >= 9000) {
         rank = "ASSASSIN";
-        rankDescription = "Effective but not subtle.";
-        rankColor = "#ff4444";
+        rankDescription = "Effective and deadly.";
+        rankColor = "#00ff00";
         rankIcon = "⚔️";
-    } else if(score >= 1000) {
-        rank = "INITIATE";
-        rankDescription = "Basic skills demonstrated.";
-        rankColor = "#aaa";
+    } else if(score >= 6000) {
+        rank = "SHINOBI";
+        rankDescription = "Competent shadow warrior.";
+        rankColor = "#44aaff";
+        rankIcon = "👤";
+    } else if(score >= 3000) {
+        rank = "RONIN";
+        rankDescription = "Adept but unrefined.";
+        rankColor = "#ffaa00";
         rankIcon = "🛡️";
     } else {
-        rank = "NOVICE";
-        rankDescription = "Survived the mission.";
-        rankColor = "#888";
+        rank = "THUG";
+        rankDescription = "Brute force over finesse.";
+        rankColor = "#ff4444";
         rankIcon = "👣";
     }
+    
+    // Set rank text
+    rankLabel.innerHTML = `${rankIcon} ${rank}`;
+    rankLabel.style.color = rankColor;
+    rankLabel.style.textShadow = `0 0 10px ${rankColor}`;
+    
+    // Show detailed stats in Tenchu style
+    statsTable.innerHTML = `
+        <div class="stat-row">
+            <span class="stat-label">MISSION TIME</span>
+            <span class="stat-value">${minutes}:${seconds.toString().padStart(2, '0')}</span>
+            <span class="stat-points">+${stats.timeBonus.toLocaleString()}</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">GUARDS ELIMINATED</span>
+            <span class="stat-value">${stats.kills}</span>
+            <span class="stat-points">+${killPoints.toLocaleString()}</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">STEALTH KILLS</span>
+            <span class="stat-value">${stats.stealthKills}</span>
+            <span class="stat-points" style="color: #00ff00;">+${stealthBonus.toLocaleString()}</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">GOLD COLLECTED</span>
+            <span class="stat-value">${stats.coins}</span>
+            <span class="stat-points">+${coinPoints.toLocaleString()}</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">TIMES SPOTTED</span>
+            <span class="stat-value">${stats.timesSpotted}</span>
+            <span class="stat-points" style="color: #ff4444;">-${spottedPenalty.toLocaleString()}</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">ITEMS USED</span>
+            <span class="stat-value">${stats.itemsUsed}</span>
+            <span class="stat-points" style="color: #44aaff;">+${itemBonus.toLocaleString()}</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-row">
+            <span class="stat-label">STEALTH BONUS</span>
+            <span class="stat-value"></span>
+            <span class="stat-points" style="color: #00ff00;">+${itemBonus.toLocaleString()}</span>
+        </div>
+        <div class="stat-row total">
+            <span class="stat-label">TOTAL SCORE</span>
+            <span class="stat-value"></span>
+            <span class="stat-points" style="color: ${rankColor}; font-size: 18px; font-weight: bold;">${score.toLocaleString()}</span>
+        </div>
+        <div class="rank-description" style="color: ${rankColor}; margin-top: 15px; font-style: italic; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 5px;">
+            ${rankDescription}
+        </div>
+    `;
+}
     
     // Set rank text
     rankLabel.innerHTML = `${rankIcon} ${rank}`;
