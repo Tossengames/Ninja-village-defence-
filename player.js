@@ -6,7 +6,7 @@ async function handlePlayerMove(targetX, targetY) {
     if(!playerTurn || gameOver || combatSequence) return;
     
     if(playerHasMovedThisTurn) {
-        createSpeechBubble(player.x, player.y, "Already moved this turn!", "#ff9900", 1);
+        createSpeechBubble(player.x, player.y, "Already moved this turn!", "#ff9900", 2); // Longer
         return;
     }
     
@@ -65,13 +65,15 @@ async function handlePlayerMove(targetX, targetY) {
         if(stepsTaken >= maxSteps) {
             playerHasMovedThisTurn = true;
             
-            // Switch to attack mode if enemy adjacent
+            // Switch to attack mode if enemy adjacent (and check for stealth kills)
             const adjacentEnemies = enemies.filter(e => 
-                e.alive && !e.isSleeping && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
+                e.alive && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
             );
             
             if(adjacentEnemies.length > 0) {
                 setMode('attack');
+                // Show stealth kill prompt if available
+                checkAndShowStealthKillPrompt();
             } else {
                 autoSwitchToMove();
             }
@@ -100,7 +102,7 @@ async function handlePlayerMove(targetX, targetY) {
                     e.state = 'investigating';
                     e.investigationTarget = {x: step.x, y: step.y};
                     e.investigationTurns = 3;
-                    createSpeechBubble(e.x, e.y, "Where'd he go?", "#ff9900", 1.5);
+                    createSpeechBubble(e.x, e.y, "Where'd he go?", "#ff9900", 2); // Longer
                 }
             });
         }
@@ -126,18 +128,34 @@ async function handleAttack(targetX, targetY) {
     
     const enemy = enemies.find(e => e.alive && e.x === targetX && e.y === targetY);
     if(!enemy) {
-        createSpeechBubble(player.x, player.y, "❌ No enemy!", "#ff0000", 1);
+        createSpeechBubble(player.x, player.y, "❌ No enemy!", "#ff0000", 2); // Longer
         return;
     }
     
-    // If enemy is sleeping, can't attack (must be awake)
+    // SLEEPING ENEMY - INSTANT STEALTH KILL
     if(enemy.isSleeping) {
-        createSpeechBubble(player.x, player.y, "Enemy is sleeping!", "#9932cc", 1);
+        createSpeechBubble(player.x, player.y, "🗡️ SLEEPING KILL!", "#00ff00", 2);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        enemy.alive = false;
+        enemy.state = 'dead';
+        enemy.hp = 0;
+        stats.kills++;
+        stats.stealthKills++;
+        createDeathEffect(targetX, targetY);
+        
+        playerUsedActionThisTurn = true;
+        playerTurn = false;
+        
+        autoSwitchToMove();
+        setTimeout(() => {
+            endTurn();
+        }, 500);
         return;
     }
     
     if(playerUsedActionThisTurn) {
-        createSpeechBubble(player.x, player.y, "Already used action this turn!", "#ff9900", 1);
+        createSpeechBubble(player.x, player.y, "Already used action this turn!", "#ff9900", 2);
         return;
     }
     
@@ -149,7 +167,7 @@ async function handleAttack(targetX, targetY) {
     
     if(enemy.state === 'alerted' || enemy.state === 'chasing' || canSeePlayer) {
         // Normal combat - enemy can see player
-        createSpeechBubble(player.x, player.y, `⚔️ ATTACK!`, "#ff3333", 1);
+        createSpeechBubble(player.x, player.y, `⚔️ ATTACK!`, "#ff3333", 2);
         
         const enemyDied = await processCombatSequence(true, enemy, 2);
         
@@ -166,7 +184,7 @@ async function handleAttack(targetX, targetY) {
         }
     } else {
         // STEALTH KILL - INSTANT KILL if enemy can't see player
-        createSpeechBubble(player.x, player.y, "🗡️ STEALTH KILL!", "#00ff00", 1);
+        createSpeechBubble(player.x, player.y, "🗡️ STEALTH KILL!", "#00ff00", 2);
         await new Promise(resolve => setTimeout(resolve, 300));
         
         enemy.alive = false;
@@ -187,7 +205,7 @@ function handleItemPlacement(x, y, type) {
     if(!playerTurn || gameOver || combatSequence) return;
     
     if(inv[type] <= 0) {
-        createSpeechBubble(player.x, player.y, `No ${type} left!`, "#ff9900", 1);
+        createSpeechBubble(player.x, player.y, `No ${type} left!`, "#ff9900", 2); // Longer
         return;
     }
     
@@ -198,12 +216,12 @@ function handleItemPlacement(x, y, type) {
                     grid[y][x] === GAS || grid[y][x] === COIN || grid[y][x] === HIDE || grid[y][x] === EXIT;
     
     if(enemyAtTile || hasItem) {
-        createSpeechBubble(player.x, player.y, "Can't place here!", "#ff9900", 1);
+        createSpeechBubble(player.x, player.y, "Can't place here!", "#ff9900", 2); // Longer
         return;
     }
     
     if(playerUsedActionThisTurn) {
-        createSpeechBubble(player.x, player.y, "Already used action this turn!", "#ff9900", 1);
+        createSpeechBubble(player.x, player.y, "Already used action this turn!", "#ff9900", 2); // Longer
         return;
     }
     
@@ -216,17 +234,17 @@ function handleItemPlacement(x, y, type) {
     switch(type) {
         case 'trap':
             grid[y][x] = TRAP;
-            createSpeechBubble(x, y, "⚠️ TRAP SET", "#ff6464", 1);
+            createSpeechBubble(x, y, "⚠️ TRAP SET", "#ff6464", 2); // Longer
             createTrapEffect(x, y);
             break;
         case 'rice':
             grid[y][x] = RICE;
-            createSpeechBubble(x, y, "🍚 RICE SET", "#ffff64", 1);
+            createSpeechBubble(x, y, "🍚 RICE SET", "#ffff64", 2); // Longer
             break;
         case 'bomb':
             grid[y][x] = BOMB;
             activeBombs.push({x: x, y: y, t: 3});
-            createSpeechBubble(x, y, "💣 BOMB SET", "#ff3296", 1);
+            createSpeechBubble(x, y, "💣 BOMB SET", "#ff3296", 2); // Longer
             break;
         case 'gas':
             grid[y][x] = GAS;
@@ -239,4 +257,28 @@ function handleItemPlacement(x, y, type) {
     setTimeout(() => {
         endTurn();
     }, 500);
+}
+
+// Function to check and show stealth kill prompt
+function checkAndShowStealthKillPrompt() {
+    const adjacentEnemies = enemies.filter(e => 
+        e.alive && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
+    );
+    
+    adjacentEnemies.forEach(enemy => {
+        // Check if stealth kill is available
+        const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
+        
+        if(!canSeePlayer || enemy.isSleeping) {
+            // Show stealth kill prompt above player
+            createStealthKillPromptPlayer(player.x, player.y);
+        }
+    });
+}
+
+// Create stealth kill prompt above player
+function createStealthKillPromptPlayer(x, y) {
+    // This will create a persistent prompt above the player
+    // We'll use a speech bubble that lasts longer
+    createSpeechBubble(x, y, "🗡️ STEALTH KILL AVAILABLE", "#00ff00", 3); // Even longer
 }
