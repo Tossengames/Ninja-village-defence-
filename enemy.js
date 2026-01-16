@@ -4,6 +4,20 @@
 
 async function processEnemyTurn(e) {
     if(!e.alive) return;
+    
+    // Check trap instantly (BEFORE anything else) - INSTANT DEATH
+    if(grid[e.y][e.x] === TRAP) {
+        grid[e.y][e.x] = FLOOR;
+        e.alive = false;
+        e.state = 'dead';
+        e.hp = 0;
+        stats.kills++;
+        createDeathEffect(e.x, e.y);
+        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 1.5);
+        createTrapEffect(e.x, e.y);
+        return;
+    }
+    
     if(e.isSleeping) {
         e.sleepTimer--;
         if(e.sleepTimer <= 0) {
@@ -13,19 +27,6 @@ async function processEnemyTurn(e) {
             createSpeechBubble(e.x, e.y, "💤 Zzz...", "#888", 1);
             return;
         }
-    }
-    
-    // Check trap instantly (before enemy moves) - INSTANT KILL
-    if(grid[e.y][e.x] === TRAP) {
-        grid[e.y][e.x] = FLOOR;
-        e.alive = false;
-        e.state = 'dead';
-        e.hp = 0;
-        stats.kills++;
-        createDeathEffect(e.x, e.y);
-        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 1.5);
-        createTrapEffect(e.x, e.y); // Add trap activation effect
-        return;
     }
     
     // Check if enemy ate rice and should die
@@ -47,30 +48,47 @@ async function processEnemyTurn(e) {
     if(gasAtTile && !e.isSleeping) {
         e.isSleeping = true;
         e.sleepTimer = Math.floor(Math.random() * 5) + 2; // 2-6 turns
-        createSpeechBubble(e.x, e.y, "💤 Falling asleep!", "#9932cc", 1.5);
+        createSpeechBubble(e.x, e.y, "💤 Falling asleep!", "#9932cc", 2); // Longer duration
         return;
     }
     
-    // Can't see player if sleeping
-    const canSeePlayer = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+    // Check if enemy can see player RIGHT NOW (even if it's not enemy's "turn" for movement)
+    const canSeePlayerNow = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
     
-    if(canSeePlayer) {
-        if(e.state !== 'alerted' && e.state !== 'chasing') {
+    // IMMEDIATE SPOTTING - if enemy can see player, spot immediately
+    if(canSeePlayerNow) {
+        if(e.state !== 'chasing' && e.state !== 'alerted') {
             stats.timesSpotted++;
             createAlertEffect(e.x, e.y);
-            createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 1.5);
+            createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 2); // Longer duration
             playSound('alert');
         }
         
         e.state = 'chasing';
         e.lastSeenPlayer = {x: player.x, y: player.y};
-        e.chaseTurns = e.chaseMemory;
+        e.alertTurns = Math.floor(Math.random() * 4) + 2; // 2-5 turns alert
         e.hasHeardSound = false; // Clear sound investigation when chasing player
         e.soundLocation = null;
+        e.investigationTarget = null;
     }
     
-    // Check for rice in vision (CONE VISION ONLY)
-    if(!e.isSleeping && !e.ateRice) {
+    // If enemy is chasing but can't see player now, decrement alert
+    if(e.state === 'chasing' && !canSeePlayerNow) {
+        e.alertTurns--;
+        if(e.alertTurns <= 0) {
+            e.state = 'patrolling';
+            createSpeechBubble(e.x, e.y, "Lost them...", "#aaa", 2);
+            e.lastSeenPlayer = null;
+        }
+    }
+    
+    // If enemy is chasing and CAN see player, reset alert timer
+    if(e.state === 'chasing' && canSeePlayerNow) {
+        e.alertTurns = Math.floor(Math.random() * 4) + 2; // Reset to 2-5 turns
+    }
+    
+    // Check for rice in vision (only if not chasing player)
+    if(!e.isSleeping && !e.ateRice && e.state !== 'chasing') {
         for(let dy = -e.visionRange; dy <= e.visionRange; dy++) {
             for(let dx = -e.visionRange; dx <= e.visionRange; dx++) {
                 const tx = e.x + dx;
@@ -87,48 +105,50 @@ async function processEnemyTurn(e) {
         }
     }
     
-    // If heard sound, investigate it
-    if(!e.isSleeping && e.hasHeardSound && e.soundLocation) {
+    // If heard sound and not chasing player, investigate it
+    if(!e.isSleeping && e.hasHeardSound && e.soundLocation && e.state !== 'chasing') {
         e.state = 'investigating';
         e.investigationTarget = e.soundLocation;
-        e.investigationTurns = 5; // Give them more time to investigate
+        e.investigationTurns = 5;
     }
+    
+    // ENEMY MOVEMENT - Random movement distance (1-3 tiles)
+    const moveDistance = Math.floor(Math.random() * 3) + 1; // 1-3 tiles
     
     switch(e.state) {
         case 'patrolling':
-            await patrolBehavior(e);
+            await patrolBehavior(e, moveDistance);
             break;
         case 'chasing':
-            await chaseBehavior(e);
+            await chaseBehavior(e, moveDistance);
             break;
         case 'investigating':
-            await investigateBehavior(e);
+            await investigateBehavior(e, moveDistance);
             break;
         case 'eating':
-            await eatBehavior(e);
+            await eatBehavior(e, moveDistance);
             break;
         case 'alerted':
-            e.state = 'chasing';
-            await chaseBehavior(e);
+            await chaseBehavior(e, moveDistance);
             break;
     }
     
-    // Attack if adjacent to player and chasing AND can see player
+    // ATTACK IF PLAYER IS IN RANGE AND ENEMY CAN SEE PLAYER
     if(!e.isSleeping && (e.state === 'chasing' || e.state === 'alerted')) {
         const distToPlayer = Math.hypot(e.x - player.x, e.y - player.y);
-        const canSeePlayerNow = hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+        const canSeePlayer = hasLineOfSight(e, player.x, player.y) && !player.isHidden;
         
-        if(distToPlayer <= e.attackRange && canSeePlayerNow) {
+        if(distToPlayer <= e.attackRange && canSeePlayer) {
             await new Promise(resolve => setTimeout(resolve, 300));
-            createSpeechBubble(e.x, e.y, `🎯 ATTACKING!`, e.color, 1);
+            createSpeechBubble(e.x, e.y, `🎯 ATTACKING!`, e.color, 2); // Longer duration
             
             playerHP -= e.damage;
             playerHP = Math.max(0, playerHP);
             createDamageEffect(player.x, player.y, e.damage, true);
-            createSpeechBubble(player.x, player.y, `-${e.damage} HP`, "#ff66ff", 1);
+            createSpeechBubble(player.x, player.y, `-${e.damage} HP`, "#ff66ff", 2); // Longer duration
             shake = 15;
             
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 800));
             
             if(playerHP <= 0) {
                 playerHP = 0;
@@ -142,7 +162,7 @@ async function processEnemyTurn(e) {
     }
 }
 
-async function patrolBehavior(e) {
+async function patrolBehavior(e, maxDistance) {
     const directions = [
         {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
     ];
@@ -158,75 +178,114 @@ async function patrolBehavior(e) {
         );
     }
     
-    if(e.hasHeardSound && e.soundLocation) {
+    if(e.hasHeardSound && e.soundLocation && e.state !== 'chasing') {
         e.state = 'investigating';
         e.investigationTarget = e.soundLocation;
         e.investigationTurns = 5;
-        createSpeechBubble(e.x, e.y, "Hmm? What was that?", "#ff9900", 1);
+        createSpeechBubble(e.x, e.y, "Hmm? What was that?", "#ff9900", 2);
         return;
     }
     
-    // Try to move in current direction first
-    let nx = e.x + e.dir.x;
-    let ny = e.y + e.dir.y;
+    // Try to move up to maxDistance tiles
+    let movesMade = 0;
+    let currentX = e.x;
+    let currentY = e.y;
     
-    // If can't move in current direction, choose random
-    if(nx < 0 || nx >= mapDim || ny < 0 || ny >= mapDim || 
-       grid[ny][nx] === WALL || isTileBlocked(nx, ny)) {
-        const validDirs = directions.filter(dir => {
-            const tx = e.x + dir.x;
-            const ty = e.y + dir.y;
-            return tx >= 0 && tx < mapDim && ty >= 0 && ty < mapDim && 
-                   grid[ty][tx] !== WALL && !isTileBlocked(tx, ty);
-        });
+    while(movesMade < maxDistance) {
+        // Try current direction first
+        let nx = currentX + e.dir.x;
+        let ny = currentY + e.dir.y;
         
-        if(validDirs.length > 0) {
-            const dir = validDirs[Math.floor(Math.random() * validDirs.length)];
-            nx = e.x + dir.x;
-            ny = e.y + dir.y;
-            e.dir = dir;
-        } else {
-            // Can't move anywhere - just turn in place
-            e.dir = directions[Math.floor(Math.random() * directions.length)];
-            return;
+        // If can't move in current direction, choose random
+        if(nx < 0 || nx >= mapDim || ny < 0 || ny >= mapDim || 
+           grid[ny][nx] === WALL || isTileBlocked(nx, ny)) {
+            const validDirs = directions.filter(dir => {
+                const tx = currentX + dir.x;
+                const ty = currentY + dir.y;
+                return tx >= 0 && tx < mapDim && ty >= 0 && ty < mapDim && 
+                       grid[ty][tx] !== WALL && !isTileBlocked(tx, ty);
+            });
+            
+            if(validDirs.length > 0) {
+                const dir = validDirs[Math.floor(Math.random() * validDirs.length)];
+                nx = currentX + dir.x;
+                ny = currentY + dir.y;
+                e.dir = dir;
+            } else {
+                // Can't move anywhere - just turn in place
+                e.dir = directions[Math.floor(Math.random() * directions.length)];
+                break;
+            }
         }
-    }
-    
-    // Check for rice at target
-    if(grid[ny][nx] === RICE) {
-        e.state = 'eating';
-        createSpeechBubble(e.x, e.y, "🍚 Rice!", "#ffff00", 1.5);
-        return;
-    }
-    
-    // SAFETY CHECK: Make sure we're not trying to move to an invalid tile
-    if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && 
-       grid[ny][nx] !== WALL && !isTileBlocked(nx, ny)) {
+        
+        // Check for rice at target
+        if(grid[ny][nx] === RICE && e.state !== 'chasing') {
+            e.state = 'eating';
+            e.investigationTarget = {x: nx, y: ny};
+            e.investigationTurns = 99;
+            createSpeechBubble(e.x, e.y, "🍚 Rice!", "#ffff00", 2);
+            break;
+        }
+        
+        // Move to the tile
         await animMove(e, nx, ny, e.speed, () => {
             e.x = nx;
             e.y = ny;
+            currentX = nx;
+            currentY = ny;
         });
+        
+        movesMade++;
+        
+        // Check if we stepped on a trap (should kill instantly)
+        if(grid[e.y][e.x] === TRAP) {
+            // Trap will kill on next enemy turn start
+            break;
+        }
+        
+        // Check if we can see player after moving
+        const canSeePlayer = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+        if(canSeePlayer && e.state !== 'chasing') {
+            stats.timesSpotted++;
+            createAlertEffect(e.x, e.y);
+            createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 2);
+            playSound('alert');
+            e.state = 'chasing';
+            e.lastSeenPlayer = {x: player.x, y: player.y};
+            e.alertTurns = Math.floor(Math.random() * 4) + 2;
+            break;
+        }
+        
+        // Small delay between moves
+        await new Promise(resolve => setTimeout(resolve, 100));
     }
 }
 
-async function chaseBehavior(e) {
-    if(e.chaseTurns <= 0) {
-        // If lost player, investigate last known position
-        e.state = 'investigating';
-        e.investigationTarget = e.lastSeenPlayer;
-        e.investigationTurns = 3;
-        createSpeechBubble(e.x, e.y, "Where did they go?", "#ff9900", 1);
+async function chaseBehavior(e, maxDistance) {
+    // If no last seen position, can't chase
+    if(!e.lastSeenPlayer) {
+        e.state = 'patrolling';
         return;
     }
     
-    e.chaseTurns--;
+    // Check if we can see player now
+    const canSeePlayerNow = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
     
-    if(e.lastSeenPlayer) {
-        // Pathfind to player's last known position
-        const path = findPathEnemy(e.x, e.y, e.lastSeenPlayer.x, e.lastSeenPlayer.y);
+    // If we can see player, update last seen position
+    if(canSeePlayerNow) {
+        e.lastSeenPlayer = {x: player.x, y: player.y};
+        e.alertTurns = Math.floor(Math.random() * 4) + 2; // Reset alert
+    }
+    
+    // Pathfind to last known position
+    const path = findPathEnemy(e.x, e.y, e.lastSeenPlayer.x, e.lastSeenPlayer.y);
+    
+    if(path && path.length > 0) {
+        // Move up to maxDistance tiles along path
+        const movesToMake = Math.min(maxDistance, path.length);
         
-        if(path && path.length > 0) {
-            const nextStep = path[0];
+        for(let i = 0; i < movesToMake; i++) {
+            const nextStep = path[i];
             const nx = nextStep.x;
             const ny = nextStep.y;
             
@@ -236,11 +295,6 @@ async function chaseBehavior(e) {
                 return enemies.some(other => 
                     other.alive && other !== e && other.x === x && other.y === y
                 );
-            }
-            
-            // Check if next step is a trap
-            if(grid[ny][nx] === TRAP) {
-                // Will be caught in trap next turn
             }
             
             // SAFETY CHECK before moving
@@ -251,21 +305,36 @@ async function chaseBehavior(e) {
                     e.y = ny;
                     e.dir = {x: Math.sign(nx - e.x) || e.dir.x, y: Math.sign(ny - e.y) || e.dir.y};
                 });
+                
+                // Check trap after moving
+                if(grid[e.y][e.x] === TRAP) {
+                    // Will die next turn
+                    break;
+                }
+                
+                // Check if we can see player after moving
+                const canSeePlayer = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+                if(canSeePlayer) {
+                    e.lastSeenPlayer = {x: player.x, y: player.y};
+                    e.alertTurns = Math.floor(Math.random() * 4) + 2;
+                }
+                
+                // Small delay between moves
+                await new Promise(resolve => setTimeout(resolve, 50));
             } else {
-                // Can't move toward player, try alternative
-                await tryAlternativeMove(e, e.lastSeenPlayer.x, e.lastSeenPlayer.y);
+                break;
             }
-        } else {
-            // No path found, try alternative move
-            await tryAlternativeMove(e, e.lastSeenPlayer.x, e.lastSeenPlayer.y);
         }
+    } else {
+        // Can't find path, try alternative move
+        await tryAlternativeMove(e, e.lastSeenPlayer.x, e.lastSeenPlayer.y, maxDistance);
     }
 }
 
-async function investigateBehavior(e) {
+async function investigateBehavior(e, maxDistance) {
     if(e.investigationTurns <= 0) {
         e.state = 'patrolling';
-        createSpeechBubble(e.x, e.y, "Nothing there...", "#aaa", 1);
+        createSpeechBubble(e.x, e.y, "Nothing there...", "#aaa", 2);
         e.hasHeardSound = false;
         e.soundLocation = null;
         return;
@@ -274,66 +343,42 @@ async function investigateBehavior(e) {
     e.investigationTurns--;
     
     if(e.investigationTarget) {
-        // If we can see the investigation target (like bomb location or player last seen)
+        // If at investigation location
         const dx = e.investigationTarget.x - e.x;
         const dy = e.investigationTarget.y - e.y;
         const dist = Math.max(Math.abs(dx), Math.abs(dy));
         
-        // If we're at the investigation location
         if(dist <= 1) {
             // Look around
-            createSpeechBubble(e.x, e.y, "Nothing here...", "#aaa", 1);
-            e.investigationTarget = null;
-            e.hasHeardSound = false;
-            e.soundLocation = null;
+            createSpeechBubble(e.x, e.y, "Nothing here...", "#aaa", 2);
             
             // Check if player is visible from here
             const canSeePlayer = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
             if(canSeePlayer) {
+                stats.timesSpotted++;
+                createAlertEffect(e.x, e.y);
+                createSpeechBubble(e.x, e.y, "There you are!", "#ff0000", 2);
                 e.state = 'chasing';
                 e.lastSeenPlayer = {x: player.x, y: player.y};
-                e.chaseTurns = e.chaseMemory;
-                createSpeechBubble(e.x, e.y, "There you are!", "#ff0000", 1);
+                e.alertTurns = Math.floor(Math.random() * 4) + 2;
+                e.hasHeardSound = false;
+                e.soundLocation = null;
+            } else {
+                e.state = 'patrolling';
+                e.hasHeardSound = false;
+                e.soundLocation = null;
             }
             return;
         }
         
-        // Pathfind to investigation target
-        const path = findPathEnemy(e.x, e.y, e.investigationTarget.x, e.investigationTarget.y);
-        
-        if(path && path.length > 0) {
-            const nextStep = path[0];
-            const nx = nextStep.x;
-            const ny = nextStep.y;
-            
-            // Check if tile is blocked
-            function isTileBlocked(x, y) {
-                if(x === player.x && y === player.y) return true;
-                return enemies.some(other => 
-                    other.alive && other !== e && other.x === x && other.y === y
-                );
-            }
-            
-            // SAFETY CHECK
-            if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && 
-               grid[ny][nx] !== WALL && !isTileBlocked(nx, ny)) {
-                await animMove(e, nx, ny, e.speed * 1.2, () => {
-                    e.x = nx;
-                    e.y = ny;
-                    e.dir = {x: Math.sign(nx - e.x) || e.dir.x, y: Math.sign(ny - e.y) || e.dir.y};
-                });
-            } else {
-                await tryAlternativeMove(e, e.investigationTarget.x, e.investigationTarget.y);
-            }
-        } else {
-            await tryAlternativeMove(e, e.investigationTarget.x, e.investigationTarget.y);
-        }
+        // Move toward investigation target
+        await tryAlternativeMove(e, e.investigationTarget.x, e.investigationTarget.y, maxDistance);
     } else {
         e.state = 'patrolling';
     }
 }
 
-async function eatBehavior(e) {
+async function eatBehavior(e, maxDistance) {
     if(e.investigationTarget) {
         const dx = e.investigationTarget.x - e.x;
         const dy = e.investigationTarget.y - e.y;
@@ -345,45 +390,20 @@ async function eatBehavior(e) {
             e.ateRice = true;
             e.state = 'patrolling';
             e.investigationTarget = null;
-            createSpeechBubble(e.x, e.y, "Yum! 🍚", "#ffff00", 1.5);
+            createSpeechBubble(e.x, e.y, "Yum! 🍚", "#ffff00", 2);
             return;
         }
         
-        // Pathfind to rice
-        const path = findPathEnemy(e.x, e.y, e.investigationTarget.x, e.investigationTarget.y);
-        
-        if(path && path.length > 0) {
-            const nextStep = path[0];
-            const nx = nextStep.x;
-            const ny = nextStep.y;
-            
-            // Check if tile is blocked
-            function isTileBlocked(x, y) {
-                if(x === player.x && y === player.y) return true;
-                return enemies.some(other => 
-                    other.alive && other !== e && other.x === x && other.y === y
-                );
-            }
-            
-            // SAFETY CHECK
-            if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && 
-               grid[ny][nx] !== WALL && !isTileBlocked(nx, ny)) {
-                await animMove(e, nx, ny, e.speed * 1.2, () => {
-                    e.x = nx;
-                    e.y = ny;
-                    e.dir = {x: Math.sign(nx - e.x) || e.dir.x, y: Math.sign(ny - e.y) || e.dir.y};
-                });
-            } else {
-                await tryAlternativeMove(e, e.investigationTarget.x, e.investigationTarget.y);
-            }
-        }
+        // Move toward rice
+        await tryAlternativeMove(e, e.investigationTarget.x, e.investigationTarget.y, maxDistance);
     } else {
         e.state = 'patrolling';
     }
 }
 
-// Helper function for enemy pathfinding (avoids other enemies)
+// Helper function for enemy pathfinding
 function findPathEnemy(startX, startY, targetX, targetY) {
+    // Same as before, but enemies can walk through other enemies
     if(startX === targetX && startY === targetY) return [];
     
     const openSet = [];
@@ -470,7 +490,7 @@ function findPathEnemy(startX, startY, targetX, targetY) {
 }
 
 // Try alternative move when direct path is blocked
-async function tryAlternativeMove(e, targetX, targetY) {
+async function tryAlternativeMove(e, targetX, targetY, maxDistance) {
     const directions = [
         {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
     ];
@@ -482,7 +502,11 @@ async function tryAlternativeMove(e, targetX, targetY) {
         return distA - distB;
     });
     
+    let movesMade = 0;
+    
     for(const dir of directions) {
+        if(movesMade >= maxDistance) break;
+        
         const nx = e.x + dir.x;
         const ny = e.y + dir.y;
         
@@ -501,7 +525,74 @@ async function tryAlternativeMove(e, targetX, targetY) {
                 e.y = ny;
                 e.dir = dir;
             });
-            return;
+            movesMade++;
+            
+            // Check trap after moving
+            if(grid[e.y][e.x] === TRAP) {
+                // Will die next turn
+                break;
+            }
+            
+            // Check if we can see player after moving
+            const canSeePlayer = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+            if(canSeePlayer && e.state !== 'chasing') {
+                stats.timesSpotted++;
+                createAlertEffect(e.x, e.y);
+                createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 2);
+                e.state = 'chasing';
+                e.lastSeenPlayer = {x: player.x, y: player.y};
+                e.alertTurns = Math.floor(Math.random() * 4) + 2;
+                break;
+            }
         }
     }
+}
+
+// Function to check if player is in any enemy's vision (called from game loop)
+function checkPlayerVisibility() {
+    let inVision = false;
+    let spotted = false;
+    let chasing = false;
+    let investigating = 0;
+    
+    enemies.forEach(e => {
+        if(e.alive && !e.isSleeping) {
+            const canSeePlayer = hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+            
+            if(canSeePlayer) {
+                inVision = true;
+                
+                // If enemy can see player and isn't already chasing, spot immediately
+                if(e.state !== 'chasing' && e.state !== 'alerted') {
+                    // Immediate spotting (even if not enemy's turn)
+                    stats.timesSpotted++;
+                    createAlertEffect(e.x, e.y);
+                    createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 2);
+                    playSound('alert');
+                    e.state = 'chasing';
+                    e.lastSeenPlayer = {x: player.x, y: player.y};
+                    e.alertTurns = Math.floor(Math.random() * 4) + 2;
+                }
+                
+                spotted = true;
+            }
+            
+            if(e.state === 'chasing' || e.state === 'alerted') {
+                chasing = true;
+            }
+            
+            if(e.state === 'investigating') {
+                investigating++;
+            }
+        }
+    });
+    
+    // Update player alert status
+    playerAlertStatus.isInVisionOfEnemy = inVision;
+    playerAlertStatus.isSpotted = spotted;
+    playerAlertStatus.isBeingChased = chasing;
+    playerAlertStatus.investigatingEnemies = investigating;
+    playerAlertStatus.chasingEnemies = enemies.filter(e => e.alive && (e.state === 'chasing' || e.state === 'alerted')).length;
+    
+    return { inVision, spotted, chasing, investigating };
 }
