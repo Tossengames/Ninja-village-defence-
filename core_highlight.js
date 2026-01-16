@@ -10,7 +10,18 @@ let playerAlertStatus = {
     investigatingEnemies: 0,
     chasingEnemies: 0,
     lastSpottedBy: null,
-    spotTimer: 0
+    spotTimer: 0,
+    playerState: 'stealth', // stealth, hiding, spotted, chasing, investigating
+    playerStateIcon: '🥷', // Default ninja
+    playerStateColor: '#00ff00' // Default green
+};
+
+// Stealth kill prompt tracking
+let stealthKillPrompt = {
+    show: false,
+    timer: 0,
+    maxTime: 1.5, // Show for 1.5 seconds
+    lastEnemyChecked: null
 };
 
 function calculateHighlightedTiles() {
@@ -205,71 +216,206 @@ function findPath(startX, startY, targetX, targetY) {
 }
 
 // ============================================
-// STEALTH KILL PROMPT FOR PLAYER
+// STEALTH KILL PROMPT FOR PLAYER (SHOWS ONLY ONCE)
 // ============================================
 
 function checkAndShowStealthKillPrompt() {
-    if(!playerTurn) return;
+    if(!playerTurn || selectMode !== 'attack') {
+        stealthKillPrompt.show = false;
+        return;
+    }
     
+    // Update stealth kill prompt timer
+    if(stealthKillPrompt.show) {
+        stealthKillPrompt.timer -= 0.016; // Roughly 60fps
+        if(stealthKillPrompt.timer <= 0) {
+            stealthKillPrompt.show = false;
+            stealthKillPrompt.lastEnemyChecked = null;
+        }
+        return; // Already showing, don't check again
+    }
+    
+    // Check if we have adjacent enemies for stealth kill
     const adjacentEnemies = enemies.filter(e => 
         e.alive && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
     );
     
     let hasStealthKill = false;
+    let currentEnemy = null;
+    
     adjacentEnemies.forEach(enemy => {
-        // Check if stealth kill is available
         const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
-        
         if(!canSeePlayer || enemy.isSleeping) {
             hasStealthKill = true;
+            currentEnemy = enemy;
         }
     });
     
-    if(hasStealthKill && selectMode === 'attack') {
-        // Show stealth kill prompt above player
-        drawStealthKillPromptPlayer();
+    // Only show if we have stealth kill AND it's a different enemy than last time
+    if(hasStealthKill && currentEnemy && currentEnemy !== stealthKillPrompt.lastEnemyChecked) {
+        stealthKillPrompt.show = true;
+        stealthKillPrompt.timer = stealthKillPrompt.maxTime;
+        stealthKillPrompt.lastEnemyChecked = currentEnemy;
     }
 }
 
-function drawStealthKillPromptPlayer() {
+function drawSimpleStealthKillPrompt() {
+    if(!stealthKillPrompt.show) return;
+    
     const centerX = player.ax * TILE + TILE/2;
-    const centerY = player.ay * TILE - 60; // Position above player
-    const time = Date.now() / 1000;
-    const pulse = Math.sin(time * 6) * 0.5 + 0.5;
+    const centerY = player.ay * TILE - 40;
     
-    // Background glow
-    ctx.save();
-    ctx.globalAlpha = 0.7 * pulse;
+    // Calculate fade based on timer
+    const alpha = Math.min(1, stealthKillPrompt.timer * 2); // Fade in/out
     
-    const gradient = ctx.createRadialGradient(
-        centerX, centerY, 0,
-        centerX, centerY, 50
-    );
-    gradient.addColorStop(0, 'rgba(153, 50, 204, 0.6)');
-    gradient.addColorStop(1, 'rgba(153, 50, 204, 0)');
-    
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 50, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.restore();
-    
-    // Text background
-    ctx.fillStyle = `rgba(30, 0, 30, ${0.8 * pulse})`;
-    ctx.fillRect(centerX - 80, centerY - 20, 160, 40);
-    
-    // Border
-    ctx.strokeStyle = `rgba(220, 20, 60, ${pulse})`;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(centerX - 80, centerY - 20, 160, 40);
-    
-    // Text
-    ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`; // Gold text
-    ctx.font = 'bold 16px monospace';
+    // Simple text with fade
+    ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`; // Gold text with alpha
+    ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('🗡️ STEALTH KILL AVAILABLE', centerX, centerY);
+    ctx.fillText('🗡️ STEALTH', centerX, centerY);
+    
+    // Optional: Add a small shadow for readability
+    ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.5})`;
+    ctx.fillText('🗡️ STEALTH', centerX + 1, centerY + 1);
+}
+
+// ============================================
+// PLAYER STATE INDICATOR (BOTTOM LEFT)
+// ============================================
+
+function updatePlayerState() {
+    // Check all enemies to determine player state
+    let inVision = false;
+    let spotted = false;
+    let chasing = false;
+    let investigating = 0;
+    let chasingCount = 0;
+    
+    enemies.forEach(e => {
+        if(e.alive && !e.isSleeping) {
+            const canSeePlayer = hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+            
+            if(canSeePlayer) {
+                inVision = true;
+                spotted = true;
+            }
+            
+            if(e.state === 'chasing' || e.state === 'alerted') {
+                chasing = true;
+                chasingCount++;
+            }
+            
+            if(e.state === 'investigating') {
+                investigating++;
+            }
+        }
+    });
+    
+    // Determine player state
+    let state = 'stealth';
+    let icon = '🥷';
+    let color = '#00ff00'; // Green
+    
+    if(player.isHidden) {
+        state = 'hiding';
+        icon = '👤';
+        color = '#00aaff'; // Blue
+    }
+    
+    if(investigating > 0) {
+        state = 'investigating';
+        icon = '🟣';
+        color = '#9932cc'; // Purple
+    }
+    
+    if(chasing) {
+        state = 'chasing';
+        icon = '⚠️';
+        color = '#ff9900'; // Orange
+    }
+    
+    if(inVision) {
+        state = 'spotted';
+        icon = '🔴';
+        color = '#ff0000'; // Red
+    }
+    
+    // Update player alert status
+    playerAlertStatus.isInVisionOfEnemy = inVision;
+    playerAlertStatus.isSpotted = spotted;
+    playerAlertStatus.isBeingChased = chasing;
+    playerAlertStatus.investigatingEnemies = investigating;
+    playerAlertStatus.chasingEnemies = chasingCount;
+    playerAlertStatus.playerState = state;
+    playerAlertStatus.playerStateIcon = icon;
+    playerAlertStatus.playerStateColor = color;
+    
+    return { state, icon, color, inVision, chasing, investigating };
+}
+
+function drawPlayerStateIndicator() {
+    ctx.setTransform(1,0,0,1,0,0);
+    
+    const stateInfo = updatePlayerState();
+    const pulse = Math.sin(Date.now() / 800) * 0.3 + 0.7;
+    
+    const boxWidth = 160;
+    const boxHeight = 60;
+    const x = 20;
+    const y = canvas.height - boxHeight - 100; // Above toolbar
+    
+    // Background with glow based on state
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(x, y, boxWidth, boxHeight);
+    
+    // Border with state color glow
+    ctx.strokeStyle = stateInfo.color;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, boxWidth, boxHeight);
+    
+    // Glow effect
+    ctx.strokeStyle = `${stateInfo.color}${Math.floor(0.4 * 255).toString(16).padStart(2, '0')}`;
+    ctx.lineWidth = 1;
+    for(let i = 0; i < 3; i++) {
+        const offset = i * 2 * pulse;
+        ctx.strokeRect(x - offset, y - offset, boxWidth + offset * 2, boxHeight + offset * 2);
+    }
+    
+    // Title
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('NINJA STATUS', x + 10, y + 20);
+    
+    // State icon and text
+    ctx.font = 'bold 20px monospace';
+    ctx.fillStyle = stateInfo.color;
+    ctx.fillText(`${stateInfo.icon} ${stateInfo.state.toUpperCase()}`, x + 10, y + 45);
+    
+    // Additional info based on state
+    ctx.font = '12px monospace';
+    ctx.fillStyle = '#aaa';
+    
+    if(stateInfo.investigating > 0) {
+        ctx.fillText(`Enemies searching: ${stateInfo.investigating}`, x + 10, y + 65);
+    }
+    
+    if(stateInfo.chasing) {
+        ctx.fillText('Being chased!', x + 10, y + 65);
+    }
+    
+    if(stateInfo.inVision) {
+        ctx.fillText('In enemy vision!', x + 10, y + 65);
+    }
+    
+    if(stateInfo.state === 'stealth') {
+        ctx.fillText('Remain unseen', x + 10, y + 65);
+    }
+    
+    if(stateInfo.state === 'hiding') {
+        ctx.fillText('Hidden from view', x + 10, y + 65);
+    }
 }
 
 // ============================================
@@ -340,81 +486,16 @@ function drawTurnIndicator() {
 // ALERT INDICATOR SYSTEM
 // ============================================
 
-function updateAlertStatus() {
-    // Count alert states from all enemies
-    let inVision = false;
-    let spotted = false;
-    let chasing = false;
-    let investigating = 0;
-    let chasingCount = 0;
-    
-    enemies.forEach(e => {
-        if(e.alive && !e.isSleeping) {
-            const canSeePlayer = hasLineOfSight(e, player.x, player.y) && !player.isHidden;
-            
-            if(canSeePlayer) {
-                inVision = true;
-                spotted = true;
-                
-                // Immediate spotting (even if not enemy's turn)
-                if(e.state !== 'chasing' && e.state !== 'alerted') {
-                    if(window.stats) window.stats.timesSpotted++;
-                    if(window.createAlertEffect) createAlertEffect(e.x, e.y);
-                    if(window.createSpeechBubble) createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 2);
-                    if(window.playSound) playSound('alert');
-                    e.state = 'chasing';
-                    e.lastSeenPlayer = {x: player.x, y: player.y};
-                    e.alertTurns = Math.floor(Math.random() * 4) + 2;
-                }
-            }
-            
-            if(e.state === 'chasing' || e.state === 'alerted') {
-                chasing = true;
-                chasingCount++;
-                
-                // If chasing but can't see player, decrement alert
-                if(!canSeePlayer) {
-                    if(e.alertTurns) {
-                        e.alertTurns--;
-                        if(e.alertTurns <= 0) {
-                            e.state = 'investigating';
-                            e.investigationTarget = e.lastSeenPlayer;
-                            e.investigationTurns = 3;
-                        }
-                    }
-                } else {
-                    // Reset alert timer if can see player
-                    e.alertTurns = Math.floor(Math.random() * 4) + 2;
-                }
-            }
-            
-            if(e.state === 'investigating') {
-                investigating++;
-            }
-        }
-    });
-    
-    // Update player alert status
-    playerAlertStatus.isInVisionOfEnemy = inVision;
-    playerAlertStatus.isSpotted = spotted;
-    playerAlertStatus.isBeingChased = chasing;
-    playerAlertStatus.investigatingEnemies = investigating;
-    playerAlertStatus.chasingEnemies = chasingCount;
-    
-    return { inVision, spotted, chasing, investigating };
-}
-
 function drawAlertIndicator() {
     ctx.setTransform(1,0,0,1,0,0);
     
     const canvasWidth = canvas.width;
     const yPos = 70; // Below turn indicator
     
-    // Update alert status
-    const alertStatus = updateAlertStatus();
+    const stateInfo = updatePlayerState();
     
     // Draw alert indicator if any alert state is active
-    if(alertStatus.inVision || alertStatus.spotted || alertStatus.chasing || alertStatus.investigating > 0) {
+    if(stateInfo.inVision || stateInfo.chasing || stateInfo.investigating > 0) {
         const pulse = Math.sin(Date.now() / 600) * 0.3 + 0.7;
         
         // Background
@@ -433,35 +514,35 @@ function drawAlertIndicator() {
         // Draw status indicators
         let lineY = yPos + 40;
         
-        if(alertStatus.inVision) {
+        if(stateInfo.inVision) {
             ctx.fillStyle = '#ff0000';
             ctx.fillText('🔴 IN VISION', canvasWidth - 170, lineY);
             lineY += 15;
         }
         
-        if(alertStatus.chasing) {
+        if(stateInfo.chasing) {
             ctx.fillStyle = '#ff4444';
             ctx.fillText('⚠️ BEING CHASED', canvasWidth - 170, lineY);
             lineY += 15;
         }
         
-        if(alertStatus.investigating > 0) {
+        if(stateInfo.investigating > 0) {
             ctx.fillStyle = '#9932cc';
-            ctx.fillText('🟣 INVESTIGATING: ' + alertStatus.investigating, canvasWidth - 170, lineY);
+            ctx.fillText('🟣 INVESTIGATING: ' + stateInfo.investigating, canvasWidth - 170, lineY);
             lineY += 15;
         }
         
-        if(!alertStatus.inVision && !alertStatus.chasing && alertStatus.investigating === 0) {
+        if(!stateInfo.inVision && !stateInfo.chasing && stateInfo.investigating === 0) {
             ctx.fillStyle = '#00ff00';
             ctx.fillText('🟢 STEALTHY', canvasWidth - 170, yPos + 40);
         }
         
         // Draw glow effect based on alert level
-        if(alertStatus.inVision) {
+        if(stateInfo.inVision) {
             ctx.strokeStyle = `rgba(255, 0, 0, ${0.5 * pulse})`;
             ctx.lineWidth = 3;
             ctx.strokeRect(canvasWidth - 183, yPos - 3, 176, 96);
-        } else if(alertStatus.chasing) {
+        } else if(stateInfo.chasing) {
             ctx.strokeStyle = `rgba(255, 100, 0, ${0.4 * pulse})`;
             ctx.lineWidth = 2;
             ctx.strokeRect(canvasWidth - 182, yPos - 2, 174, 94);
@@ -609,10 +690,14 @@ window.updateVFX = function() {
     // Call the original VFX update
     if(originalUpdateVFX) originalUpdateVFX();
     
-    // Check and show stealth kill prompt for player
+    // Check and show stealth kill prompt for player (shows only once)
     checkAndShowStealthKillPrompt();
+    drawSimpleStealthKillPrompt();
     
-    // Draw alert indicator
+    // Draw player state indicator (bottom left)
+    drawPlayerStateIndicator();
+    
+    // Draw alert indicator (top right)
     drawAlertIndicator();
     
     // Draw turn indicator on top of everything
@@ -625,4 +710,5 @@ window.findPath = findPath;
 window.drawTurnIndicator = drawTurnIndicator;
 window.drawAlertIndicator = drawAlertIndicator;
 window.checkAndShowStealthKillPrompt = checkAndShowStealthKillPrompt;
-window.updateAlertStatus = updateAlertStatus;
+window.updatePlayerState = updatePlayerState;
+window.drawPlayerStateIndicator = drawPlayerStateIndicator;
