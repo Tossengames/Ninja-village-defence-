@@ -281,7 +281,7 @@ function drawSimpleStealthKillPrompt() {
 }
 
 // ============================================
-// PLAYER STATE INDICATOR (BOTTOM LEFT)
+// PLAYER STATE INDICATOR (BOTTOM LEFT) - THE ONLY ALERT INDICATOR NOW
 // ============================================
 
 function updatePlayerState() {
@@ -351,7 +351,7 @@ function updatePlayerState() {
     playerAlertStatus.playerStateIcon = icon;
     playerAlertStatus.playerStateColor = color;
     
-    return { state, icon, color, inVision, chasing, investigating };
+    return { state, icon, color, inVision, chasing, investigating, chasingCount };
 }
 
 function drawPlayerStateIndicator() {
@@ -402,7 +402,7 @@ function drawPlayerStateIndicator() {
     }
     
     if(stateInfo.chasing) {
-        ctx.fillText('Being chased!', x + 10, y + 65);
+        ctx.fillText(`Being chased: ${stateInfo.chasingCount}`, x + 10, y + 65);
     }
     
     if(stateInfo.inVision) {
@@ -478,74 +478,6 @@ function drawTurnIndicator() {
             ctx.fillText(`${enemyType} is moving...`, canvas.width / 2, y + indicatorHeight + 18);
         } else {
             ctx.fillText('Wait for enemies to move...', canvas.width / 2, y + indicatorHeight + 18);
-        }
-    }
-}
-
-// ============================================
-// ALERT INDICATOR SYSTEM
-// ============================================
-
-function drawAlertIndicator() {
-    ctx.setTransform(1,0,0,1,0,0);
-    
-    const canvasWidth = canvas.width;
-    const yPos = 70; // Below turn indicator
-    
-    const stateInfo = updatePlayerState();
-    
-    // Draw alert indicator if any alert state is active
-    if(stateInfo.inVision || stateInfo.chasing || stateInfo.investigating > 0) {
-        const pulse = Math.sin(Date.now() / 600) * 0.3 + 0.7;
-        
-        // Background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(canvasWidth - 180, yPos, 170, 90);
-        ctx.strokeStyle = '#444';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(canvasWidth - 180, yPos, 170, 90);
-        
-        // Title
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText('ENEMY STATUS', canvasWidth - 170, yPos + 20);
-        
-        // Draw status indicators
-        let lineY = yPos + 40;
-        
-        if(stateInfo.inVision) {
-            ctx.fillStyle = '#ff0000';
-            ctx.fillText('🔴 IN VISION', canvasWidth - 170, lineY);
-            lineY += 15;
-        }
-        
-        if(stateInfo.chasing) {
-            ctx.fillStyle = '#ff4444';
-            ctx.fillText('⚠️ BEING CHASED', canvasWidth - 170, lineY);
-            lineY += 15;
-        }
-        
-        if(stateInfo.investigating > 0) {
-            ctx.fillStyle = '#9932cc';
-            ctx.fillText('🟣 INVESTIGATING: ' + stateInfo.investigating, canvasWidth - 170, lineY);
-            lineY += 15;
-        }
-        
-        if(!stateInfo.inVision && !stateInfo.chasing && stateInfo.investigating === 0) {
-            ctx.fillStyle = '#00ff00';
-            ctx.fillText('🟢 STEALTHY', canvasWidth - 170, yPos + 40);
-        }
-        
-        // Draw glow effect based on alert level
-        if(stateInfo.inVision) {
-            ctx.strokeStyle = `rgba(255, 0, 0, ${0.5 * pulse})`;
-            ctx.lineWidth = 3;
-            ctx.strokeRect(canvasWidth - 183, yPos - 3, 176, 96);
-        } else if(stateInfo.chasing) {
-            ctx.strokeStyle = `rgba(255, 100, 0, ${0.4 * pulse})`;
-            ctx.lineWidth = 2;
-            ctx.strokeRect(canvasWidth - 182, yPos - 2, 174, 94);
         }
     }
 }
@@ -694,11 +626,8 @@ window.updateVFX = function() {
     checkAndShowStealthKillPrompt();
     drawSimpleStealthKillPrompt();
     
-    // Draw player state indicator (bottom left)
+    // Draw player state indicator (bottom left) - THE ONLY ALERT INDICATOR
     drawPlayerStateIndicator();
-    
-    // Draw alert indicator (top right)
-    drawAlertIndicator();
     
     // Draw turn indicator on top of everything
     drawTurnIndicator();
@@ -708,7 +637,6 @@ window.updateVFX = function() {
 window.calculateHighlightedTiles = calculateHighlightedTiles;
 window.findPath = findPath;
 window.drawTurnIndicator = drawTurnIndicator;
-window.drawAlertIndicator = drawAlertIndicator;
 window.checkAndShowStealthKillPrompt = checkAndShowStealthKillPrompt;
 window.updatePlayerState = updatePlayerState;
 window.drawPlayerStateIndicator = drawPlayerStateIndicator;
