@@ -103,34 +103,9 @@ canvas {
     transform: translateY(2px);
 }
 
-/* --- TOOLBAR (Bottom Center) - FIXED POSITION --- */
-#toolbar {
-    position: fixed;
-    bottom: 25px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 8px;
-    background: var(--panel);
-    padding: 12px;
-    border-radius: 20px;
-    border: 1px solid #333;
-    z-index: 100;
-    box-shadow: 0 -5px 25px rgba(0,0,0,0.5);
-    backdrop-filter: blur(10px);
-    max-width: 95vw;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    align-items: center; /* Align items vertically */
-}
-
-#toolbar::-webkit-scrollbar {
-    display: none;
-}
-
-/* --- STATUS CIRCLE --- */
+/* --- FIXED STATUS CIRCLE (Left of toolbar) --- */
 .status-circle {
+    position: fixed;
     width: 65px;
     height: 65px;
     min-width: 65px;
@@ -140,11 +115,12 @@ canvas {
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
-    margin-right: 8px;
-    flex-shrink: 0;
+    z-index: 101; /* Above toolbar */
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
+    bottom: 25px; /* Same as toolbar */
+    left: 50%;
+    transform: translateX(calc(-50% - 240px)); /* Position left of toolbar center */
 }
 
 .status-emoji {
@@ -219,9 +195,34 @@ canvas {
 
 /* Alert pulse for spotted state */
 @keyframes alertPulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
+    0% { transform: translateX(calc(-50% - 240px)) scale(1); }
+    50% { transform: translateX(calc(-50% - 240px)) scale(1.1); }
+    100% { transform: translateX(calc(-50% - 240px)) scale(1); }
+}
+
+/* --- TOOLBAR (Bottom Center) - FIXED POSITION --- */
+#toolbar {
+    position: fixed;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    background: var(--panel);
+    padding: 12px;
+    border-radius: 20px;
+    border: 1px solid #333;
+    z-index: 100;
+    box-shadow: 0 -5px 25px rgba(0,0,0,0.5);
+    backdrop-filter: blur(10px);
+    max-width: 95vw;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#toolbar::-webkit-scrollbar {
+    display: none;
 }
 
 /* --- TOOL BUTTONS - ALL SAME STYLE --- */
@@ -512,6 +513,8 @@ input[type="number"] {
         width: 55px;
         height: 55px;
         min-width: 55px;
+        bottom: 15px;
+        transform: translateX(calc(-50% - 200px)); /* Adjusted for mobile */
     }
     
     .status-emoji {
