@@ -118,9 +118,9 @@ canvas {
     z-index: 101; /* Above toolbar */
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
-    bottom: 25px; /* Same as toolbar */
+    bottom: 85px; /* Same as toolbar */
     left: 50%;
-    transform: translateX(calc(-50% - 240px)); /* Position left of toolbar center */
+    transform: translateX(calc(-50% - 200px)); /* Position left of toolbar center */
 }
 
 .status-emoji {
