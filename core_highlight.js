@@ -11,16 +11,16 @@ let playerAlertStatus = {
     chasingEnemies: 0,
     lastSpottedBy: null,
     spotTimer: 0,
-    playerState: 'stealth', // stealth, hiding, spotted, chasing, investigating
-    playerStateIcon: '🥷', // Default ninja
-    playerStateColor: '#00ff00' // Default green
+    playerState: 'stealth',
+    playerStateIcon: '🥷',
+    playerStateColor: '#00ff00'
 };
 
-// Stealth kill prompt tracking
+// Stealth kill prompt tracking (removed the popup)
 let stealthKillPrompt = {
     show: false,
     timer: 0,
-    maxTime: 1.5, // Show for 1.5 seconds
+    maxTime: 1.5,
     lastEnemyChecked: null
 };
 
@@ -63,7 +63,6 @@ function calculateHighlightedTiles() {
             
             if(selectMode === 'move') {
                 if(dist <= 3 && tile !== WALL && tile !== undefined) {
-                    // Use A* pathfinding to check if reachable
                     const path = findPath(player.x, player.y, tx, ty);
                     if(path && path.length <= 3) {
                         const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
@@ -82,18 +81,15 @@ function calculateHighlightedTiles() {
                 if(dist === 1) {
                     const enemyAtTile = enemies.find(e => e.alive && e.x === tx && e.y === ty);
                     if(enemyAtTile) {
-                        // Check if enemy can see player for stealth kill
                         const canSeePlayer = hasLineOfSight(enemyAtTile, player.x, player.y) && !player.isHidden;
                         
-                        // ENHANCED STEALTH KILL INDICATOR - PURPLE/CRIMSON
                         if(!canSeePlayer || enemyAtTile.isSleeping) {
-                            // STEALTH KILL AVAILABLE - New purple/crimson indicator
                             highlightedTiles.push({
                                 x: tx, y: ty,
                                 color: {
-                                    fill: 'rgba(153, 50, 204, 0.3)',    // Purple fill
-                                    border: 'rgba(220, 20, 60, 1.0)',   // Crimson border
-                                    glow: 'rgba(138, 43, 226, 0.6)'     // Blue-violet glow
+                                    fill: 'rgba(153, 50, 204, 0.3)',
+                                    border: 'rgba(220, 20, 60, 1.0)',
+                                    glow: 'rgba(138, 43, 226, 0.6)'
                                 },
                                 type: 'stealth',
                                 enemyType: enemyAtTile.type,
@@ -101,7 +97,6 @@ function calculateHighlightedTiles() {
                                 isSleeping: enemyAtTile.isSleeping
                             });
                         } else {
-                            // NORMAL COMBAT - enemy can see player
                             highlightedTiles.push({
                                 x: tx, y: ty,
                                 color: modeColors.attack,
@@ -216,72 +211,7 @@ function findPath(startX, startY, targetX, targetY) {
 }
 
 // ============================================
-// STEALTH KILL PROMPT FOR PLAYER (SHOWS ONLY ONCE)
-// ============================================
-
-function checkAndShowStealthKillPrompt() {
-    if(!playerTurn || selectMode !== 'attack') {
-        stealthKillPrompt.show = false;
-        return;
-    }
-    
-    // Update stealth kill prompt timer
-    if(stealthKillPrompt.show) {
-        stealthKillPrompt.timer -= 0.016; // Roughly 60fps
-        if(stealthKillPrompt.timer <= 0) {
-            stealthKillPrompt.show = false;
-            stealthKillPrompt.lastEnemyChecked = null;
-        }
-        return; // Already showing, don't check again
-    }
-    
-    // Check if we have adjacent enemies for stealth kill
-    const adjacentEnemies = enemies.filter(e => 
-        e.alive && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
-    );
-    
-    let hasStealthKill = false;
-    let currentEnemy = null;
-    
-    adjacentEnemies.forEach(enemy => {
-        const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
-        if(!canSeePlayer || enemy.isSleeping) {
-            hasStealthKill = true;
-            currentEnemy = enemy;
-        }
-    });
-    
-    // Only show if we have stealth kill AND it's a different enemy than last time
-    if(hasStealthKill && currentEnemy && currentEnemy !== stealthKillPrompt.lastEnemyChecked) {
-        stealthKillPrompt.show = true;
-        stealthKillPrompt.timer = stealthKillPrompt.maxTime;
-        stealthKillPrompt.lastEnemyChecked = currentEnemy;
-    }
-}
-
-function drawSimpleStealthKillPrompt() {
-    if(!stealthKillPrompt.show) return;
-    
-    const centerX = player.ax * TILE + TILE/2;
-    const centerY = player.ay * TILE - 40;
-    
-    // Calculate fade based on timer
-    const alpha = Math.min(1, stealthKillPrompt.timer * 2); // Fade in/out
-    
-    // Simple text with fade
-    ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`; // Gold text with alpha
-    ctx.font = 'bold 14px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🗡️ STEALTH', centerX, centerY);
-    
-    // Optional: Add a small shadow for readability
-    ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.5})`;
-    ctx.fillText('🗡️ STEALTH', centerX + 1, centerY + 1);
-}
-
-// ============================================
-// PLAYER STATE INDICATOR (BOTTOM LEFT) - THE ONLY ALERT INDICATOR NOW
+// PLAYER STATE INDICATOR (HTML BASED)
 // ============================================
 
 function updatePlayerState() {
@@ -315,30 +245,25 @@ function updatePlayerState() {
     // Determine player state
     let state = 'stealth';
     let icon = '🥷';
-    let color = '#00ff00'; // Green
     
     if(player.isHidden) {
         state = 'hiding';
         icon = '👤';
-        color = '#00aaff'; // Blue
     }
     
     if(investigating > 0) {
         state = 'investigating';
         icon = '🟣';
-        color = '#9932cc'; // Purple
     }
     
     if(chasing) {
         state = 'chasing';
         icon = '⚠️';
-        color = '#ff9900'; // Orange
     }
     
     if(inVision) {
         state = 'spotted';
         icon = '🔴';
-        color = '#ff0000'; // Red
     }
     
     // Update player alert status
@@ -349,77 +274,38 @@ function updatePlayerState() {
     playerAlertStatus.chasingEnemies = chasingCount;
     playerAlertStatus.playerState = state;
     playerAlertStatus.playerStateIcon = icon;
-    playerAlertStatus.playerStateColor = color;
     
-    return { state, icon, color, inVision, chasing, investigating, chasingCount };
+    // Update the HTML status circle
+    updateStatusCircle(state, icon);
+    
+    return { state, icon, inVision, chasing, investigating, chasingCount };
 }
 
-function drawPlayerStateIndicator() {
-    ctx.setTransform(1,0,0,1,0,0);
+function updateStatusCircle(state, icon) {
+    const statusCircle = document.getElementById('playerStatus');
+    if(!statusCircle) return;
     
-    const stateInfo = updatePlayerState();
-    const pulse = Math.sin(Date.now() / 800) * 0.3 + 0.7;
+    // Remove all state classes
+    statusCircle.classList.remove('stealth', 'hiding', 'investigating', 'chasing', 'spotted');
     
-    const boxWidth = 160;
-    const boxHeight = 60;
-    const x = 20;
-    const y = canvas.height - boxHeight - 100; // Above toolbar
+    // Add current state class
+    statusCircle.classList.add(state);
     
-    // Background with glow based on state
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(x, y, boxWidth, boxHeight);
-    
-    // Border with state color glow
-    ctx.strokeStyle = stateInfo.color;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(x, y, boxWidth, boxHeight);
-    
-    // Glow effect
-    ctx.strokeStyle = `${stateInfo.color}${Math.floor(0.4 * 255).toString(16).padStart(2, '0')}`;
-    ctx.lineWidth = 1;
-    for(let i = 0; i < 3; i++) {
-        const offset = i * 2 * pulse;
-        ctx.strokeRect(x - offset, y - offset, boxWidth + offset * 2, boxHeight + offset * 2);
-    }
-    
-    // Title
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('NINJA STATUS', x + 10, y + 20);
-    
-    // State icon and text
-    ctx.font = 'bold 20px monospace';
-    ctx.fillStyle = stateInfo.color;
-    ctx.fillText(`${stateInfo.icon} ${stateInfo.state.toUpperCase()}`, x + 10, y + 45);
-    
-    // Additional info based on state
-    ctx.font = '12px monospace';
-    ctx.fillStyle = '#aaa';
-    
-    if(stateInfo.investigating > 0) {
-        ctx.fillText(`Enemies searching: ${stateInfo.investigating}`, x + 10, y + 65);
-    }
-    
-    if(stateInfo.chasing) {
-        ctx.fillText(`Being chased: ${stateInfo.chasingCount}`, x + 10, y + 65);
-    }
-    
-    if(stateInfo.inVision) {
-        ctx.fillText('In enemy vision!', x + 10, y + 65);
-    }
-    
-    if(stateInfo.state === 'stealth') {
-        ctx.fillText('Remain unseen', x + 10, y + 65);
-    }
-    
-    if(stateInfo.state === 'hiding') {
-        ctx.fillText('Hidden from view', x + 10, y + 65);
+    // Update emoji
+    const emojiElement = statusCircle.querySelector('.status-emoji');
+    if(emojiElement) {
+        emojiElement.textContent = icon;
+        
+        // Add a subtle animation when state changes
+        emojiElement.style.transform = 'scale(1.2)';
+        setTimeout(() => {
+            emojiElement.style.transform = 'scale(1)';
+        }, 200);
     }
 }
 
 // ============================================
-// TURN INDICATOR
+// TURN INDICATOR (CANVAS BASED)
 // ============================================
 
 function drawTurnIndicator() {
@@ -486,7 +372,6 @@ function drawTurnIndicator() {
 // ENHANCED TILE HIGHLIGHT DRAWING - PURPLE/CRIMSON
 // ============================================
 
-// Override the drawTileHighlight function for stealth kills
 const originalDrawTileHighlight = window.drawTileHighlight || function(x, y, colorSet, pulse = true) {
     const time = Date.now() / 1000;
     const pulseFactor = pulse ? (Math.sin(time * 6) * 0.1 + 0.9) : 1;
@@ -511,31 +396,25 @@ const originalDrawTileHighlight = window.drawTileHighlight || function(x, y, col
     }
 };
 
-// New enhanced drawTileHighlight with purple/crimson stealth kill
 window.drawTileHighlight = function(x, y, colorSet, pulse = true) {
-    // Find if this is a stealth kill tile
     const tileInfo = highlightedTiles.find(t => t.x === x && t.y === y);
     const isStealthKill = tileInfo && tileInfo.type === 'stealth';
     
     if(isStealthKill) {
-        // STEALTH KILL - New purple/crimson effect
         drawStealthKillHighlight(x, y, tileInfo);
     } else {
-        // Regular highlight
         originalDrawTileHighlight(x, y, colorSet, pulse);
     }
 };
 
 function drawStealthKillHighlight(x, y, tileInfo) {
     const time = Date.now() / 1000;
-    const pulse = Math.sin(time * 8) * 0.5 + 0.5; // Fast, intense pulsing
+    const pulse = Math.sin(time * 8) * 0.5 + 0.5;
     
-    // Create a diamond shape instead of square
     const centerX = x * TILE + TILE/2;
     const centerY = y * TILE + TILE/2;
     const size = TILE/2 - 2;
     
-    // Inner diamond fill with purple gradient
     const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size * 1.5);
     gradient.addColorStop(0, `rgba(153, 50, 204, ${0.7 * pulse})`);
     gradient.addColorStop(1, `rgba(138, 43, 226, ${0.3 * pulse})`);
@@ -549,7 +428,6 @@ function drawStealthKillHighlight(x, y, tileInfo) {
     ctx.closePath();
     ctx.fill();
     
-    // Crimson border diamond
     ctx.strokeStyle = `rgba(220, 20, 60, ${pulse})`;
     ctx.lineWidth = 4;
     ctx.beginPath();
@@ -560,7 +438,6 @@ function drawStealthKillHighlight(x, y, tileInfo) {
     ctx.closePath();
     ctx.stroke();
     
-    // Pulsing outer glow
     for(let i = 0; i < 4; i++) {
         const glowSize = size + 5 + i * 5 * pulse;
         const alpha = 0.4 - i * 0.1;
@@ -576,25 +453,21 @@ function drawStealthKillHighlight(x, y, tileInfo) {
         ctx.stroke();
     }
     
-    // Add shadow dagger icon in center with pulse
     ctx.save();
     ctx.translate(centerX, centerY);
-    ctx.rotate(time * 3); // Spinning effect
+    ctx.rotate(time * 3);
     
-    // Shadow
     ctx.fillStyle = `rgba(0, 0, 0, ${0.5 * pulse})`;
     ctx.font = '22px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('🗡️', 2, 2);
     
-    // Main icon
-    ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`; // Gold color
+    ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`;
     ctx.fillText('🗡️', 0, 0);
     
     ctx.restore();
     
-    // Add floating particles
     if(Math.random() < 0.3) {
         const angle = Math.random() * Math.PI * 2;
         const dist = Math.random() * size;
@@ -604,7 +477,7 @@ function drawStealthKillHighlight(x, y, tileInfo) {
             vx: (Math.random() - 0.5) * 0.5,
             vy: (Math.random() - 0.5) * 0.5,
             life: 1.0,
-            color: `rgba(220, 20, 60, ${0.8})`, // Crimson particles
+            color: `rgba(220, 20, 60, ${0.8})`,
             size: Math.random() * 2 + 1
         });
     }
@@ -614,20 +487,13 @@ function drawStealthKillHighlight(x, y, tileInfo) {
 // AUTO-INTEGRATION WITH GAME LOOP
 // ============================================
 
-// Store the original updateVFX function
 const originalUpdateVFX = window.updateVFX;
 
-// Create a new updateVFX that includes everything
 window.updateVFX = function() {
-    // Call the original VFX update
     if(originalUpdateVFX) originalUpdateVFX();
     
-    // Check and show stealth kill prompt for player (shows only once)
-    checkAndShowStealthKillPrompt();
-    drawSimpleStealthKillPrompt();
-    
-    // Draw player state indicator (bottom left) - THE ONLY ALERT INDICATOR
-    drawPlayerStateIndicator();
+    // Update player state (which updates the HTML circle)
+    updatePlayerState();
     
     // Draw turn indicator on top of everything
     drawTurnIndicator();
@@ -637,6 +503,5 @@ window.updateVFX = function() {
 window.calculateHighlightedTiles = calculateHighlightedTiles;
 window.findPath = findPath;
 window.drawTurnIndicator = drawTurnIndicator;
-window.checkAndShowStealthKillPrompt = checkAndShowStealthKillPrompt;
 window.updatePlayerState = updatePlayerState;
-window.drawPlayerStateIndicator = drawPlayerStateIndicator;
+window.updateStatusCircle = updateStatusCircle;
