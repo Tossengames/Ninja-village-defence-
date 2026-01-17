@@ -122,10 +122,106 @@ canvas {
     overflow-x: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    align-items: center; /* Align items vertically */
 }
 
 #toolbar::-webkit-scrollbar {
     display: none;
+}
+
+/* --- STATUS CIRCLE --- */
+.status-circle {
+    width: 65px;
+    height: 65px;
+    min-width: 65px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    border: 3px solid #00ff00; /* Default green border */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    margin-right: 8px;
+    flex-shrink: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
+}
+
+.status-emoji {
+    font-size: 32px;
+    z-index: 2;
+    position: relative;
+    filter: drop-shadow(1px 1px 3px rgba(0,0,0,0.8));
+    transition: transform 0.3s ease;
+}
+
+.status-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(0, 255, 0, 0.25); /* Default green fill */
+    z-index: 1;
+    animation: pulse 2s infinite;
+    transition: background 0.3s ease;
+}
+
+/* Pulse animation */
+@keyframes pulse {
+    0% { transform: scale(0.95); opacity: 0.7; }
+    50% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(0.95); opacity: 0.7; }
+}
+
+/* State Colors */
+.status-circle.stealth { 
+    border-color: #00ff00; 
+    box-shadow: 0 0 25px rgba(0, 255, 0, 0.5);
+}
+.status-circle.stealth .status-glow {
+    background: rgba(0, 255, 0, 0.25);
+}
+
+.status-circle.hiding { 
+    border-color: #00aaff; 
+    box-shadow: 0 0 25px rgba(0, 170, 255, 0.5);
+}
+.status-circle.hiding .status-glow {
+    background: rgba(0, 170, 255, 0.25);
+}
+
+.status-circle.investigating { 
+    border-color: #9932cc; 
+    box-shadow: 0 0 25px rgba(153, 50, 204, 0.5);
+}
+.status-circle.investigating .status-glow {
+    background: rgba(153, 50, 204, 0.25);
+}
+
+.status-circle.chasing { 
+    border-color: #ff9900; 
+    box-shadow: 0 0 25px rgba(255, 153, 0, 0.5);
+}
+.status-circle.chasing .status-glow {
+    background: rgba(255, 153, 0, 0.25);
+}
+
+.status-circle.spotted { 
+    border-color: #ff0000; 
+    box-shadow: 0 0 30px rgba(255, 0, 0, 0.7);
+    animation: alertPulse 0.5s infinite;
+}
+.status-circle.spotted .status-glow {
+    background: rgba(255, 0, 0, 0.3);
+}
+
+/* Alert pulse for spotted state */
+@keyframes alertPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
 }
 
 /* --- TOOL BUTTONS - ALL SAME STYLE --- */
@@ -134,7 +230,7 @@ canvas {
     height: 65px;
     min-width: 65px;
     background: linear-gradient(145deg, #1a1a1a, #222);
-    border: 2px solid #444; /* All buttons have same border color */
+    border: 2px solid #444;
     border-radius: 15px;
     display: flex;
     flex-direction: column;
@@ -154,7 +250,7 @@ canvas {
 }
 
 .tool-btn.active {
-    border-color: var(--blue); /* Only active state changes border */
+    border-color: var(--blue);
     color: #fff;
     background: linear-gradient(145deg, #1e2a30, #2a3a42);
     box-shadow: 0 0 20px rgba(0, 210, 255, 0.6), 
@@ -183,9 +279,6 @@ canvas {
     align-items: center;
     justify-content: center;
 }
-
-/* REMOVED special styling for Attack and Gas buttons */
-/* They now use the same styling as other buttons */
 
 /* --- OVERLAY SCREENS --- */
 .overlay-screen {
@@ -413,6 +506,16 @@ input[type="number"] {
         bottom: 15px;
         padding: 10px;
         gap: 6px;
+    }
+    
+    .status-circle {
+        width: 55px;
+        height: 55px;
+        min-width: 55px;
+    }
+    
+    .status-emoji {
+        font-size: 26px;
     }
     
     .tool-btn {
