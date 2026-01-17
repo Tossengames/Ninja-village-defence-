@@ -17,14 +17,14 @@
         <button id="mapToggle" onclick="toggleMinimap()">Toggle Map</button>
     </div>
     
+    <!-- Fixed Status Circle (Left of toolbar) -->
+    <div id="playerStatus" class="status-circle stealth hidden">
+        <div class="status-emoji">🥷</div>
+        <div class="status-glow"></div>
+    </div>
+    
     <!-- Toolbar (Bottom Center) - FIXED POSITION -->
     <div id="toolbar" class="hidden">
-        <!-- Status Indicator Circle (Left side - fixed) -->
-        <div id="playerStatus" class="status-circle stealth">
-            <div class="status-emoji">🥷</div>
-            <div class="status-glow"></div>
-        </div>
-        
         <div class="tool-btn" id="btnMove" onclick="setMode('move')">
             <span>👣</span>
             Move
