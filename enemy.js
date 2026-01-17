@@ -7,7 +7,6 @@ async function processEnemyTurn(e) {
     
     // Check trap INSTANTLY - IMMEDIATE DEATH
     if(grid[e.y][e.x] === TRAP) {
-        // INSTANT DEATH - no waiting for next turn
         grid[e.y][e.x] = FLOOR;
         e.alive = false;
         e.state = 'dead';
@@ -48,7 +47,7 @@ async function processEnemyTurn(e) {
     const gasAtTile = activeGas.find(g => g.x === e.x && g.y === e.y);
     if(gasAtTile && !e.isSleeping) {
         e.isSleeping = true;
-        e.sleepTimer = Math.floor(Math.random() * 5) + 2; // 2-6 turns
+        e.sleepTimer = Math.floor(Math.random() * 5) + 2;
         createSpeechBubble(e.x, e.y, "💤 Falling asleep!", "#9932cc", 2);
         return;
     }
@@ -67,23 +66,23 @@ async function processEnemyTurn(e) {
         
         e.state = 'chasing';
         e.lastSeenPlayer = {x: player.x, y: player.y};
-        e.alertTurns = Math.floor(Math.random() * 4) + 2; // 2-5 turns alert
-        e.hasHeardSound = false; // Clear sound investigation when chasing player
+        e.alertTurns = Math.floor(Math.random() * 4) + 5; // Increased from 2-5 to 5-8 turns
+        e.hasHeardSound = false;
         e.soundLocation = null;
         e.investigationTarget = null;
         
         // When chasing, move toward player immediately
         await chasePlayer(e);
-        return; // Skip other behaviors when chasing
+        return;
     }
     
     // If enemy is chasing but can't see player now
-    if(e.state === 'chasing' && !canSeePlayerNow) {
+    if((e.state === 'chasing' || e.state === 'alerted') && !canSeePlayerNow) {
         // Decrement alert timer
         if(e.alertTurns) e.alertTurns--;
         
         if(e.alertTurns <= 0) {
-            // Lost player completely
+            // Lost player completely after many turns
             e.state = 'investigating';
             e.investigationTarget = e.lastSeenPlayer;
             e.investigationTurns = 3;
@@ -91,9 +90,21 @@ async function processEnemyTurn(e) {
             await investigateBehavior(e);
             return;
         } else {
-            // Still alert, move toward last seen position
+            // Still alert, move toward last seen position and keep searching
             createSpeechBubble(e.x, e.y, "Where'd they go?", "#ff9900", 2);
+            
+            // Try to move toward last known position
             await moveTowardLastSeen(e);
+            
+            // After moving, check if we can see player again
+            const canSeePlayerAfterMove = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+            if(canSeePlayerAfterMove) {
+                // Found player again!
+                e.lastSeenPlayer = {x: player.x, y: player.y};
+                e.alertTurns = Math.floor(Math.random() * 4) + 5; // Reset alert timer
+                createSpeechBubble(e.x, e.y, "Found you!", "#ff0000", 2);
+                await chasePlayer(e);
+            }
             return;
         }
     }
@@ -103,7 +114,7 @@ async function processEnemyTurn(e) {
         e.state = 'investigating';
         e.investigationTarget = e.soundLocation;
         e.investigationTurns = 5;
-        e.hasHeardSound = false; // Reset flag
+        e.hasHeardSound = false;
         createSpeechBubble(e.x, e.y, "Hmm? What was that?", "#ff9900", 2);
         await investigateBehavior(e);
         return;
@@ -123,7 +134,7 @@ async function processEnemyTurn(e) {
 async function chasePlayer(e) {
     if(!e.alive || e.isSleeping) return;
     
-    const maxDistance = Math.floor(Math.random() * 3) + 1; // 1-3 tiles
+    const maxDistance = Math.floor(Math.random() * 3) + 2; // Increased from 1-3 to 2-4 tiles
     
     // Calculate direction to player
     const dx = player.x - e.x;
@@ -132,7 +143,6 @@ async function chasePlayer(e) {
     
     // If player is adjacent, attack
     if(dist <= e.attackRange) {
-        // Attack player
         createSpeechBubble(e.x, e.y, `🎯 ATTACKING!`, e.color, 2);
         await new Promise(resolve => setTimeout(resolve, 300));
         
@@ -210,14 +220,51 @@ async function chasePlayer(e) {
                 const canSeePlayer = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
                 if(canSeePlayer) {
                     e.lastSeenPlayer = {x: player.x, y: player.y};
-                    e.alertTurns = Math.floor(Math.random() * 4) + 2;
+                    e.alertTurns = Math.floor(Math.random() * 4) + 5;
                 }
                 
                 // Small delay between moves
                 await new Promise(resolve => setTimeout(resolve, 100));
             } else {
-                // Tile blocked by another enemy, try alternative
-                break;
+                // Tile blocked by another enemy, try alternative direction
+                // Try perpendicular directions
+                const altMoves = [
+                    {x: 0, y: moveY !== 0 ? 0 : 1},
+                    {x: 0, y: moveY !== 0 ? 0 : -1},
+                    {x: moveX !== 0 ? 0 : 1, y: 0},
+                    {x: moveX !== 0 ? 0 : -1, y: 0}
+                ];
+                
+                let moved = false;
+                for(const altMove of altMoves) {
+                    const altX = currentX + altMove.x;
+                    const altY = currentY + altMove.y;
+                    
+                    if(altX >= 0 && altX < mapDim && altY >= 0 && altY < mapDim && 
+                       grid[altY][altX] !== WALL) {
+                        
+                        const enemyAtAltTile = enemies.find(other => 
+                            other.alive && other !== e && other.x === altX && other.y === altY
+                        );
+                        
+                        if(!enemyAtAltTile) {
+                            await animMove(e, altX, altY, e.speed * 1.5, () => {
+                                e.x = altX;
+                                e.y = altY;
+                                currentX = altX;
+                                currentY = altY;
+                                e.dir = {x: altMove.x, y: altMove.y};
+                            });
+                            movesMade++;
+                            moved = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if(!moved) {
+                    break; // Can't move in any direction
+                }
             }
         } else {
             // Can't move in that direction, try alternative
@@ -226,19 +273,47 @@ async function chasePlayer(e) {
     }
 }
 
-// MOVE TOWARD LAST SEEN POSITION
+// MOVE TOWARD LAST SEEN POSITION - IMPROVED VERSION
 async function moveTowardLastSeen(e) {
     if(!e.lastSeenPlayer) return;
     
-    const maxDistance = Math.floor(Math.random() * 2) + 1; // 1-2 tiles when investigating
+    const maxDistance = Math.floor(Math.random() * 2) + 2; // Increased from 1-2 to 2-3 tiles
     
     const dx = e.lastSeenPlayer.x - e.x;
     const dy = e.lastSeenPlayer.y - e.y;
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
     
     if(dist <= 1) {
-        // Reached last known position, look around
-        createSpeechBubble(e.x, e.y, "Where are you?", "#ff9900", 2);
+        // Reached last known position, look around (random move)
+        const directions = [
+            {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
+        ];
+        
+        // Try to move in a random direction to search
+        const validDirs = directions.filter(dir => {
+            const tx = e.x + dir.x;
+            const ty = e.y + dir.y;
+            return tx >= 0 && tx < mapDim && ty >= 0 && ty < mapDim && 
+                   grid[ty][tx] !== WALL;
+        });
+        
+        if(validDirs.length > 0) {
+            const dir = validDirs[Math.floor(Math.random() * validDirs.length)];
+            const nx = e.x + dir.x;
+            const ny = e.y + dir.y;
+            
+            const enemyAtTile = enemies.find(other => 
+                other.alive && other !== e && other.x === nx && other.y === ny
+            );
+            
+            if(!enemyAtTile) {
+                await animMove(e, nx, ny, e.speed * 1.2, () => {
+                    e.x = nx;
+                    e.y = ny;
+                    e.dir = dir;
+                });
+            }
+        }
         return;
     }
     
@@ -294,10 +369,79 @@ async function moveTowardLastSeen(e) {
                 // Small delay between moves
                 await new Promise(resolve => setTimeout(resolve, 100));
             } else {
-                break;
+                // Try alternative direction
+                const altMoves = [
+                    {x: 0, y: moveY !== 0 ? 0 : 1},
+                    {x: 0, y: moveY !== 0 ? 0 : -1}
+                ];
+                
+                let moved = false;
+                for(const altMove of altMoves) {
+                    const altX = currentX + altMove.x;
+                    const altY = currentY + altMove.y;
+                    
+                    if(altX >= 0 && altX < mapDim && altY >= 0 && altY < mapDim && 
+                       grid[altY][altX] !== WALL) {
+                        
+                        const enemyAtAltTile = enemies.find(other => 
+                            other.alive && other !== e && other.x === altX && other.y === altY
+                        );
+                        
+                        if(!enemyAtAltTile) {
+                            await animMove(e, altX, altY, e.speed * 1.2, () => {
+                                e.x = altX;
+                                e.y = altY;
+                                currentX = altX;
+                                currentY = altY;
+                                e.dir = {x: altMove.x, y: altMove.y};
+                            });
+                            movesMade++;
+                            moved = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if(!moved) {
+                    break;
+                }
             }
         } else {
-            break;
+            // Can't move in that direction, try alternative
+            const altMoves = [
+                {x: 0, y: 1}, {x: 0, y: -1}, {x: 1, y: 0}, {x: -1, y: 0}
+            ];
+            
+            let moved = false;
+            for(const altMove of altMoves) {
+                const altX = currentX + altMove.x;
+                const altY = currentY + altMove.y;
+                
+                if(altX >= 0 && altX < mapDim && altY >= 0 && altY < mapDim && 
+                   grid[altY][altX] !== WALL && !(altMove.x === moveX && altMove.y === moveY)) {
+                    
+                    const enemyAtAltTile = enemies.find(other => 
+                        other.alive && other !== e && other.x === altX && other.y === altY
+                    );
+                    
+                    if(!enemyAtAltTile) {
+                        await animMove(e, altX, altY, e.speed * 1.2, () => {
+                            e.x = altX;
+                            e.y = altY;
+                            currentX = altX;
+                            currentY = altY;
+                            e.dir = {x: altMove.x, y: altMove.y};
+                        });
+                        movesMade++;
+                        moved = true;
+                        break;
+                    }
+                }
+            }
+            
+            if(!moved) {
+                break;
+            }
         }
     }
 }
@@ -367,7 +511,7 @@ async function patrolBehavior(e) {
             playSound('alert');
             e.state = 'chasing';
             e.lastSeenPlayer = {x: player.x, y: player.y};
-            e.alertTurns = Math.floor(Math.random() * 4) + 2;
+            e.alertTurns = Math.floor(Math.random() * 4) + 5;
             break;
         }
         
