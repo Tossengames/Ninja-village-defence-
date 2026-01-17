@@ -118,7 +118,7 @@ canvas {
     z-index: 101; /* Above toolbar */
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
-    bottom: 450px; /* Same as toolbar */
+    bottom: 990px; /* Same as toolbar */
     left: 65%;
     /* Position left of toolbar center */
 }
