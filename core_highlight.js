@@ -505,3 +505,25 @@ window.findPath = findPath;
 window.drawTurnIndicator = drawTurnIndicator;
 window.updatePlayerState = updatePlayerState;
 window.updateStatusCircle = updateStatusCircle;
+
+// ============================================
+// INITIALIZE STATUS CIRCLE ON GAME START
+// ============================================
+
+// Store the original initGame function
+const originalInitGame = window.initGame;
+
+// Create a new initGame that wraps the original
+window.initGame = function() {
+    // Call the original initGame
+    originalInitGame();
+    
+    // Show the status circle
+    const statusCircle = document.getElementById('playerStatus');
+    if(statusCircle) {
+        statusCircle.classList.remove('hidden');
+    }
+    
+    // Initialize status circle to stealth
+    updateStatusCircle('stealth', '🥷');
+};
