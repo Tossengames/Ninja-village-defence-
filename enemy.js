@@ -55,6 +55,17 @@ async function processEnemyTurn(e) {
     // Check if enemy can see player RIGHT NOW  
     const canSeePlayerNow = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;  
     
+    // If player is hidden, immediately cancel all chase/alert states and go to patrol
+    if(player.isHidden && (e.state === 'chasing' || e.state === 'alert')) {
+        e.state = 'patrolling';
+        e.patrolTarget = null;
+        e.lastSeenPlayer = null;
+        e.alertTurns = 0;
+        createSpeechBubble(e.x, e.y, "Where'd they go?", "#aaa", 2);
+        await patrolBehavior(e);
+        return;
+    }
+    
     // Check if enemy can see rice (rice is visible if in line of sight)
     const visibleRice = findVisibleRice(e);
     
@@ -174,6 +185,9 @@ async function chasePlayer(e) {
     const dy = player.y - e.y;
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
     
+    // Update enemy direction to face player
+    updateEnemyDirection(e, player.x, player.y);
+    
     // If player is within attack range, attack
     if(dist <= e.attackRange) {
         createSpeechBubble(e.x, e.y, `🎯 ATTACKING!`, e.color, 2);
@@ -204,15 +218,33 @@ async function chasePlayer(e) {
         const nx = nextStep.x;
         const ny = nextStep.y;
         
+        // Update direction based on movement
+        updateEnemyDirection(e, nx, ny);
+        
         // Check if tile is valid and not occupied
         if(isValidMove(e, nx, ny)) {
             await animMove(e, nx, ny, e.speed * 1.5, () => {
                 e.x = nx;
                 e.y = ny;
-                e.dir = {x: nx - e.x, y: ny - e.y};
             });
         }
     }
+}
+
+// UPDATE ENEMY DIRECTION - Fix cone direction
+function updateEnemyDirection(e, targetX, targetY) {
+    const dx = targetX - e.x;
+    const dy = targetY - e.y;
+    
+    // Set direction based on movement or looking direction
+    if(Math.abs(dx) > Math.abs(dy)) {
+        // Horizontal movement/looking
+        e.dir = {x: dx > 0 ? 1 : -1, y: 0};
+    } else if(dy !== 0) {
+        // Vertical movement/looking
+        e.dir = {x: 0, y: dy > 0 ? 1 : -1};
+    }
+    // If dx and dy are both 0, keep current direction
 }
 
 // MOVE TOWARD LAST SEEN POSITION - UPDATED to prevent getting stuck
@@ -229,6 +261,9 @@ async function moveTowardLastSeen(e) {
     const dy = e.lastSeenPlayer.y - e.y;
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
     
+    // Update direction to face last seen position
+    updateEnemyDirection(e, e.lastSeenPlayer.x, e.lastSeenPlayer.y);
+    
     // If we're at or very close to the last seen position, look around
     if(dist <= 1) {
         // Do a small random patrol move to search the area
@@ -243,12 +278,14 @@ async function moveTowardLastSeen(e) {
         const nx = nextStep.x;
         const ny = nextStep.y;
         
+        // Update direction based on movement
+        updateEnemyDirection(e, nx, ny);
+        
         // Check if tile is valid and not occupied
         if(isValidMove(e, nx, ny)) {
             await animMove(e, nx, ny, e.speed * 1.2, () => {
                 e.x = nx;
                 e.y = ny;
-                e.dir = {x: nx - e.x, y: ny - e.y};
             });
         } else {
             // Can't move to planned step, try alternative
@@ -274,10 +311,12 @@ async function doRandomSearchMove(e) {
         const ny = e.y + dir.y;
         
         if(isValidMove(e, nx, ny)) {
+            // Update direction before moving
+            e.dir = dir;
+            
             await animMove(e, nx, ny, e.speed * 1.2, () => {
                 e.x = nx;
                 e.y = ny;
-                e.dir = dir;
             });
             return true;
         }
@@ -413,12 +452,14 @@ async function patrolBehavior(e) {
         const nx = nextStep.x;
         const ny = nextStep.y;
         
+        // Update direction based on movement
+        updateEnemyDirection(e, nx, ny);
+        
         // Check if tile is valid and not occupied by other enemies
         if(isValidMove(e, nx, ny)) {
             await animMove(e, nx, ny, e.speed, () => {
                 e.x = nx;
                 e.y = ny;
-                e.dir = {x: nx - e.x, y: ny - e.y};
             });
             
             // Check if we can see player after moving
@@ -522,6 +563,9 @@ async function eatBehavior(e) {
     const dy = e.investigationTarget.y - e.y;
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
     
+    // Update direction to face rice
+    updateEnemyDirection(e, e.investigationTarget.x, e.investigationTarget.y);
+    
     if(dist <= 1) {
         // Eat the rice if it's still there
         if(grid[e.investigationTarget.y][e.investigationTarget.x] === RICE) {
@@ -543,12 +587,14 @@ async function eatBehavior(e) {
         const nx = nextStep.x;
         const ny = nextStep.y;
         
+        // Update direction based on movement
+        updateEnemyDirection(e, nx, ny);
+        
         // Check if tile is valid and not occupied
         if(isValidMove(e, nx, ny)) {
             await animMove(e, nx, ny, e.speed * 1.2, () => {
                 e.x = nx;
                 e.y = ny;
-                e.dir = {x: nx - e.x, y: ny - e.y};
             });
             
             // Check if rice is still there after moving
