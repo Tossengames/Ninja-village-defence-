@@ -89,43 +89,65 @@ async function processEnemyTurn(e) {
         return;  
     }  
     
-    // If enemy is chasing/alert but can't see player now  
-    if((e.state === 'chasing' || e.state === 'alert') && !canSeePlayerNow) {  
-        // Decrement alert timer  
-        if(e.alertTurns) e.alertTurns--;  
+    // If enemy is chasing but can't see player now  
+    if(e.state === 'chasing' && !canSeePlayerNow) {  
+        // Switch to alert state when losing sight of player
+        e.state = 'alert';
+        e.alertTurns = Math.floor(Math.random() * 5) + 1; // Reset alert timer for searching
+        createSpeechBubble(e.x, e.y, "Where'd they go?", "#ff9900", 2);  
         
-        if(e.alertTurns <= 0) {  
-            // Lost player completely after alert turns
-            e.state = 'patrolling';  
-            e.patrolTarget = null; // Get new random patrol point
-            e.lastSeenPlayer = null;
-            createSpeechBubble(e.x, e.y, "Lost them...", "#aaa", 2);  
-            await patrolBehavior(e);  
-            return;  
-        } else {  
-            // Still alert, move toward last seen position
-            e.state = 'alert';
-            createSpeechBubble(e.x, e.y, "Where'd they go?", "#ff9900", 2);  
-            
-            // Move toward last known position  
-            await moveTowardLastSeen(e);  
-            
-            // After moving, check if we can see player again  
-            const canSeePlayerAfterMove = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;  
-            if(canSeePlayerAfterMove) {  
-                // Found player again!  
-                e.lastSeenPlayer = {x: player.x, y: player.y};  
-                e.alertTurns = Math.floor(Math.random() * 5) + 1; // Reset alert timer  
-                createSpeechBubble(e.x, e.y, "Found you!", "#ff0000", 2);  
-                e.state = 'chasing';
-                await chasePlayer(e);  
-            }  
-            return;  
+        // Move toward last known position  
+        await moveTowardLastSeen(e);  
+        
+        // After moving, check if we can see player again  
+        const canSeePlayerAfterMove = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;  
+        if(canSeePlayerAfterMove) {  
+            // Found player again!  
+            e.lastSeenPlayer = {x: player.x, y: player.y};  
+            e.alertTurns = Math.floor(Math.random() * 5) + 1; // Reset alert timer  
+            createSpeechBubble(e.x, e.y, "Found you!", "#ff0000", 2);  
+            e.state = 'chasing';
+            await chasePlayer(e);  
         }  
-    }  
+        return;  
+    }
+    
+    // If enemy is in alert state (searching for player)
+    if(e.state === 'alert' && !canSeePlayerNow) {
+        // Decrement alert timer
+        if(e.alertTurns) e.alertTurns--;
+        
+        // Always move during alert state, even if timer hasn't expired
+        if(e.lastSeenPlayer) {
+            // Move toward last seen position
+            await moveTowardLastSeen(e);
+            
+            // After moving, check if we can see player again
+            const canSeePlayerAfterMove = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+            if(canSeePlayerAfterMove) {
+                // Found player again!
+                e.lastSeenPlayer = {x: player.x, y: player.y};
+                e.alertTurns = Math.floor(Math.random() * 5) + 1;
+                createSpeechBubble(e.x, e.y, "Found you!", "#ff0000", 2);
+                e.state = 'chasing';
+                await chasePlayer(e);
+                return;
+            }
+        }
+        
+        // If alert timer expired or no last seen position, go back to patrolling
+        if(e.alertTurns <= 0 || !e.lastSeenPlayer) {
+            e.state = 'patrolling';
+            e.patrolTarget = null;
+            e.lastSeenPlayer = null;
+            createSpeechBubble(e.x, e.y, "Lost them...", "#aaa", 2);
+            await patrolBehavior(e);
+        }
+        return;
+    }
     
     // If investigating sound  
-    if(e.hasHeardSound && e.soundLocation && e.state !== 'chasing' && e.state !== 'alert') {  
+    if(e.hasHeardSound && e.soundLocation && e.state !== 'chasing' && e.state !== 'alert' && e.state !== 'eating') {  
         e.state = 'alert';  
         e.lastSeenPlayer = e.soundLocation;  
         e.alertTurns = 3; // Short alert for sounds
@@ -176,31 +198,24 @@ async function chasePlayer(e) {
         return;
     }
     
-    // Move one tile toward player
-    let moveX = 0;
-    let moveY = 0;
-    
-    // Determine best move direction
-    if(Math.abs(dx) > Math.abs(dy)) {
-        moveX = dx > 0 ? 1 : -1;
-    } else {
-        moveY = dy > 0 ? 1 : -1;
-    }
-    
-    const nx = e.x + moveX;
-    const ny = e.y + moveY;
-    
-    // Check if tile is valid and not occupied
-    if(isValidMove(e, nx, ny)) {
-        await animMove(e, nx, ny, e.speed * 1.5, () => {
-            e.x = nx;
-            e.y = ny;
-            e.dir = {x: moveX, y: moveY};
-        });
+    // Find path to player using simple pathfinding
+    const nextStep = findPathStep(e.x, e.y, player.x, player.y);
+    if(nextStep) {
+        const nx = nextStep.x;
+        const ny = nextStep.y;
+        
+        // Check if tile is valid and not occupied
+        if(isValidMove(e, nx, ny)) {
+            await animMove(e, nx, ny, e.speed * 1.5, () => {
+                e.x = nx;
+                e.y = ny;
+                e.dir = {x: nx - e.x, y: ny - e.y};
+            });
+        }
     }
 }
 
-// MOVE TOWARD LAST SEEN POSITION
+// MOVE TOWARD LAST SEEN POSITION - UPDATED to prevent getting stuck
 async function moveTowardLastSeen(e) {
     if(!e.lastSeenPlayer) {
         // No last seen position, go back to patrolling
@@ -214,39 +229,158 @@ async function moveTowardLastSeen(e) {
     const dy = e.lastSeenPlayer.y - e.y;
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
     
-    if(dist === 0) {
-        // Already at last seen position, look around by doing a small patrol move
-        await patrolBehavior(e);
+    // If we're at or very close to the last seen position, look around
+    if(dist <= 1) {
+        // Do a small random patrol move to search the area
+        await doRandomSearchMove(e);
+        e.lastSeenPlayer = null; // Clear after searching
         return;
     }
     
-    // Move one tile toward last seen position
-    let moveX = 0;
-    let moveY = 0;
-    
-    if(Math.abs(dx) > Math.abs(dy)) {
-        moveX = dx > 0 ? 1 : -1;
+    // Find path to last seen position using pathfinding
+    const nextStep = findPathStep(e.x, e.y, e.lastSeenPlayer.x, e.lastSeenPlayer.y);
+    if(nextStep) {
+        const nx = nextStep.x;
+        const ny = nextStep.y;
+        
+        // Check if tile is valid and not occupied
+        if(isValidMove(e, nx, ny)) {
+            await animMove(e, nx, ny, e.speed * 1.2, () => {
+                e.x = nx;
+                e.y = ny;
+                e.dir = {x: nx - e.x, y: ny - e.y};
+            });
+        } else {
+            // Can't move to planned step, try alternative
+            await doRandomSearchMove(e);
+        }
     } else {
-        moveY = dy > 0 ? 1 : -1;
-    }
-    
-    const nx = e.x + moveX;
-    const ny = e.y + moveY;
-    
-    // Check if tile is valid and not occupied
-    if(isValidMove(e, nx, ny)) {
-        await animMove(e, nx, ny, e.speed * 1.2, () => {
-            e.x = nx;
-            e.y = ny;
-            e.dir = {x: moveX, y: moveY};
-        });
-    } else {
-        // Can't move toward last seen, try alternative directions
-        await patrolBehavior(e);
+        // No path found, try random move
+        await doRandomSearchMove(e);
     }
 }
 
-// PATROL BEHAVIOR - Move to random points on the map
+// DO RANDOM SEARCH MOVE - Helper function for searching
+async function doRandomSearchMove(e) {
+    const directions = [
+        {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
+    ];
+    
+    // Shuffle directions
+    const shuffledDirs = [...directions].sort(() => Math.random() - 0.5);
+    
+    for(const dir of shuffledDirs) {
+        const nx = e.x + dir.x;
+        const ny = e.y + dir.y;
+        
+        if(isValidMove(e, nx, ny)) {
+            await animMove(e, nx, ny, e.speed * 1.2, () => {
+                e.x = nx;
+                e.y = ny;
+                e.dir = dir;
+            });
+            return true;
+        }
+    }
+    
+    // Can't move in any direction
+    return false;
+}
+
+// FIND PATH STEP - Simple pathfinding (Breadth-First Search for one step)
+function findPathStep(startX, startY, targetX, targetY) {
+    // If target is adjacent, return direct move
+    const dx = targetX - startX;
+    const dy = targetY - startY;
+    const dist = Math.max(Math.abs(dx), Math.abs(dy));
+    
+    if(dist === 0) return null;
+    
+    // Check if direct path is available
+    if(Math.abs(dx) > Math.abs(dy)) {
+        const nx = startX + (dx > 0 ? 1 : -1);
+        const ny = startY;
+        if(isTileWalkable(nx, ny)) {
+            return {x: nx, y: ny};
+        }
+    } else {
+        const nx = startX;
+        const ny = startY + (dy > 0 ? 1 : -1);
+        if(isTileWalkable(nx, ny)) {
+            return {x: nx, y: ny};
+        }
+    }
+    
+    // If direct path blocked, use BFS to find alternative path
+    const queue = [{x: startX, y: startY, path: []}];
+    const visited = new Set();
+    visited.add(`${startX},${startY}`);
+    
+    while(queue.length > 0) {
+        const current = queue.shift();
+        
+        // Check all adjacent tiles
+        const neighbors = [
+            {x: current.x + 1, y: current.y},
+            {x: current.x - 1, y: current.y},
+            {x: current.x, y: current.y + 1},
+            {x: current.x, y: current.y - 1}
+        ];
+        
+        for(const neighbor of neighbors) {
+            const key = `${neighbor.x},${neighbor.y}`;
+            
+            // Skip if visited or not walkable
+            if(visited.has(key) || !isTileWalkable(neighbor.x, neighbor.y)) {
+                continue;
+            }
+            
+            visited.add(key);
+            
+            // Create new path
+            const newPath = [...current.path, neighbor];
+            
+            // If this is the first step in path, return it
+            if(newPath.length === 1) {
+                // Check if this step gets us closer to target
+                const newDist = Math.max(Math.abs(targetX - neighbor.x), Math.abs(targetY - neighbor.y));
+                const oldDist = Math.max(Math.abs(targetX - startX), Math.abs(targetY - startY));
+                
+                if(newDist < oldDist) {
+                    return neighbor;
+                }
+            }
+            
+            // If we reached target, return first step
+            if(neighbor.x === targetX && neighbor.y === targetY) {
+                return newPath[0];
+            }
+            
+            // Continue BFS
+            queue.push({x: neighbor.x, y: neighbor.y, path: newPath});
+        }
+    }
+    
+    // No path found
+    return null;
+}
+
+// IS TILE WALKABLE - Check if tile can be walked on (ignoring enemies)
+function isTileWalkable(x, y) {
+    // Check bounds
+    if(x < 0 || x >= mapDim || y < 0 || y >= mapDim) {
+        return false;
+    }
+    
+    // Check if tile is walkable
+    if(grid[y][x] === WALL || grid[y][x] === TRAP) {
+        return false;
+    }
+    
+    return true;
+}
+
+// PATROL BEHAVIOR - Move to random points on the map with pathfinding
 async function patrolBehavior(e) {
     // If no patrol target or reached current target, get new random point
     if(!e.patrolTarget || (e.x === e.patrolTarget.x && e.y === e.patrolTarget.y)) {
@@ -273,94 +407,51 @@ async function patrolBehavior(e) {
         return;
     }
     
-    // Move toward patrol target
-    const dx = e.patrolTarget.x - e.x;
-    const dy = e.patrolTarget.y - e.y;
-    const dist = Math.max(Math.abs(dx), Math.abs(dy));
-    
-    if(dist === 0) {
-        // Reached target, wait a turn then get new point
-        createSpeechBubble(e.x, e.y, "Look around...", "#aaa", 1);
-        e.patrolTarget = null;
-        return;
-    }
-    
-    // Move one tile toward patrol target
-    let moveX = 0;
-    let moveY = 0;
-    
-    // Prefer horizontal movement if equal distance
-    if(Math.abs(dx) >= Math.abs(dy)) {
-        moveX = dx > 0 ? 1 : -1;
-    } else {
-        moveY = dy > 0 ? 1 : -1;
-    }
-    
-    // Try primary direction
-    let nx = e.x + moveX;
-    let ny = e.y + moveY;
-    let validMove = false;
-    
-    if(isValidMove(e, nx, ny)) {
-        validMove = true;
-    }
-    
-    // If primary move blocked, try alternative directions
-    if(!validMove) {
-        const directions = [
-            {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
-        ];
+    // Move toward patrol target using pathfinding
+    const nextStep = findPathStep(e.x, e.y, e.patrolTarget.x, e.patrolTarget.y);
+    if(nextStep) {
+        const nx = nextStep.x;
+        const ny = nextStep.y;
         
-        // Shuffle directions for more natural movement
-        const shuffledDirs = [...directions].sort(() => Math.random() - 0.5);
-        
-        for(const dir of shuffledDirs) {
-            // Skip the primary direction we already tried
-            if(dir.x === moveX && dir.y === moveY) continue;
+        // Check if tile is valid and not occupied by other enemies
+        if(isValidMove(e, nx, ny)) {
+            await animMove(e, nx, ny, e.speed, () => {
+                e.x = nx;
+                e.y = ny;
+                e.dir = {x: nx - e.x, y: ny - e.y};
+            });
             
-            nx = e.x + dir.x;
-            ny = e.y + dir.y;
-            
-            if(isValidMove(e, nx, ny)) {
-                moveX = dir.x;
-                moveY = dir.y;
-                validMove = true;
-                break;
+            // Check if we can see player after moving
+            const canSeePlayer = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+            if(canSeePlayer && e.state === 'patrolling') {
+                stats.timesSpotted++;
+                createAlertEffect(e.x, e.y);
+                createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 2);
+                playSound('alert');
+                e.state = 'chasing';
+                e.lastSeenPlayer = {x: player.x, y: player.y};
+                e.alertTurns = Math.floor(Math.random() * 5) + 1;
+                e.patrolTarget = null; // Cancel patrol
+                return;
+            }
+        } else {
+            // Tile occupied by another enemy, try alternative move
+            const moved = await doRandomSearchMove(e);
+            if(!moved) {
+                createSpeechBubble(e.x, e.y, "Blocked...", "#888", 1);
+                e.patrolTarget = null; // Get new random point
             }
         }
-    }
-    
-    // If found a valid move, execute it
-    if(validMove) {
-        await animMove(e, nx, ny, e.speed, () => {
-            e.x = nx;
-            e.y = ny;
-            e.dir = {x: moveX, y: moveY};
-        });
-        
-        // Check if we can see player after moving
-        const canSeePlayer = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
-        if(canSeePlayer && e.state === 'patrolling') {
-            stats.timesSpotted++;
-            createAlertEffect(e.x, e.y);
-            createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 2);
-            playSound('alert');
-            e.state = 'chasing';
-            e.lastSeenPlayer = {x: player.x, y: player.y};
-            e.alertTurns = Math.floor(Math.random() * 5) + 1;
-            e.patrolTarget = null; // Cancel patrol
-            return;
-        }
     } else {
-        // Can't move, wait a turn and try new direction next time
-        createSpeechBubble(e.x, e.y, "Stuck...", "#888", 1);
-        e.patrolTarget = null; // Get new random point
+        // No path found, get new patrol target
+        createSpeechBubble(e.x, e.y, "Can't reach...", "#888", 1);
+        e.patrolTarget = null;
     }
 }
 
 // GET RANDOM WALKABLE POINT - Helper function for patrol behavior
 function getRandomWalkablePoint(e) {
-    const maxAttempts = 20;
+    const maxAttempts = 30;
     
     for(let attempt = 0; attempt < maxAttempts; attempt++) {
         // Generate random coordinates
@@ -368,7 +459,7 @@ function getRandomWalkablePoint(e) {
         const ry = Math.floor(Math.random() * mapDim);
         
         // Check if tile is walkable (not wall) and not occupied
-        if(grid[ry][rx] !== WALL && grid[ry][rx] !== TRAP) {
+        if(isTileWalkable(rx, ry)) {
             // Check if tile is not occupied by another enemy or player
             const occupied = enemies.some(other => 
                 other.alive && other !== e && other.x === rx && other.y === ry
@@ -378,16 +469,19 @@ function getRandomWalkablePoint(e) {
                 // Check if point is not too close to current position (at least 3 tiles away)
                 const dist = Math.max(Math.abs(rx - e.x), Math.abs(ry - e.y));
                 if(dist >= 3) {
-                    return {x: rx, y: ry};
+                    // Verify there's a path to this point
+                    if(findPathStep(e.x, e.y, rx, ry)) {
+                        return {x: rx, y: ry};
+                    }
                 }
             }
         }
     }
     
-    // If no valid point found after attempts, try any walkable tile
+    // If no valid point found after attempts, try any walkable tile with path
     for(let y = 0; y < mapDim; y++) {
         for(let x = 0; x < mapDim; x++) {
-            if(grid[y][x] !== WALL && grid[y][x] !== TRAP) {
+            if(isTileWalkable(x, y)) {
                 const occupied = enemies.some(other => 
                     other.alive && other !== e && other.x === x && other.y === y
                 ) || (player.x === x && player.y === y);
@@ -395,7 +489,9 @@ function getRandomWalkablePoint(e) {
                 if(!occupied) {
                     const dist = Math.max(Math.abs(x - e.x), Math.abs(y - e.y));
                     if(dist >= 2) {
-                        return {x: x, y: y};
+                        if(findPathStep(e.x, e.y, x, y)) {
+                            return {x: x, y: y};
+                        }
                     }
                 }
             }
@@ -414,7 +510,7 @@ function getRandomWalkablePoint(e) {
     return null;
 }
 
-// EAT BEHAVIOR - Simplified version
+// EAT BEHAVIOR - Simplified version with pathfinding
 async function eatBehavior(e) {
     if(!e.investigationTarget) {
         e.state = 'patrolling';
@@ -441,38 +537,38 @@ async function eatBehavior(e) {
         return;
     }
     
-    // Move toward rice
-    let moveX = 0;
-    let moveY = 0;
-    
-    if(Math.abs(dx) > Math.abs(dy)) {
-        moveX = dx > 0 ? 1 : -1;
-    } else {
-        moveY = dy > 0 ? 1 : -1;
-    }
-    
-    const nx = e.x + moveX;
-    const ny = e.y + moveY;
-    
-    // Check if tile is valid and not occupied
-    if(isValidMove(e, nx, ny)) {
-        await animMove(e, nx, ny, e.speed * 1.2, () => {
-            e.x = nx;
-            e.y = ny;
-            e.dir = {x: moveX, y: moveY};
-        });
+    // Find path to rice
+    const nextStep = findPathStep(e.x, e.y, e.investigationTarget.x, e.investigationTarget.y);
+    if(nextStep) {
+        const nx = nextStep.x;
+        const ny = nextStep.y;
         
-        // Check if rice is still there after moving
-        if(e.investigationTarget && grid[e.investigationTarget.y][e.investigationTarget.x] !== RICE) {
-            // Rice was eaten or disappeared
+        // Check if tile is valid and not occupied
+        if(isValidMove(e, nx, ny)) {
+            await animMove(e, nx, ny, e.speed * 1.2, () => {
+                e.x = nx;
+                e.y = ny;
+                e.dir = {x: nx - e.x, y: ny - e.y};
+            });
+            
+            // Check if rice is still there after moving
+            if(e.investigationTarget && grid[e.investigationTarget.y][e.investigationTarget.x] !== RICE) {
+                // Rice was eaten or disappeared
+                e.state = 'patrolling';
+                e.investigationTarget = null;
+                createSpeechBubble(e.x, e.y, "Food gone?", "#aaa", 1);
+            }
+        } else {
+            // Can't move toward rice, go back to patrolling
             e.state = 'patrolling';
             e.investigationTarget = null;
-            createSpeechBubble(e.x, e.y, "Food gone?", "#aaa", 1);
+            await patrolBehavior(e);
         }
     } else {
-        // Can't move toward rice, go back to patrolling
+        // No path to rice, go back to patrolling
         e.state = 'patrolling';
         e.investigationTarget = null;
+        createSpeechBubble(e.x, e.y, "Can't reach food", "#aaa", 1);
         await patrolBehavior(e);
     }
 }
@@ -481,13 +577,8 @@ async function eatBehavior(e) {
 
 // Check if a tile is valid for movement (not wall, not trap, not occupied)
 function isValidMove(e, x, y) {
-    // Check bounds
-    if(x < 0 || x >= mapDim || y < 0 || y >= mapDim) {
-        return false;
-    }
-    
-    // Check if tile is walkable
-    if(grid[y][x] === WALL) {
+    // First check if tile is walkable
+    if(!isTileWalkable(x, y)) {
         return false;
     }
     
