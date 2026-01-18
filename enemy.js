@@ -55,20 +55,17 @@ async function processEnemyTurn(e) {
     // Check if enemy can see player RIGHT NOW  
     const canSeePlayerNow = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;  
     
-    // Check if enemy can see rice (rice has higher priority than player when hungry)
-    const canSeeRice = !e.isSleeping && e.hungry && canSeeRiceFrom(e.x, e.y);
+    // Check if enemy can see rice (rice is visible if in line of sight)
+    const visibleRice = findVisibleRice(e);
     
-    // If enemy sees rice and is hungry, go eat it
-    if(canSeeRice && e.hungry && e.state !== 'eating') {
-        const riceTile = findNearestRice(e);
-        if(riceTile) {
-            e.state = 'eating';
-            e.investigationTarget = riceTile;
-            e.lastSeenPlayer = null; // Clear player tracking when eating
-            createSpeechBubble(e.x, e.y, "Food! 🍚", "#ffff00", 2);
-            await eatBehavior(e);
-            return;
-        }
+    // If enemy sees rice and not currently chasing player, go eat it
+    if(visibleRice && e.state !== 'chasing' && e.state !== 'alert' && !e.ateRice) {
+        e.state = 'eating';
+        e.investigationTarget = visibleRice;
+        e.lastSeenPlayer = null; // Clear player tracking when eating
+        createSpeechBubble(e.x, e.y, "Food! 🍚", "#ffff00", 2);
+        await eatBehavior(e);
+        return;
     }
     
     // IMMEDIATE SPOTTING - if enemy can see player, spot immediately  
@@ -417,26 +414,27 @@ function getRandomWalkablePoint(e) {
     return null;
 }
 
-// EAT BEHAVIOR - Improved version
+// EAT BEHAVIOR - Simplified version
 async function eatBehavior(e) {
     if(!e.investigationTarget) {
         e.state = 'patrolling';
         return;
     }
 
-    // Check if we're already at the rice
+    // Check if we're already at the rice (adjacent to it)
     const dx = e.investigationTarget.x - e.x;
     const dy = e.investigationTarget.y - e.y;
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
     
     if(dist <= 1) {
-        // Eat the rice
+        // Eat the rice if it's still there
         if(grid[e.investigationTarget.y][e.investigationTarget.x] === RICE) {
             grid[e.investigationTarget.y][e.investigationTarget.x] = FLOOR;
             e.ateRice = true;
-            e.hungry = false;
-            e.riceDeathTimer = 10; // Die after 10 turns
+            // Random death timer between 1-3 turns
+            e.riceDeathTimer = Math.floor(Math.random() * 3) + 1;
             createSpeechBubble(e.x, e.y, "Yum! 🍚", "#ffff00", 2);
+            createPoisonEffect(e.x, e.y);
         }
         e.state = 'patrolling';
         e.investigationTarget = null;
@@ -465,7 +463,7 @@ async function eatBehavior(e) {
         });
         
         // Check if rice is still there after moving
-        if(grid[e.investigationTarget.y][e.investigationTarget.x] !== RICE) {
+        if(e.investigationTarget && grid[e.investigationTarget.y][e.investigationTarget.x] !== RICE) {
             // Rice was eaten or disappeared
             e.state = 'patrolling';
             e.investigationTarget = null;
@@ -510,60 +508,36 @@ function isValidMove(e, x, y) {
     return true;
 }
 
-// Check if enemy can see rice from current position
-function canSeeRiceFrom(x, y) {
-    // Simple check for rice in line of sight
-    for(let checkY = 0; checkY < mapDim; checkY++) {
-        for(let checkX = 0; checkX < mapDim; checkX++) {
-            if(grid[checkY][checkX] === RICE) {
-                // Check line of sight (simplified)
-                const dx = Math.abs(checkX - x);
-                const dy = Math.abs(checkY - y);
-                
-                // If rice is within 5 tiles and no walls in direct line (simplified)
-                if(dx <= 5 && dy <= 5) {
-                    // Check if there's a clear path (simplified)
-                    let clearPath = true;
-                    const steps = Math.max(dx, dy);
-                    
-                    for(let s = 1; s <= steps; s++) {
-                        const tx = Math.round(x + (checkX - x) * (s / steps));
-                        const ty = Math.round(y + (checkY - y) * (s / steps));
-                        
-                        if(tx >= 0 && tx < mapDim && ty >= 0 && ty < mapDim) {
-                            if(grid[ty][tx] === WALL) {
-                                clearPath = false;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if(clearPath) {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    return false;
-}
-
-// Find nearest rice to enemy
-function findNearestRice(e) {
-    let nearestRice = null;
-    let minDist = Infinity;
-    
+// Find visible rice in line of sight
+function findVisibleRice(e) {
+    // Check all tiles in the map for rice
     for(let y = 0; y < mapDim; y++) {
         for(let x = 0; x < mapDim; x++) {
             if(grid[y][x] === RICE) {
-                const dist = Math.abs(x - e.x) + Math.abs(y - e.y);
-                if(dist < minDist) {
-                    minDist = dist;
-                    nearestRice = {x: x, y: y};
+                // Check if rice is in line of sight
+                if(hasLineOfSight(e, x, y)) {
+                    return {x: x, y: y};
                 }
             }
         }
     }
+    return null;
+}
+
+// Create poison effect when enemy eats rice
+function createPoisonEffect(x, y) {
+    // Create a green poison cloud effect
+    const effect = {
+        x: x,
+        y: y,
+        color: "#00ff00",
+        alpha: 0.7,
+        size: 1.0,
+        timer: 30
+    };
     
-    return nearestRice;
+    // Add to effects array if you have one, or create a visual effect
+    if(typeof createVisualEffect === 'function') {
+        createVisualEffect(x, y, "poison");
+    }
 }
