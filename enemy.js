@@ -61,6 +61,7 @@ async function processEnemyTurn(e) {
         e.patrolTarget = null;
         e.lastSeenPlayer = null;
         e.alertTurns = 0;
+        e.alertStuckTurns = 0;
         createSpeechBubble(e.x, e.y, "Where'd they go?", "#aaa", 2);
         await patrolBehavior(e);
         return;
@@ -74,6 +75,7 @@ async function processEnemyTurn(e) {
         e.state = 'eating';
         e.investigationTarget = visibleRice;
         e.lastSeenPlayer = null; // Clear player tracking when eating
+        e.alertStuckTurns = 0; // Reset stuck timer
         createSpeechBubble(e.x, e.y, "Food! 🍚", "#ffff00", 2);
         await eatBehavior(e);
         return;
@@ -91,6 +93,7 @@ async function processEnemyTurn(e) {
         e.state = 'chasing';  
         e.lastSeenPlayer = {x: player.x, y: player.y};  
         e.alertTurns = Math.floor(Math.random() * 5) + 1; // 1-5 alert turns
+        e.alertStuckTurns = 0; // Reset stuck timer
         e.hasHeardSound = false;  
         e.soundLocation = null;  
         e.investigationTarget = null;  
@@ -105,6 +108,7 @@ async function processEnemyTurn(e) {
         // Switch to alert state when losing sight of player
         e.state = 'alert';
         e.alertTurns = Math.floor(Math.random() * 5) + 1; // Reset alert timer for searching
+        e.alertStuckTurns = 0; // Reset stuck timer
         createSpeechBubble(e.x, e.y, "Where'd they go?", "#ff9900", 2);  
         
         // Move toward last known position  
@@ -116,6 +120,7 @@ async function processEnemyTurn(e) {
             // Found player again!  
             e.lastSeenPlayer = {x: player.x, y: player.y};  
             e.alertTurns = Math.floor(Math.random() * 5) + 1; // Reset alert timer  
+            e.alertStuckTurns = 0; // Reset stuck timer
             createSpeechBubble(e.x, e.y, "Found you!", "#ff0000", 2);  
             e.state = 'chasing';
             await chasePlayer(e);  
@@ -125,6 +130,21 @@ async function processEnemyTurn(e) {
     
     // If enemy is in alert state (searching for player)
     if(e.state === 'alert' && !canSeePlayerNow) {
+        // Increment stuck timer
+        e.alertStuckTurns = (e.alertStuckTurns || 0) + 1;
+        
+        // FORCE GO BACK TO PATROLLING IF STUCK FOR MORE THAN 3 TURNS
+        if(e.alertStuckTurns > 3) {
+            e.state = 'patrolling';
+            e.patrolTarget = null;
+            e.lastSeenPlayer = null;
+            e.alertTurns = 0;
+            e.alertStuckTurns = 0;
+            createSpeechBubble(e.x, e.y, "Giving up search...", "#aaa", 2);
+            await patrolBehavior(e);
+            return;
+        }
+        
         // Decrement alert timer
         if(e.alertTurns) e.alertTurns--;
         
@@ -139,6 +159,7 @@ async function processEnemyTurn(e) {
                 // Found player again!
                 e.lastSeenPlayer = {x: player.x, y: player.y};
                 e.alertTurns = Math.floor(Math.random() * 5) + 1;
+                e.alertStuckTurns = 0; // Reset stuck timer
                 createSpeechBubble(e.x, e.y, "Found you!", "#ff0000", 2);
                 e.state = 'chasing';
                 await chasePlayer(e);
@@ -151,6 +172,7 @@ async function processEnemyTurn(e) {
             e.state = 'patrolling';
             e.patrolTarget = null;
             e.lastSeenPlayer = null;
+            e.alertStuckTurns = 0;
             createSpeechBubble(e.x, e.y, "Lost them...", "#aaa", 2);
             await patrolBehavior(e);
         }
@@ -162,6 +184,7 @@ async function processEnemyTurn(e) {
         e.state = 'alert';  
         e.lastSeenPlayer = e.soundLocation;  
         e.alertTurns = 3; // Short alert for sounds
+        e.alertStuckTurns = 0; // Reset stuck timer
         e.hasHeardSound = false;  
         createSpeechBubble(e.x, e.y, "Hmm? What was that?", "#ff9900", 2);  
         await moveTowardLastSeen(e);  
@@ -253,6 +276,7 @@ async function moveTowardLastSeen(e) {
         // No last seen position, go back to patrolling
         e.state = 'patrolling';
         e.patrolTarget = null;
+        e.alertStuckTurns = 0;
         await patrolBehavior(e);
         return;
     }
@@ -269,6 +293,7 @@ async function moveTowardLastSeen(e) {
         // Do a small random patrol move to search the area
         await doRandomSearchMove(e);
         e.lastSeenPlayer = null; // Clear after searching
+        e.alertStuckTurns = 0; // Reset stuck timer when reaching target
         return;
     }
     
@@ -287,6 +312,8 @@ async function moveTowardLastSeen(e) {
                 e.x = nx;
                 e.y = ny;
             });
+            // Reset stuck timer on successful move
+            e.alertStuckTurns = 0;
         } else {
             // Can't move to planned step, try alternative
             await doRandomSearchMove(e);
@@ -318,6 +345,8 @@ async function doRandomSearchMove(e) {
                 e.x = nx;
                 e.y = ny;
             });
+            // Reset stuck timer on successful move
+            e.alertStuckTurns = 0;
             return true;
         }
     }
@@ -421,6 +450,9 @@ function isTileWalkable(x, y) {
 
 // PATROL BEHAVIOR - Move to random points on the map with pathfinding
 async function patrolBehavior(e) {
+    // Reset stuck timer when patrolling
+    e.alertStuckTurns = 0;
+    
     // If no patrol target or reached current target, get new random point
     if(!e.patrolTarget || (e.x === e.patrolTarget.x && e.y === e.patrolTarget.y)) {
         e.patrolTarget = getRandomWalkablePoint(e);
@@ -472,6 +504,7 @@ async function patrolBehavior(e) {
                 e.state = 'chasing';
                 e.lastSeenPlayer = {x: player.x, y: player.y};
                 e.alertTurns = Math.floor(Math.random() * 5) + 1;
+                e.alertStuckTurns = 0;
                 e.patrolTarget = null; // Cancel patrol
                 return;
             }
@@ -578,6 +611,7 @@ async function eatBehavior(e) {
         }
         e.state = 'patrolling';
         e.investigationTarget = null;
+        e.alertStuckTurns = 0;
         return;
     }
     
@@ -602,18 +636,21 @@ async function eatBehavior(e) {
                 // Rice was eaten or disappeared
                 e.state = 'patrolling';
                 e.investigationTarget = null;
+                e.alertStuckTurns = 0;
                 createSpeechBubble(e.x, e.y, "Food gone?", "#aaa", 1);
             }
         } else {
             // Can't move toward rice, go back to patrolling
             e.state = 'patrolling';
             e.investigationTarget = null;
+            e.alertStuckTurns = 0;
             await patrolBehavior(e);
         }
     } else {
         // No path to rice, go back to patrolling
         e.state = 'patrolling';
         e.investigationTarget = null;
+        e.alertStuckTurns = 0;
         createSpeechBubble(e.x, e.y, "Can't reach food", "#aaa", 1);
         await patrolBehavior(e);
     }
