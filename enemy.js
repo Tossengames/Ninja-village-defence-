@@ -1,30 +1,21 @@
 // ============================================
-// ENEMY AI & DETECTION SYSTEM (FIXED)
+// ENEMY AI & DETECTION SYSTEM (TURN SAFE)
 // ============================================
 
 async function processEnemyTurn(e) {
     if (!e.alive) return;
 
-    // INSTANT TRAP CHECK (START TURN)
+    // INSTANT TRAP CHECK
     if (grid[e.y][e.x] === TRAP) {
         grid[e.y][e.x] = FLOOR;
-        e.alive = false;
-        e.state = 'dead';
-        e.hp = 0;
-        stats.kills++;
-        createDeathEffect(e.x, e.y);
-        createTrapEffect(e.x, e.y);
-        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2);
+        killEnemy(e);
         return;
     }
 
     // SLEEP
     if (e.isSleeping) {
         e.sleepTimer--;
-        if (e.sleepTimer > 0) {
-            createSpeechBubble(e.x, e.y, "💤 Zzz...", "#888", 2);
-            return;
-        }
+        if (e.sleepTimer > 0) return;
         e.isSleeping = false;
     }
 
@@ -32,12 +23,7 @@ async function processEnemyTurn(e) {
     if (e.ateRice) {
         e.riceDeathTimer--;
         if (e.riceDeathTimer <= 0) {
-            e.alive = false;
-            e.state = 'dead';
-            e.hp = 0;
-            stats.kills++;
-            createDeathEffect(e.x, e.y);
-            createSpeechBubble(e.x, e.y, "💀 Poisoned!", "#ff0000", 2);
+            killEnemy(e);
             return;
         }
     }
@@ -47,38 +33,35 @@ async function processEnemyTurn(e) {
     if (gas && !e.isSleeping) {
         e.isSleeping = true;
         e.sleepTimer = Math.floor(Math.random() * 5) + 2;
-        createSpeechBubble(e.x, e.y, "💤 Gas!", "#9932cc", 2);
         return;
     }
 
     const canSeePlayer =
         !player.isHidden &&
-        !e.isSleeping &&
         hasLineOfSight(e, player.x, player.y);
 
-    // =========================
-    // PLAYER SEEN → CHASE
-    // =========================
+    // =====================
+    // SPOT PLAYER
+    // =====================
     if (canSeePlayer) {
         if (e.state !== 'chasing') {
             stats.timesSpotted++;
             createAlertEffect(e.x, e.y);
             playSound('alert');
-            createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 2);
         }
 
         e.state = 'chasing';
         e.lastSeenPlayer = { x: player.x, y: player.y };
-        e.alertTurns = Math.floor(Math.random() * 4) + 5;
+        e.alertTurns = 6;
 
         await chasePlayer(e);
         return;
     }
 
-    // =========================
-    // LOST PLAYER → INVESTIGATE
-    // =========================
-    if (e.state === 'chasing' && !canSeePlayer) {
+    // =====================
+    // LOST PLAYER
+    // =====================
+    if (e.state === 'chasing') {
         e.alertTurns--;
 
         if (e.alertTurns <= 0) {
@@ -92,93 +75,39 @@ async function processEnemyTurn(e) {
         return;
     }
 
-    // =========================
+    // =====================
     // INVESTIGATING
-    // =========================
+    // =====================
     if (e.state === 'investigating') {
         await investigateBehavior(e);
         return;
     }
 
-    // =========================
+    // =====================
     // PATROL
-    // =========================
+    // =====================
     await patrolBehavior(e);
 }
 
 // ============================================
-// CHASE PLAYER (FIXED)
+// CHASE PLAYER (1 STEP PER TURN)
 // ============================================
 async function chasePlayer(e) {
-    if (!e.alive || e.isSleeping) return;
-
     const dx = player.x - e.x;
     const dy = player.y - e.y;
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
 
     // ATTACK
     if (dist <= e.attackRange) {
-        createSpeechBubble(e.x, e.y, "🎯 ATTACK!", e.color, 2);
-
-        await new Promise(r => setTimeout(r, 300));
-
-        playerHP -= e.damage;
-        playerHP = Math.max(0, playerHP);
-        createDamageEffect(player.x, player.y, e.damage, true);
-        shake = 15;
-
-        if (playerHP <= 0) {
-            gameOver = true;
-            setTimeout(showGameOverScreen, 500);
-        }
+        await enemyAttack(e);
         return;
     }
 
-    // MOVE TOWARD PLAYER
-    let moveX = 0;
-    let moveY = 0;
-
-    if (Math.abs(dx) > Math.abs(dy)) {
-        moveX = Math.sign(dx);
-    } else {
-        moveY = Math.sign(dy);
-    }
-
-    const nx = e.x + moveX;
-    const ny = e.y + moveY;
-
-    if (
-        nx < 0 || nx >= mapDim ||
-        ny < 0 || ny >= mapDim ||
-        grid[ny][nx] === WALL
-    ) return;
-
-    const enemyThere = enemies.find(o =>
-        o.alive && o !== e && o.x === nx && o.y === ny
-    );
-    if (enemyThere) return;
-
-    await animMove(e, nx, ny, e.speed * 1.4, () => {
-        e.x = nx;
-        e.y = ny;
-        e.dir = { x: moveX, y: moveY };
-    });
-
-    // TRAP
-    if (grid[e.y][e.x] === TRAP) {
-        grid[e.y][e.x] = FLOOR;
-        e.alive = false;
-        e.state = 'dead';
-        e.hp = 0;
-        stats.kills++;
-        createDeathEffect(e.x, e.y);
-        createTrapEffect(e.x, e.y);
-        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2);
-    }
+    await stepToward(e, player.x, player.y);
 }
 
 // ============================================
-// INVESTIGATE LAST SEEN POSITION (FIXED)
+// INVESTIGATE LAST SEEN POSITION
 // ============================================
 async function investigateBehavior(e) {
     if (!e.lastSeenPlayer) {
@@ -186,61 +115,82 @@ async function investigateBehavior(e) {
         return;
     }
 
-    const dx = e.lastSeenPlayer.x - e.x;
-    const dy = e.lastSeenPlayer.y - e.y;
-    const dist = Math.max(Math.abs(dx), Math.abs(dy));
+    const { x, y } = e.lastSeenPlayer;
+    const dist = Math.max(Math.abs(x - e.x), Math.abs(y - e.y));
 
     if (dist <= 1) {
-        createSpeechBubble(e.x, e.y, "Lost them...", "#aaa", 2);
         e.state = 'patrolling';
         e.lastSeenPlayer = null;
         return;
     }
 
-    let moveX = 0;
-    let moveY = 0;
+    await stepToward(e, x, y);
+}
 
-    if (Math.abs(dx) > Math.abs(dy)) {
-        moveX = Math.sign(dx);
-    } else {
-        moveY = Math.sign(dy);
-    }
+// ============================================
+// SINGLE TILE STEP (CORE FIX)
+// ============================================
+async function stepToward(e, tx, ty) {
+    let dx = Math.sign(tx - e.x);
+    let dy = Math.sign(ty - e.y);
 
-    const nx = e.x + moveX;
-    const ny = e.y + moveY;
+    // Try main axis first
+    let candidates = Math.abs(tx - e.x) > Math.abs(ty - e.y)
+        ? [{ x: dx, y: 0 }, { x: 0, y: dy }]
+        : [{ x: 0, y: dy }, { x: dx, y: 0 }];
 
-    if (
-        nx < 0 || nx >= mapDim ||
-        ny < 0 || ny >= mapDim ||
-        grid[ny][nx] === WALL
-    ) return;
+    for (const dir of candidates) {
+        const nx = e.x + dir.x;
+        const ny = e.y + dir.y;
 
-    const enemyThere = enemies.find(o =>
-        o.alive && o !== e && o.x === nx && o.y === ny
-    );
-    if (enemyThere) return;
+        if (
+            nx < 0 || nx >= mapDim ||
+            ny < 0 || ny >= mapDim ||
+            grid[ny][nx] === WALL
+        ) continue;
 
-    await animMove(e, nx, ny, e.speed * 1.2, () => {
-        e.x = nx;
-        e.y = ny;
-        e.dir = { x: moveX, y: moveY };
-    });
+        const blocked = enemies.find(o =>
+            o.alive && o !== e && o.x === nx && o.y === ny
+        );
+        if (blocked) continue;
 
-    // TRAP
-    if (grid[e.y][e.x] === TRAP) {
-        grid[e.y][e.x] = FLOOR;
-        e.alive = false;
-        e.state = 'dead';
-        e.hp = 0;
-        stats.kills++;
-        createDeathEffect(e.x, e.y);
-        createTrapEffect(e.x, e.y);
-        createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2);
+        await animMove(e, nx, ny, e.speed, () => {
+            e.x = nx;
+            e.y = ny;
+            e.dir = dir;
+        });
+
+        // TRAP
+        if (grid[e.y][e.x] === TRAP) {
+            grid[e.y][e.x] = FLOOR;
+            killEnemy(e);
+        }
+        return;
     }
 }
 
 // ============================================
-// PATROL (UNCHANGED SIMPLE)
+// ATTACK
+// ============================================
+async function enemyAttack(e) {
+    createSpeechBubble(e.x, e.y, "🎯 ATTACK!", e.color, 2);
+
+    await new Promise(r => setTimeout(r, 200));
+
+    playerHP -= e.damage;
+    playerHP = Math.max(0, playerHP);
+    shake = 12;
+
+    createDamageEffect(player.x, player.y, e.damage, true);
+
+    if (playerHP <= 0) {
+        gameOver = true;
+        setTimeout(showGameOverScreen, 400);
+    }
+}
+
+// ============================================
+// PATROL
 // ============================================
 async function patrolBehavior(e) {
     const dirs = [
@@ -263,4 +213,16 @@ async function patrolBehavior(e) {
             e.dir = dir;
         });
     }
+}
+
+// ============================================
+// KILL ENEMY (HELPER)
+// ============================================
+function killEnemy(e) {
+    e.alive = false;
+    e.state = 'dead';
+    e.hp = 0;
+    stats.kills++;
+    createDeathEffect(e.x, e.y);
+    createSpeechBubble(e.x, e.y, "💀", "#ff0000", 2);
 }
