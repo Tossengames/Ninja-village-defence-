@@ -5,7 +5,7 @@
 async function processEnemyTurn(e) {
     if(!e.alive) return;
 
-    // Check trap INSTANTLY - IMMEDIATE DEATH  
+    // Check trap INSTANTLY - IMMEDIATE DEATH (BEFORE ANY MOVEMENT)
     if(grid[e.y][e.x] === TRAP) {  
         grid[e.y][e.x] = FLOOR;  
         e.alive = false;  
@@ -55,6 +55,22 @@ async function processEnemyTurn(e) {
     // Check if enemy can see player RIGHT NOW  
     const canSeePlayerNow = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;  
     
+    // Check if enemy can see rice (rice has higher priority than player when hungry)
+    const canSeeRice = !e.isSleeping && e.hungry && canSeeRiceFrom(e.x, e.y);
+    
+    // If enemy sees rice and is hungry, go eat it
+    if(canSeeRice && e.hungry && e.state !== 'eating') {
+        const riceTile = findNearestRice(e);
+        if(riceTile) {
+            e.state = 'eating';
+            e.investigationTarget = riceTile;
+            e.lastSeenPlayer = null; // Clear player tracking when eating
+            createSpeechBubble(e.x, e.y, "Food! 🍚", "#ffff00", 2);
+            await eatBehavior(e);
+            return;
+        }
+    }
+    
     // IMMEDIATE SPOTTING - if enemy can see player, spot immediately  
     if(canSeePlayerNow) {  
         if(e.state !== 'chasing' && e.state !== 'alert') {  
@@ -85,6 +101,7 @@ async function processEnemyTurn(e) {
             // Lost player completely after alert turns
             e.state = 'patrolling';  
             e.patrolTarget = null; // Get new random patrol point
+            e.lastSeenPlayer = null;
             createSpeechBubble(e.x, e.y, "Lost them...", "#aaa", 2);  
             await patrolBehavior(e);  
             return;  
@@ -176,77 +193,33 @@ async function chasePlayer(e) {
     const nx = e.x + moveX;
     const ny = e.y + moveY;
     
-    // Check if tile is valid
-    if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && 
-       grid[ny][nx] !== WALL) {
-        
-        // Check if tile has another enemy
-        const enemyAtTile = enemies.find(other => 
-            other.alive && other !== e && other.x === nx && other.y === ny
-        );
-        
-        if(!enemyAtTile) {
-            await animMove(e, nx, ny, e.speed * 1.5, () => {
-                e.x = nx;
-                e.y = ny;
-                e.dir = {x: moveX, y: moveY};
-            });
-            
-            // Check trap after moving (INSTANT DEATH)
-            if(grid[e.y][e.x] === TRAP) {
-                grid[e.y][e.x] = FLOOR;
-                e.alive = false;
-                e.state = 'dead';
-                e.hp = 0;
-                stats.kills++;
-                createDeathEffect(e.x, e.y);
-                createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2);
-                createTrapEffect(e.x, e.y);
-                return;
-            }
-        }
+    // Check if tile is valid and not occupied
+    if(isValidMove(e, nx, ny)) {
+        await animMove(e, nx, ny, e.speed * 1.5, () => {
+            e.x = nx;
+            e.y = ny;
+            e.dir = {x: moveX, y: moveY};
+        });
     }
 }
 
 // MOVE TOWARD LAST SEEN POSITION
 async function moveTowardLastSeen(e) {
-    if(!e.lastSeenPlayer) return;
+    if(!e.lastSeenPlayer) {
+        // No last seen position, go back to patrolling
+        e.state = 'patrolling';
+        e.patrolTarget = null;
+        await patrolBehavior(e);
+        return;
+    }
 
     const dx = e.lastSeenPlayer.x - e.x;
     const dy = e.lastSeenPlayer.y - e.y;
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
     
     if(dist === 0) {
-        // Already at last seen position, look around
-        const directions = [
-            {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
-        ];
-        
-        // Try to move in a random direction to search
-        const validDirs = directions.filter(dir => {
-            const tx = e.x + dir.x;
-            const ty = e.y + dir.y;
-            return tx >= 0 && tx < mapDim && ty >= 0 && ty < mapDim && 
-                   grid[ty][tx] !== WALL;
-        });
-        
-        if(validDirs.length > 0) {
-            const dir = validDirs[Math.floor(Math.random() * validDirs.length)];
-            const nx = e.x + dir.x;
-            const ny = e.y + dir.y;
-            
-            const enemyAtTile = enemies.find(other => 
-                other.alive && other !== e && other.x === nx && other.y === ny
-            );
-            
-            if(!enemyAtTile) {
-                await animMove(e, nx, ny, e.speed * 1.2, () => {
-                    e.x = nx;
-                    e.y = ny;
-                    e.dir = dir;
-                });
-            }
-        }
+        // Already at last seen position, look around by doing a small patrol move
+        await patrolBehavior(e);
         return;
     }
     
@@ -263,35 +236,16 @@ async function moveTowardLastSeen(e) {
     const nx = e.x + moveX;
     const ny = e.y + moveY;
     
-    // Check if tile is valid
-    if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && 
-       grid[ny][nx] !== WALL) {
-        
-        // Check if tile has another enemy
-        const enemyAtTile = enemies.find(other => 
-            other.alive && other !== e && other.x === nx && other.y === ny
-        );
-        
-        if(!enemyAtTile) {
-            await animMove(e, nx, ny, e.speed * 1.2, () => {
-                e.x = nx;
-                e.y = ny;
-                e.dir = {x: moveX, y: moveY};
-            });
-            
-            // Check trap after moving (INSTANT DEATH)
-            if(grid[e.y][e.x] === TRAP) {
-                grid[e.y][e.x] = FLOOR;
-                e.alive = false;
-                e.state = 'dead';
-                e.hp = 0;
-                stats.kills++;
-                createDeathEffect(e.x, e.y);
-                createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2);
-                createTrapEffect(e.x, e.y);
-                return;
-            }
-        }
+    // Check if tile is valid and not occupied
+    if(isValidMove(e, nx, ny)) {
+        await animMove(e, nx, ny, e.speed * 1.2, () => {
+            e.x = nx;
+            e.y = ny;
+            e.dir = {x: moveX, y: moveY};
+        });
+    } else {
+        // Can't move toward last seen, try alternative directions
+        await patrolBehavior(e);
     }
 }
 
@@ -350,17 +304,8 @@ async function patrolBehavior(e) {
     let ny = e.y + moveY;
     let validMove = false;
     
-    if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && 
-       grid[ny][nx] !== WALL) {
-        
-        // Check if tile has another enemy
-        const enemyAtTile = enemies.find(other => 
-            other.alive && other !== e && other.x === nx && other.y === ny
-        );
-        
-        if(!enemyAtTile) {
-            validMove = true;
-        }
+    if(isValidMove(e, nx, ny)) {
+        validMove = true;
     }
     
     // If primary move blocked, try alternative directions
@@ -379,19 +324,11 @@ async function patrolBehavior(e) {
             nx = e.x + dir.x;
             ny = e.y + dir.y;
             
-            if(nx >= 0 && nx < mapDim && ny >= 0 && ny < mapDim && 
-               grid[ny][nx] !== WALL) {
-                
-                const enemyAtTile = enemies.find(other => 
-                    other.alive && other !== e && other.x === nx && other.y === ny
-                );
-                
-                if(!enemyAtTile) {
-                    moveX = dir.x;
-                    moveY = dir.y;
-                    validMove = true;
-                    break;
-                }
+            if(isValidMove(e, nx, ny)) {
+                moveX = dir.x;
+                moveY = dir.y;
+                validMove = true;
+                break;
             }
         }
     }
@@ -404,22 +341,9 @@ async function patrolBehavior(e) {
             e.dir = {x: moveX, y: moveY};
         });
         
-        // Check trap after moving (INSTANT DEATH)
-        if(grid[e.y][e.x] === TRAP) {
-            grid[e.y][e.x] = FLOOR;
-            e.alive = false;
-            e.state = 'dead';
-            e.hp = 0;
-            stats.kills++;
-            createDeathEffect(e.x, e.y);
-            createSpeechBubble(e.x, e.y, "💀 TRAPPED!", "#ff0000", 2);
-            createTrapEffect(e.x, e.y);
-            return;
-        }
-        
         // Check if we can see player after moving
         const canSeePlayer = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
-        if(canSeePlayer) {
+        if(canSeePlayer && e.state === 'patrolling') {
             stats.timesSpotted++;
             createAlertEffect(e.x, e.y);
             createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 2);
@@ -446,16 +370,19 @@ function getRandomWalkablePoint(e) {
         const rx = Math.floor(Math.random() * mapDim);
         const ry = Math.floor(Math.random() * mapDim);
         
-        // Check if tile is walkable (not wall)
-        if(grid[ry][rx] !== WALL) {
-            // Optional: Check if point is reachable (BFS check)
-            // For simplicity, we'll assume most points are reachable
-            // You could implement a pathfinding check here if needed
+        // Check if tile is walkable (not wall) and not occupied
+        if(grid[ry][rx] !== WALL && grid[ry][rx] !== TRAP) {
+            // Check if tile is not occupied by another enemy or player
+            const occupied = enemies.some(other => 
+                other.alive && other !== e && other.x === rx && other.y === ry
+            ) || (player.x === rx && player.y === ry);
             
-            // Check if point is not too close to current position (at least 3 tiles away)
-            const dist = Math.max(Math.abs(rx - e.x), Math.abs(ry - e.y));
-            if(dist >= 3) {
-                return {x: rx, y: ry};
+            if(!occupied) {
+                // Check if point is not too close to current position (at least 3 tiles away)
+                const dist = Math.max(Math.abs(rx - e.x), Math.abs(ry - e.y));
+                if(dist >= 3) {
+                    return {x: rx, y: ry};
+                }
             }
         }
     }
@@ -463,39 +390,180 @@ function getRandomWalkablePoint(e) {
     // If no valid point found after attempts, try any walkable tile
     for(let y = 0; y < mapDim; y++) {
         for(let x = 0; x < mapDim; x++) {
-            if(grid[y][x] !== WALL) {
-                const dist = Math.max(Math.abs(x - e.x), Math.abs(y - e.y));
-                if(dist >= 2) {
-                    return {x: x, y: y};
+            if(grid[y][x] !== WALL && grid[y][x] !== TRAP) {
+                const occupied = enemies.some(other => 
+                    other.alive && other !== e && other.x === x && other.y === y
+                ) || (player.x === x && player.y === y);
+                
+                if(!occupied) {
+                    const dist = Math.max(Math.abs(x - e.x), Math.abs(y - e.y));
+                    if(dist >= 2) {
+                        return {x: x, y: y};
+                    }
                 }
             }
         }
     }
     
-    // Fallback: current position (stay put)
-    return {x: e.x, y: e.y};
+    // Fallback: stay in place (but check if current tile is occupied by enemy)
+    const occupied = enemies.some(other => 
+        other.alive && other !== e && other.x === e.x && other.y === e.y
+    );
+    
+    if(!occupied) {
+        return {x: e.x, y: e.y};
+    }
+    
+    return null;
 }
 
-// EAT BEHAVIOR
+// EAT BEHAVIOR - Improved version
 async function eatBehavior(e) {
     if(!e.investigationTarget) {
         e.state = 'patrolling';
         return;
     }
 
-    await moveTowardLastSeen(e);  
+    // Check if we're already at the rice
+    const dx = e.investigationTarget.x - e.x;
+    const dy = e.investigationTarget.y - e.y;
+    const dist = Math.max(Math.abs(dx), Math.abs(dy));
     
-    // Check if at rice location  
-    const dx = e.investigationTarget.x - e.x;  
-    const dy = e.investigationTarget.y - e.y;  
-    const dist = Math.max(Math.abs(dx), Math.abs(dy));  
-    
-    if(dist <= 1) {  
-        // Eat the rice  
-        grid[e.investigationTarget.y][e.investigationTarget.x] = FLOOR;  
-        e.ateRice = true;  
-        e.state = 'patrolling';  
-        e.investigationTarget = null;  
-        createSpeechBubble(e.x, e.y, "Yum! 🍚", "#ffff00", 2);  
+    if(dist <= 1) {
+        // Eat the rice
+        if(grid[e.investigationTarget.y][e.investigationTarget.x] === RICE) {
+            grid[e.investigationTarget.y][e.investigationTarget.x] = FLOOR;
+            e.ateRice = true;
+            e.hungry = false;
+            e.riceDeathTimer = 10; // Die after 10 turns
+            createSpeechBubble(e.x, e.y, "Yum! 🍚", "#ffff00", 2);
+        }
+        e.state = 'patrolling';
+        e.investigationTarget = null;
+        return;
     }
+    
+    // Move toward rice
+    let moveX = 0;
+    let moveY = 0;
+    
+    if(Math.abs(dx) > Math.abs(dy)) {
+        moveX = dx > 0 ? 1 : -1;
+    } else {
+        moveY = dy > 0 ? 1 : -1;
+    }
+    
+    const nx = e.x + moveX;
+    const ny = e.y + moveY;
+    
+    // Check if tile is valid and not occupied
+    if(isValidMove(e, nx, ny)) {
+        await animMove(e, nx, ny, e.speed * 1.2, () => {
+            e.x = nx;
+            e.y = ny;
+            e.dir = {x: moveX, y: moveY};
+        });
+        
+        // Check if rice is still there after moving
+        if(grid[e.investigationTarget.y][e.investigationTarget.x] !== RICE) {
+            // Rice was eaten or disappeared
+            e.state = 'patrolling';
+            e.investigationTarget = null;
+            createSpeechBubble(e.x, e.y, "Food gone?", "#aaa", 1);
+        }
+    } else {
+        // Can't move toward rice, go back to patrolling
+        e.state = 'patrolling';
+        e.investigationTarget = null;
+        await patrolBehavior(e);
+    }
+}
+
+// HELPER FUNCTIONS
+
+// Check if a tile is valid for movement (not wall, not trap, not occupied)
+function isValidMove(e, x, y) {
+    // Check bounds
+    if(x < 0 || x >= mapDim || y < 0 || y >= mapDim) {
+        return false;
+    }
+    
+    // Check if tile is walkable
+    if(grid[y][x] === WALL) {
+        return false;
+    }
+    
+    // Check if tile has another enemy
+    const enemyAtTile = enemies.find(other => 
+        other.alive && other !== e && other.x === x && other.y === y
+    );
+    
+    if(enemyAtTile) {
+        return false;
+    }
+    
+    // Check if tile is player position
+    if(player.x === x && player.y === y) {
+        return false;
+    }
+    
+    return true;
+}
+
+// Check if enemy can see rice from current position
+function canSeeRiceFrom(x, y) {
+    // Simple check for rice in line of sight
+    for(let checkY = 0; checkY < mapDim; checkY++) {
+        for(let checkX = 0; checkX < mapDim; checkX++) {
+            if(grid[checkY][checkX] === RICE) {
+                // Check line of sight (simplified)
+                const dx = Math.abs(checkX - x);
+                const dy = Math.abs(checkY - y);
+                
+                // If rice is within 5 tiles and no walls in direct line (simplified)
+                if(dx <= 5 && dy <= 5) {
+                    // Check if there's a clear path (simplified)
+                    let clearPath = true;
+                    const steps = Math.max(dx, dy);
+                    
+                    for(let s = 1; s <= steps; s++) {
+                        const tx = Math.round(x + (checkX - x) * (s / steps));
+                        const ty = Math.round(y + (checkY - y) * (s / steps));
+                        
+                        if(tx >= 0 && tx < mapDim && ty >= 0 && ty < mapDim) {
+                            if(grid[ty][tx] === WALL) {
+                                clearPath = false;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if(clearPath) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// Find nearest rice to enemy
+function findNearestRice(e) {
+    let nearestRice = null;
+    let minDist = Infinity;
+    
+    for(let y = 0; y < mapDim; y++) {
+        for(let x = 0; x < mapDim; x++) {
+            if(grid[y][x] === RICE) {
+                const dist = Math.abs(x - e.x) + Math.abs(y - e.y);
+                if(dist < minDist) {
+                    minDist = dist;
+                    nearestRice = {x: x, y: y};
+                }
+            }
+        }
+    }
+    
+    return nearestRice;
 }
