@@ -11,46 +11,23 @@ let selectMode = 'move', gameOver = false, playerTurn = true, shake = 0, mapDim 
 let stats = { kills: 0, coins: 0, itemsUsed: 0, timesSpotted: 0, stealthKills: 0, timeBonus: 0 };
 let inv = { trap: 0, rice: 0, bomb: 0, gas: 0, health: 0, coin: 0, sight: 0, mark: 0 };
 let camX = 0, camY = 0, zoom = 1.0;
-let showMinimap = false;
-let showHighlights = true;
-let showLog = false;
-let highlightedTiles = [];
-let hasReachedExit = false;
-let currentEnemyTurn = null;
-let combatSequence = false;
-let startTime = 0;
-let currentTurnEntity = null;
-let playerHasMovedThisTurn = false;
-let playerUsedActionThisTurn = false;
-let cameraFocusEnabled = true;
-let isUserDragging = false;
-let dragStartX = 0, dragStartY = 0;
+let showMinimap = false, showHighlights = true, showLog = false;
+let highlightedTiles = [], hasReachedExit = false, currentEnemyTurn = null;
+let combatSequence = false, startTime = 0, currentTurnEntity = null;
+let playerHasMovedThisTurn = false, playerUsedActionThisTurn = false;
+let cameraFocusEnabled = true, isUserDragging = false, dragStartX = 0, dragStartY = 0;
 
 // Player stats
-let playerHP = 10;
-let playerMaxHP = 10;
+let playerHP = 10, playerMaxHP = 10;
 
 // VFX Systems
-let particles = [];
-let bloodStains = [];
-let coinPickupEffects = [];
-let hideEffects = [];
-let explosionEffects = [];
-let footstepEffects = [];
-let damageEffects = [];
-let speechBubbles = [];
-let gasEffects = [];
+let particles = [], bloodStains = [], coinPickupEffects = [], hideEffects = [];
+let explosionEffects = [], footstepEffects = [], damageEffects = [], speechBubbles = [], gasEffects = [];
 
 // Canvas and rendering
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
+let canvas, ctx;
 const sprites = {};
 
-// Audio context for programmatic SFX
-let audioContext;
-let gainNode;
-
-// Mode colors for highlighting
 const modeColors = {
     'move': { fill: 'rgba(0, 210, 255, 0.15)', border: 'rgba(0, 210, 255, 0.7)', glow: 'rgba(0, 210, 255, 0.3)' },
     'trap': { fill: 'rgba(255, 100, 100, 0.15)', border: 'rgba(255, 100, 100, 0.7)', glow: 'rgba(255, 100, 100, 0.3)' },
@@ -60,7 +37,6 @@ const modeColors = {
     'attack': { fill: 'rgba(255, 0, 0, 0.3)', border: 'rgba(255, 0, 0, 0.8)', glow: 'rgba(255, 0, 0, 0.5)' }
 };
 
-// Enemy types with distinct colors
 const ENEMY_TYPES = {
     NORMAL: { range: 1, hp: 10, speed: 0.08, damage: 2, color: '#ff3333', tint: 'rgba(255, 50, 50, 0.3)' },
     ARCHER: { range: 3, hp: 8, speed: 0.06, damage: 1, color: '#33cc33', tint: 'rgba(50, 255, 50, 0.3)' },
@@ -72,6 +48,9 @@ const ENEMY_TYPES = {
 // ============================================
 
 function initGame() {
+    canvas = document.getElementById('game');
+    ctx = canvas.getContext('2d');
+    
     mapDim = window.mapDim || 12;
     const guardCountSetting = window.guardCount || 5;
     
@@ -81,30 +60,13 @@ function initGame() {
     
     hasReachedExit = false;
     playerHP = playerMaxHP;
-    combatSequence = false;
-    playerHasMovedThisTurn = false;
-    playerUsedActionThisTurn = false;
-    startTime = Date.now();
-    stats = { kills: 0, coins: 0, itemsUsed: 0, timesSpotted: 0, stealthKills: 0, timeBonus: 0 };
-    
-    particles = []; bloodStains = []; coinPickupEffects = []; hideEffects = [];
-    explosionEffects = []; footstepEffects = []; damageEffects = [];
-    speechBubbles = []; gasEffects = [];
-    
-    showHighlights = true;
-    showLog = false;
-    currentTurnEntity = player;
-    cameraFocusEnabled = true;
-    isUserDragging = false;
+    gameOver = false;
     
     document.getElementById('mainMenu').classList.add('hidden');
     document.getElementById('itemSelection').classList.add('hidden');
     document.getElementById('toolbar').classList.remove('hidden');
     document.getElementById('ui-controls').classList.remove('hidden');
     document.getElementById('playerStatus').classList.remove('hidden');
-    
-    document.getElementById('resultScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
     
     generateLevel(guardCountSetting);
     centerCamera();
@@ -128,50 +90,21 @@ function generateLevel(guardCount) {
     player = { x: 1, y: 1, ax: 1, ay: 1, isHidden: false, dir: {x: 0, y: 0} };
     grid[mapDim-2][mapDim-2] = EXIT;
     
-    for(let i = 0; i < 3; i++) {
-        let cx, cy;
-        do {
-            cx = rand(mapDim);
-            cy = rand(mapDim);
-        } while(grid[cy][cx] !== FLOOR || Math.hypot(cx-player.x, cy-player.y) < 3);
-        grid[cy][cx] = COIN;
-    }
-    
     const gc = Math.min(15, Math.max(1, guardCount));
     enemies = [];
     for(let i=0; i<gc; i++){
         let ex, ey; 
         do { 
-            ex = rand(mapDim); 
-            ey = rand(mapDim); 
+            ex = Math.floor(Math.random()*(mapDim-2))+1; 
+            ey = Math.floor(Math.random()*(mapDim-2))+1; 
         } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
-        
-        const visionRange = 3;
-        const typeRoll = Math.random();
-        let enemyType, enemyStats;
-        if(typeRoll < 0.6) { enemyType = 'NORMAL'; enemyStats = ENEMY_TYPES.NORMAL; } 
-        else if(typeRoll < 0.85) { enemyType = 'SPEAR'; enemyStats = ENEMY_TYPES.SPEAR; } 
-        else { enemyType = 'ARCHER'; enemyStats = ENEMY_TYPES.ARCHER; }
         
         enemies.push({
             x: ex, y: ey, ax: ex, ay: ey, dir: {x: 1, y: 0}, alive: true,
-            hp: enemyStats.hp, maxHP: enemyStats.hp, type: enemyType,
-            attackRange: enemyStats.range, damage: enemyStats.damage,
-            speed: enemyStats.speed, visionRange: visionRange, state: 'patrolling',
-            investigationTarget: null, investigationTurns: 0, poisonTimer: 0,
-            hearingRange: 6, hasHeardSound: false, soundLocation: null,
-            returnToPatrolPos: {x: ex, y: ey}, lastSeenPlayer: null,
-            chaseTurns: 0, chaseMemory: 5, color: enemyStats.color, tint: enemyStats.tint,
-            isSleeping: false, sleepTimer: 0, ateRice: false, riceDeathTimer: Math.floor(Math.random() * 5) + 1
+            hp: 10, maxHP: 10, type: 'NORMAL', visionRange: 3, tint: 'rgba(255, 50, 50, 0.3)'
         });
     }
 }
-
-function rand(m) { return Math.floor(Math.random()*(m-2))+1; }
-
-// ============================================
-// SPRITE LOADING & RENDERING
-// ============================================
 
 function loadSprites() {
     const assetNames = ['player', 'guard', 'wall', 'floor', 'exit', 'trap', 'rice', 'bomb', 'coin', 'hide'];
@@ -183,18 +116,21 @@ function loadSprites() {
             const cTemp = document.createElement('canvas');
             cTemp.width = TILE; cTemp.height = TILE;
             const tCtx = cTemp.getContext('2d');
-            tCtx.fillStyle = '#666'; tCtx.fillRect(0, 0, TILE, TILE);
+            tCtx.fillStyle = '#444'; tCtx.fillRect(0, 0, TILE, TILE);
             sprites[n] = cTemp;
         };
     });
 }
 
 function gameLoop() {
-    if(gameOver) return;
+    if(gameOver || !ctx) return;
+    
     ctx.setTransform(1,0,0,1,0,0);
-    ctx.fillStyle = "#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
-    const s = (Math.random()-0.5)*shake;
-    ctx.translate(camX+s, camY+s); ctx.scale(zoom, zoom);
+    ctx.fillStyle = "#111"; 
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    
+    ctx.translate(camX, camY);
+    ctx.scale(zoom, zoom);
 
     for(let y=0; y<mapDim; y++) {
         for(let x=0; x<mapDim; x++) {
@@ -216,46 +152,39 @@ function gameLoop() {
 
     if(sprites['player']) ctx.drawImage(sprites['player'], player.ax*TILE, player.ay*TILE, TILE, TILE);
 
-    shake *= 0.8;
     requestAnimationFrame(gameLoop);
 }
 
 function centerCamera() {
+    if(!canvas) return;
     camX = (canvas.width/2) - (player.x*TILE + TILE/2)*zoom;
     camY = (canvas.height/2) - (player.y*TILE + TILE/2)*zoom;
 }
 
 function updateToolCounts() {
-    if(document.getElementById('trapCount')) document.getElementById('trapCount').textContent = inv.trap;
-    if(document.getElementById('riceCount')) document.getElementById('riceCount').textContent = inv.rice;
-    if(document.getElementById('bombCount')) document.getElementById('bombCount').textContent = inv.bomb;
-    if(document.getElementById('gasCount')) document.getElementById('gasCount').textContent = inv.gas;
+    const tools = ['trap', 'rice', 'bomb', 'gas'];
+    tools.forEach(t => {
+        let el = document.getElementById(t + 'Count');
+        if(el) el.textContent = inv[t];
+    });
 }
 
 // ============================================
-// MENU SYSTEM LOGIC
+// MENU LOGIC
 // ============================================
 
-let selectedItems = { trap: 0, rice: 0, bomb: 0, gas: 0, health: 0, coin: 0, sight: 0, mark: 0 };
+let selectedItems = { trap: 0, rice: 0, bomb: 0, gas: 0 };
 let mapSizeSetting = 12;
 let guardCountSetting = 5;
 
-function initMenu() {
-    updateMenuDisplay();
-}
-
 function changeMapSize(delta) {
-    mapSizeSetting += delta;
-    if (mapSizeSetting < 8) mapSizeSetting = 8;
-    if (mapSizeSetting > 20) mapSizeSetting = 20;
+    mapSizeSetting = Math.max(8, Math.min(20, mapSizeSetting + delta));
     document.getElementById('mapSizeValue').textContent = mapSizeSetting;
     window.mapDim = mapSizeSetting;
 }
 
 function changeGuardCount(delta) {
-    guardCountSetting += delta;
-    if (guardCountSetting < 1) guardCountSetting = 1;
-    if (guardCountSetting > 15) guardCountSetting = 15;
+    guardCountSetting = Math.max(1, Math.min(15, guardCountSetting + delta));
     document.getElementById('guardCountValue').textContent = guardCountSetting;
     window.guardCount = guardCountSetting;
 }
@@ -272,105 +201,62 @@ function backToMainMenu() {
 }
 
 function toggleItem(itemType) {
-    let total = 0;
-    let types = 0;
-    for (let k in selectedItems) {
-        if(selectedItems[k] > 0) {
-            total += selectedItems[k];
-            types++;
-        }
-    }
+    let total = Object.values(selectedItems).reduce((a, b) => a + b, 0);
+    let types = Object.values(selectedItems).filter(v => v > 0).length;
 
     if (selectedItems[itemType] > 0) {
-        if (selectedItems[itemType] < 3 && total < 5) {
-            selectedItems[itemType]++;
-        }
+        if (selectedItems[itemType] < 3 && total < 5) selectedItems[itemType]++;
+        else if (selectedItems[itemType] >= 3) removeItem(itemType);
     } else {
-        if (total < 5 && types < 3) {
-            selectedItems[itemType] = 1;
-        } else if (total >= 5) {
-            alert("Max 5 items total!");
-        } else if (types >= 3) {
-            alert("Max 3 types allowed!");
-        }
+        if (total < 5 && types < 3) selectedItems[itemType] = 1;
     }
     updateSelectionDisplay();
 }
 
 function removeItem(itemType) {
-    if (selectedItems[itemType] > 0) {
-        selectedItems[itemType]--;
-    }
+    selectedItems[itemType] = 0;
     updateSelectionDisplay();
 }
 
 function updateSelectionDisplay() {
-    let total = 0;
-    let types = 0;
+    let total = 0, types = 0;
     for (let k in selectedItems) {
-        if (selectedItems[k] > 0) {
-            total += selectedItems[k];
-            types++;
-        }
+        if (selectedItems[k] > 0) { total += selectedItems[k]; types++; }
         let el = document.getElementById(k + 'SelCount');
         if (el) el.textContent = selectedItems[k];
     }
-    
     document.getElementById('totalItems').textContent = total;
     document.getElementById('totalTypes').textContent = types;
-    updateSelectedPreview();
-}
-
-function updateSelectedPreview() {
+    
     const preview = document.getElementById('selectedPreview');
     preview.innerHTML = '';
     let hasAny = false;
     for (let k in selectedItems) {
         if (selectedItems[k] > 0) {
             hasAny = true;
-            const itemDiv = document.createElement('div');
-            itemDiv.className = 'selected-item-preview';
-            itemDiv.innerHTML = `<span>${k}</span> x${selectedItems[k]}`;
-            itemDiv.onclick = () => removeItem(k);
-            preview.appendChild(itemDiv);
+            preview.innerHTML += `<div class="selected-item-preview" onclick="removeItem('${k}')">${k} x${selectedItems[k]}</div>`;
         }
     }
-    if (!hasAny) preview.innerHTML = '<div class="empty-preview">Select up to 3 types / 5 total</div>';
+    if (!hasAny) preview.innerHTML = '<div class="empty-preview">Select Tools</div>';
 }
 
 function startGame() {
     window.selectedItemsForGame = { ...selectedItems };
-    window.mapDim = mapSizeSetting;
-    window.guardCount = guardCountSetting;
     initGame();
 }
 
-function showTutorial() {
-    document.getElementById('mainMenu').classList.add('hidden');
-    document.getElementById('tutorialScreen').classList.remove('hidden');
-}
+function showTutorial() { document.getElementById('tutorialScreen').classList.remove('hidden'); }
+function hideTutorial() { document.getElementById('tutorialScreen').classList.add('hidden'); }
 
-function hideTutorial() {
-    document.getElementById('tutorialScreen').classList.add('hidden');
-    document.getElementById('mainMenu').classList.remove('hidden');
-}
-
-function updateMenuDisplay() {
-    document.getElementById('mapSizeValue').textContent = mapSizeSetting;
-    document.getElementById('guardCountValue').textContent = guardCountSetting;
-}
-
-window.addEventListener('load', () => {
-    loadSprites();
-    initMenu();
-});
-
-// Map buttons and item interactions to global window scope so HTML can see them
+// Bindings
+window.addEventListener('load', loadSprites);
 window.changeMapSize = changeMapSize;
 window.changeGuardCount = changeGuardCount;
 window.showItemSelection = showItemSelection;
 window.backToMainMenu = backToMainMenu;
 window.toggleItem = toggleItem;
+window.removeItem = removeItem;
 window.startGame = startGame;
 window.showTutorial = showTutorial;
 window.hideTutorial = hideTutorial;
+window.centerCamera = centerCamera;
