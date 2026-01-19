@@ -506,6 +506,295 @@ input[type="number"] {
     display: none !important;
 }
 
+/* =========================================== */
+/* ENHANCED MENU STYLES */
+/* =========================================== */
+
+/* Number Selector (for Map Size & Guard Count) */
+.number-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.num-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #222;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.num-btn:hover {
+    background: #2a2a2a;
+}
+
+.num-btn:active {
+    background: var(--accent);
+    color: #000;
+}
+
+.num-value {
+    min-width: 40px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+/* Item Selection Grid */
+.item-selection {
+    margin: 20px 0;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+    border: 1px solid #333;
+}
+
+.item-selection h3 {
+    margin: 0 0 15px 0;
+    font-size: 14px;
+    text-align: center;
+    color: #aaa;
+}
+
+.item-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.item-btn {
+    background: linear-gradient(145deg, #1a1a1a, #222);
+    border: 2px solid #444;
+    border-radius: 10px;
+    padding: 10px 5px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    min-height: 80px;
+}
+
+.item-btn:hover {
+    border-color: #666;
+    transform: translateY(-2px);
+}
+
+.item-btn.selected {
+    border-color: var(--accent);
+    background: linear-gradient(145deg, #2a2a1a, #333322);
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+}
+
+.item-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    border-color: #333;
+}
+
+.item-btn.disabled:hover {
+    transform: none;
+    border-color: #333;
+}
+
+.item-icon {
+    font-size: 24px;
+    margin-bottom: 5px;
+}
+
+.item-name {
+    font-size: 10px;
+    color: #aaa;
+    margin-bottom: 5px;
+}
+
+.item-count {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: var(--accent);
+    color: #000;
+    font-size: 10px;
+    font-weight: bold;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.selection-stats {
+    text-align: center;
+    font-size: 13px;
+    color: #aaa;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 5px;
+    margin-top: 10px;
+}
+
+.selection-stats span {
+    color: var(--accent);
+    font-weight: bold;
+}
+
+/* Menu Action Buttons */
+.menu-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.menu-action-btn {
+    flex: 1;
+    padding: 12px;
+    background: linear-gradient(to bottom, #333, #222);
+    color: #aaa;
+    border: 1px solid #444;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.menu-action-btn:hover {
+    background: linear-gradient(to bottom, #3a3a3a, #2a2a2a);
+    color: #ccc;
+    border-color: #666;
+}
+
+/* Tutorial Screen */
+.tutorial-box {
+    background: #111;
+    border: 2px solid var(--accent);
+    padding: 30px;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 700px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 0 40px rgba(212, 175, 55, 0.2);
+}
+
+.tutorial-content {
+    text-align: left;
+    margin: 20px 0;
+}
+
+.tutorial-section {
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tutorial-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.tutorial-section h2 {
+    color: var(--accent);
+    font-size: 18px;
+    margin-bottom: 10px;
+    padding-left: 10px;
+    border-left: 3px solid var(--accent);
+}
+
+.tutorial-section p {
+    margin: 8px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    padding-left: 13px;
+}
+
+.tutorial-section strong {
+    color: var(--accent);
+}
+
+.back-btn {
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(to bottom, #333, #222);
+    color: #aaa;
+    border: 1px solid #444;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 20px;
+    transition: all 0.2s;
+}
+
+.back-btn:hover {
+    background: linear-gradient(to bottom, #3a3a3a, #2a2a2a);
+    color: #ccc;
+    border-color: #666;
+}
+
+/* Responsive adjustments for new menu */
+@media (max-width: 768px) {
+    .item-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    
+    .item-btn {
+        min-height: 70px;
+        padding: 8px 5px;
+    }
+    
+    .item-icon {
+        font-size: 20px;
+    }
+    
+    .item-name {
+        font-size: 9px;
+    }
+    
+    .tutorial-box {
+        max-width: 95%;
+        padding: 20px;
+        max-height: 85vh;
+    }
+    
+    .tutorial-section h2 {
+        font-size: 16px;
+    }
+    
+    .tutorial-section p {
+        font-size: 13px;
+    }
+    
+    .menu-actions {
+        flex-direction: column;
+    }
+}
+
+/* Hide tutorial scrollbar */
+.tutorial-box::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tutorial-box::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+.tutorial-box::-webkit-scrollbar-thumb {
+    background: var(--accent);
+    border-radius: 4px;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     #toolbar {
