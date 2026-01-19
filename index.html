@@ -188,6 +188,14 @@
                     <p>• <strong>❤️ Heal</strong>: Restores 3 HP (if implemented)</p>
                     <p>• <strong>💰 Coin</strong>: Bonus points if collected (if implemented)</p>
                 </div>
+                
+                <div class="tutorial-section">
+                    <h2>🏆 SCORING</h2>
+                    <p>• <strong>Stealth kills</strong> give bonus points</p>
+                    <p>• <strong>Time bonus</strong>: Faster completion = more points</p>
+                    <p>• <strong>Penalty</strong>: Getting spotted reduces score</p>
+                    <p>• <strong>Ranks</strong>: Grand Master, Master Ninja, Assassin, Shinobi, Ronin, Thug</p>
+                </div>
             </div>
             
             <button class="back-btn" onclick="hideTutorial()">BACK TO MENU</button>
@@ -213,10 +221,52 @@
         </div>
     </div>
     
+    <!-- OLD MENU (Hidden - for backward compatibility) -->
+    <div id="menu" class="overlay-screen hidden">
+        <div class="menu-box">
+            <h1>STEALTH GAME</h1>
+            <div class="menu-item">
+                <label>Map Size:</label>
+                <input type="number" id="mapSize" min="8" max="20" value="12">
+            </div>
+            <div class="menu-item">
+                <label>Guard Count:</label>
+                <input type="number" id="guardCount" min="1" max="15" value="5">
+            </div>
+            <button class="start-btn" onclick="initGame()">START MISSION</button>
+        </div>
+    </div>
+    
+    <!-- Main Game Script -->
     <script src="core_main.js"></script>
     <script src="core_vfx.js"></script>
     <script src="core_highlight.js"></script>
     <script src="player.js"></script>
     <script src="enemy.js"></script>
+    
+    <!-- Inline script to ensure menu loads -->
+    <script>
+        // Quick debug check
+        console.log("HTML loaded, checking functions...");
+        
+        // Check if menu functions exist
+        window.addEventListener('load', function() {
+            console.log("Page fully loaded");
+            console.log("changeMapSize function:", typeof changeMapSize);
+            console.log("showItemSelection function:", typeof showItemSelection);
+            console.log("startGame function:", typeof startGame);
+            
+            // Force show main menu on load
+            const mainMenu = document.getElementById('mainMenu');
+            const oldMenu = document.getElementById('menu');
+            if (mainMenu) {
+                console.log("Main menu found, showing it");
+                mainMenu.classList.remove('hidden');
+            }
+            if (oldMenu) {
+                oldMenu.classList.add('hidden');
+            }
+        });
+    </script>
 </body>
 </html>
