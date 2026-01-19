@@ -1241,3 +1241,258 @@ window.playerWait = playerWait;
 window.wait = wait;
 window.initGame = initGame;
 window.toggleMinimap = toggleMinimap;
+
+// ============================================
+// ENHANCED MENU SYSTEM
+// ============================================
+
+// Menu state variables
+let selectedItems = {
+    trap: 0, rice: 0, bomb: 0, gas: 0,
+    health: 0, coin: 0, sight: 0, mark: 0
+};
+
+let mapSize = 12;
+let guardCount = 5;
+
+// Initialize menu state
+function initMenu() {
+    // Load saved preferences if any
+    const savedMapSize = localStorage.getItem('stealthMapSize');
+    const savedGuardCount = localStorage.getItem('stealthGuardCount');
+    
+    if(savedMapSize) mapSize = parseInt(savedMapSize);
+    if(savedGuardCount) guardCount = parseInt(savedGuardCount);
+    
+    updateMenuDisplay();
+}
+
+// Update map size
+function changeMapSize(delta) {
+    mapSize += delta;
+    mapSize = Math.max(8, Math.min(20, mapSize));
+    document.getElementById('mapSizeValue').textContent = mapSize;
+    localStorage.setItem('stealthMapSize', mapSize);
+}
+
+// Update guard count
+function changeGuardCount(delta) {
+    guardCount += delta;
+    guardCount = Math.max(1, Math.min(15, guardCount));
+    document.getElementById('guardCountValue').textContent = guardCount;
+    localStorage.setItem('stealthGuardCount', guardCount);
+}
+
+// Toggle item selection
+function toggleItem(itemType) {
+    const currentCount = selectedItems[itemType];
+    const totalSelected = getTotalSelectedItems();
+    const selectedTypes = getSelectedTypesCount();
+    
+    // Calculate if this item is currently selected (count > 0)
+    const isCurrentlySelected = currentCount > 0;
+    
+    if(isCurrentlySelected) {
+        // Decrease count (remove item)
+        selectedItems[itemType]--;
+        updateItemDisplay(itemType);
+    } else {
+        // Check if we can add this item
+        if(totalSelected >= 5) {
+            createSpeechBubble(0, 0, "Max 5 items total!", "#ff9900", 2);
+            return;
+        }
+        if(selectedTypes >= 3 && currentCount === 0) {
+            createSpeechBubble(0, 0, "Max 3 item types!", "#ff9900", 2);
+            return;
+        }
+        
+        // Increase count (add item)
+        selectedItems[itemType]++;
+        updateItemDisplay(itemType);
+    }
+    
+    updateSelectionStats();
+    updateItemButtonStates();
+}
+
+// Get total number of selected items
+function getTotalSelectedItems() {
+    return Object.values(selectedItems).reduce((sum, count) => sum + count, 0);
+}
+
+// Get number of selected item types
+function getSelectedTypesCount() {
+    return Object.values(selectedItems).filter(count => count > 0).length;
+}
+
+// Update item display counter
+function updateItemDisplay(itemType) {
+    const countElement = document.getElementById(itemType + 'SelCount');
+    if(countElement) {
+        countElement.textContent = selectedItems[itemType];
+        
+        // Update button visual state
+        const button = document.querySelector(`[data-type="${itemType}"]`);
+        if(button) {
+            if(selectedItems[itemType] > 0) {
+                button.classList.add('selected');
+            } else {
+                button.classList.remove('selected');
+            }
+        }
+    }
+}
+
+// Update selection statistics display
+function updateSelectionStats() {
+    const totalItems = getTotalSelectedItems();
+    const totalTypes = getSelectedTypesCount();
+    
+    document.getElementById('totalItems').textContent = totalItems;
+    document.getElementById('totalTypes').textContent = totalTypes;
+}
+
+// Update item button states (enable/disable based on constraints)
+function updateItemButtonStates() {
+    const totalSelected = getTotalSelectedItems();
+    const selectedTypes = getSelectedTypesCount();
+    
+    // Get all item buttons
+    const itemButtons = document.querySelectorAll('.item-btn');
+    
+    itemButtons.forEach(button => {
+        const itemType = button.getAttribute('data-type');
+        const currentCount = selectedItems[itemType];
+        
+        // Remove disabled class first
+        button.classList.remove('disabled');
+        
+        // Check if this button should be disabled
+        if(currentCount === 0) {
+            // Item not selected - disable if we're at max types or max items
+            if(selectedTypes >= 3 || totalSelected >= 5) {
+                button.classList.add('disabled');
+            }
+        }
+    });
+}
+
+// Update entire menu display
+function updateMenuDisplay() {
+    document.getElementById('mapSizeValue').textContent = mapSize;
+    document.getElementById('guardCountValue').textContent = guardCount;
+    
+    // Update all item counts
+    Object.keys(selectedItems).forEach(itemType => {
+        updateItemDisplay(itemType);
+    });
+    
+    updateSelectionStats();
+    updateItemButtonStates();
+}
+
+// Show tutorial screen
+function showTutorial() {
+    document.getElementById('menu').classList.add('hidden');
+    document.getElementById('tutorialScreen').classList.remove('hidden');
+}
+
+// Hide tutorial screen
+function hideTutorial() {
+    document.getElementById('tutorialScreen').classList.add('hidden');
+    document.getElementById('menu').classList.remove('hidden');
+}
+
+// Start game with selected items
+function startGame() {
+    const totalSelected = getTotalSelectedItems();
+    
+    // Validate selection
+    if(totalSelected > 5) {
+        createSpeechBubble(0, 0, "Too many items selected!", "#ff9900", 2);
+        return;
+    }
+    
+    if(totalSelected === 0) {
+        // Optional: Allow starting with no items
+        if(!confirm("Start mission with no items?")) {
+            return;
+        }
+    }
+    
+    // Set global variables for game start
+    window.mapDim = mapSize; // This will be used by initGame
+    
+    // Override the guard count input
+    const guardInput = document.getElementById('guardCount');
+    if(guardInput) guardInput.value = guardCount;
+    
+    // Store selected items for use in game
+    window.selectedItemsForGame = {...selectedItems};
+    
+    // Hide menu and tutorial if open
+    document.getElementById('menu').classList.add('hidden');
+    document.getElementById('tutorialScreen').classList.add('hidden');
+    
+    // Initialize game
+    initGame();
+}
+
+// Modified initGame to use selected items
+const originalInitGame = window.initGame;
+window.initGame = function() {
+    // Call original initGame
+    originalInitGame();
+    
+    // Show the status circle
+    const statusCircle = document.getElementById('playerStatus');
+    if(statusCircle) {
+        statusCircle.classList.remove('hidden');
+    }
+    
+    // Initialize status circle to stealth
+    if(window.updateStatusCircle) {
+        updateStatusCircle('stealth', '🥷');
+    }
+    
+    // Override starting inventory with selected items
+    if(window.selectedItemsForGame) {
+        // Only set the items that exist in your game
+        if(window.inv) {
+            window.inv.trap = window.selectedItemsForGame.trap || 0;
+            window.inv.rice = window.selectedItemsForGame.rice || 0;
+            window.inv.bomb = window.selectedItemsForGame.bomb || 0;
+            window.inv.gas = window.selectedItemsForGame.gas || 0;
+            
+            // Note: health, coin, sight, mark would need game implementation
+            // For now, we'll just log them
+            console.log('Additional selected items:', {
+                health: window.selectedItemsForGame.health,
+                coin: window.selectedItemsForGame.coin,
+                sight: window.selectedItemsForGame.sight,
+                mark: window.selectedItemsForGame.mark
+            });
+        }
+        
+        // Update tool counts display
+        if(window.updateToolCounts) {
+            updateToolCounts();
+        }
+    }
+};
+
+// Initialize menu when page loads
+window.addEventListener('load', () => {
+    initMenu();
+    loadSprites();
+    initAudio();
+});
+
+// Export menu functions
+window.changeMapSize = changeMapSize;
+window.changeGuardCount = changeGuardCount;
+window.toggleItem = toggleItem;
+window.showTutorial = showTutorial;
+window.hideTutorial = hideTutorial;
+window.startGame = startGame;
