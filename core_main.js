@@ -9,7 +9,7 @@ const FLOOR = 0, WALL = 1, HIDE = 2, EXIT = 3, COIN = 5, TRAP = 6, RICE = 7, BOM
 let grid, player, enemies = [], activeBombs = [], activeGas = [], turnCount = 1;
 let selectMode = 'move', gameOver = false, playerTurn = true, shake = 0, mapDim = 12;
 let stats = { kills: 0, coins: 0, itemsUsed: 0, timesSpotted: 0, stealthKills: 0, timeBonus: 0 };
-let inv = { trap: 3, rice: 2, bomb: 1, gas: 2 };
+let inv = { trap: 0, rice: 0, bomb: 0, gas: 0, health: 0, coin: 0, sight: 0, mark: 0 };
 let camX = 0, camY = 0, zoom = 1.0;
 let showMinimap = false;
 let showHighlights = true;
@@ -72,7 +72,15 @@ const ENEMY_TYPES = {
 // ============================================
 
 function initGame() {
-    mapDim = Math.min(20, Math.max(8, parseInt(document.getElementById('mapSize').value) || 12));
+    // Get values from menu system
+    mapDim = window.mapDim || 12;
+    const guardCount = window.guardCount || 5;
+    
+    // Set inventory from selected items
+    if (window.selectedItemsForGame) {
+        inv = { ...inv, ...window.selectedItemsForGame };
+        console.log("Inventory set from menu:", inv);
+    }
     
     hasReachedExit = false;
     playerHP = playerMaxHP;
@@ -101,19 +109,20 @@ function initGame() {
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('toolbar').classList.remove('hidden');
     document.getElementById('ui-controls').classList.remove('hidden');
+    document.getElementById('playerStatus').classList.remove('hidden');
     
     // Hide result screens
     document.getElementById('resultScreen').classList.add('hidden');
     document.getElementById('gameOverScreen').classList.add('hidden');
     
-    generateLevel();
+    generateLevel(guardCount);
     centerCamera();
     updateToolCounts();
     
     requestAnimationFrame(gameLoop);
 }
 
-function generateLevel() {
+function generateLevel(guardCount) {
     canvas.width = window.innerWidth; 
     canvas.height = window.innerHeight;
     
@@ -137,7 +146,7 @@ function generateLevel() {
         grid[cy][cx] = COIN;
     }
     
-    const gc = Math.min(15, Math.max(1, parseInt(document.getElementById('guardCount').value) || 5));
+    const gc = Math.min(15, Math.max(1, guardCount));
     enemies = [];
     for(let i=0; i<gc; i++){
         let ex, ey; 
@@ -371,8 +380,8 @@ function gameLoop() {
 
         // Draw player health bar
         const playerHealthPercent = playerHP / playerMaxHP;
-    ctx.fillStyle = playerHealthPercent > 0.5 ? "#0f0" : playerHealthPercent > 0.25 ? "#ff0" : "#f00";
-    ctx.fillRect(player.ax * TILE + 5, player.ay * TILE - 8, (TILE - 10) * playerHealthPercent, 4);
+        ctx.fillStyle = playerHealthPercent > 0.5 ? "#0f0" : playerHealthPercent > 0.25 ? "#ff0" : "#f00";
+        ctx.fillRect(player.ax * TILE + 5, player.ay * TILE - 8, (TILE - 10) * playerHealthPercent, 4);
 
         // Draw player with shadow
         ctx.shadowColor = player.isHidden ? 'rgba(0, 210, 255, 0.5)' : 'rgba(255, 255, 255, 0.3)';
@@ -843,6 +852,7 @@ function showVictoryScreen() {
     document.getElementById('resultScreen').classList.remove('hidden');
     document.getElementById('toolbar').classList.add('hidden');
     document.getElementById('ui-controls').classList.add('hidden');
+    document.getElementById('playerStatus').classList.add('hidden');
     showTenchuStyleVictoryStats();
 }
 
@@ -851,6 +861,7 @@ function showGameOverScreen() {
     document.getElementById('gameOverScreen').classList.remove('hidden');
     document.getElementById('toolbar').classList.add('hidden');
     document.getElementById('ui-controls').classList.add('hidden');
+    document.getElementById('playerStatus').classList.add('hidden');
 }
 
 // ============================================
@@ -1295,7 +1306,7 @@ function hideTutorial() {
     }
 }
 
-// Map/Guard controls - SIMPLE VERSION
+// Map/Guard controls - FIXED VERSION
 function changeMapSize(delta) {
     mapSize += delta;
     if (mapSize < 8) mapSize = 8;
@@ -1306,6 +1317,9 @@ function changeMapSize(delta) {
         element.textContent = mapSize;
         console.log("Map size:", mapSize);
     }
+    
+    // Store in global variable for game
+    window.mapDim = mapSize;
 }
 
 function changeGuardCount(delta) {
@@ -1318,9 +1332,12 @@ function changeGuardCount(delta) {
         element.textContent = guardCount;
         console.log("Guard count:", guardCount);
     }
+    
+    // Store in global variable for game
+    window.guardCount = guardCount;
 }
 
-// Item selection logic - SIMPLE VERSION
+// Item selection logic - UPDATED VERSION
 function toggleItem(itemType) {
     console.log("Toggling item:", itemType);
     
@@ -1328,10 +1345,15 @@ function toggleItem(itemType) {
     const totalSelected = getTotalSelectedItems();
     const selectedTypes = getSelectedTypesCount();
     
-    // If already selected, remove it
+    // If already has this item, increase count up to max 3 per type
     if (currentCount > 0) {
-        selectedItems[itemType]--;
-        console.log(`Removed ${itemType}`);
+        if (currentCount < 3) {
+            selectedItems[itemType]++;
+            console.log(`Increased ${itemType} to ${selectedItems[itemType]}`);
+        } else {
+            console.log(`Max 3 per item type reached for ${itemType}`);
+            return;
+        }
     } else {
         // Check limits
         if (totalSelected >= 5) {
@@ -1354,6 +1376,10 @@ function toggleItem(itemType) {
 function removeItem(itemType) {
     if (selectedItems[itemType] > 0) {
         selectedItems[itemType]--;
+        if (selectedItems[itemType] === 0) {
+            // Remove from selected items if count reaches 0
+            delete selectedItems[itemType];
+        }
         updateSelectionDisplay();
         console.log(`Removed ${itemType} from preview`);
     }
@@ -1415,8 +1441,35 @@ function updateSelectionDisplay() {
         }
     }
     
+    // Also update for items with 0 count (remove selection)
+    const allItems = ['trap', 'rice', 'bomb', 'gas', 'health', 'coin', 'sight', 'mark'];
+    allItems.forEach(itemType => {
+        if (!selectedItems[itemType] || selectedItems[itemType] === 0) {
+            const button = document.querySelector(`[data-type="${itemType}"]`);
+            if (button) {
+                button.classList.remove('selected');
+            }
+            const countElement = document.getElementById(itemType + 'SelCount');
+            if (countElement) {
+                countElement.textContent = '0';
+            }
+        }
+    });
+    
     // Update preview
     updateSelectedPreview();
+    
+    // Update start button state
+    const startBtn = document.getElementById('startGameBtn');
+    if (startBtn) {
+        if (totalItems === 0) {
+            startBtn.disabled = false; // Can start with 0 items
+            startBtn.textContent = "START MISSION";
+        } else {
+            startBtn.disabled = false;
+            startBtn.textContent = "START MISSION";
+        }
+    }
 }
 
 function updateSelectedPreview() {
@@ -1477,6 +1530,7 @@ function startGame() {
     
     // Set global variables
     window.mapDim = mapSize;
+    window.guardCount = guardCount;
     window.selectedItemsForGame = { ...selectedItems };
     
     // Hide all menus
@@ -1486,13 +1540,6 @@ function startGame() {
     
     // Initialize game
     if (typeof initGame === 'function') {
-        // Set the map size input value
-        const mapSizeInput = document.getElementById('mapSize');
-        const guardCountInput = document.getElementById('guardCount');
-        
-        if (mapSizeInput) mapSizeInput.value = mapSize;
-        if (guardCountInput) guardCountInput.value = guardCount;
-        
         initGame();
     } else {
         console.error("initGame function not found!");
