@@ -1496,3 +1496,341 @@ window.toggleItem = toggleItem;
 window.showTutorial = showTutorial;
 window.hideTutorial = hideTutorial;
 window.startGame = startGame;
+
+// ============================================
+// ENHANCED MENU SYSTEM - COMPLETE WORKING
+// ============================================
+
+// Menu state
+let selectedItems = {
+    trap: 0, rice: 0, bomb: 0, gas: 0,
+    health: 0, coin: 0, sight: 0, mark: 0
+};
+let mapSize = 12;
+let guardCount = 5;
+
+// Initialize menu
+function initMenu() {
+    console.log("Menu initialized");
+    updateMenuDisplay();
+}
+
+// Screen navigation
+function showItemSelection() {
+    console.log("Showing item selection");
+    document.getElementById('mainMenu').classList.add('hidden');
+    document.getElementById('itemSelection').classList.remove('hidden');
+    updateSelectionDisplay();
+}
+
+function backToMainMenu() {
+    document.getElementById('itemSelection').classList.add('hidden');
+    document.getElementById('mainMenu').classList.remove('hidden');
+}
+
+function showTutorial() {
+    // Determine which screen we're coming from
+    if (!document.getElementById('mainMenu').classList.contains('hidden')) {
+        window.tutorialReturnScreen = 'main';
+        document.getElementById('mainMenu').classList.add('hidden');
+    } else {
+        window.tutorialReturnScreen = 'items';
+        document.getElementById('itemSelection').classList.add('hidden');
+    }
+    document.getElementById('tutorialScreen').classList.remove('hidden');
+}
+
+function hideTutorial() {
+    document.getElementById('tutorialScreen').classList.add('hidden');
+    
+    if (window.tutorialReturnScreen === 'main') {
+        document.getElementById('mainMenu').classList.remove('hidden');
+    } else {
+        document.getElementById('itemSelection').classList.remove('hidden');
+    }
+}
+
+// Map/Guard controls
+function changeMapSize(delta) {
+    mapSize += delta;
+    mapSize = Math.max(8, Math.min(20, mapSize));
+    document.getElementById('mapSizeValue').textContent = mapSize;
+    console.log("Map size:", mapSize);
+}
+
+function changeGuardCount(delta) {
+    guardCount += delta;
+    guardCount = Math.max(1, Math.min(15, guardCount));
+    document.getElementById('guardCountValue').textContent = guardCount;
+    console.log("Guard count:", guardCount);
+}
+
+// Item selection logic
+function toggleItem(itemType) {
+    const currentCount = selectedItems[itemType];
+    const totalSelected = getTotalSelectedItems();
+    const selectedTypes = getSelectedTypesCount();
+    
+    if (currentCount > 0) {
+        // Remove item
+        selectedItems[itemType]--;
+        console.log(`Removed ${itemType}, now: ${selectedItems[itemType]}`);
+    } else {
+        // Check if we can add item
+        if (totalSelected >= 5) {
+            showError("Maximum 5 items total!");
+            return;
+        }
+        if (selectedTypes >= 3) {
+            showError("Maximum 3 different item types!");
+            return;
+        }
+        
+        // Add item
+        selectedItems[itemType]++;
+        console.log(`Added ${itemType}, now: ${selectedItems[itemType]}`);
+    }
+    
+    updateSelectionDisplay();
+}
+
+function removeItem(itemType) {
+    if (selectedItems[itemType] > 0) {
+        selectedItems[itemType]--;
+        updateSelectionDisplay();
+        console.log(`Removed ${itemType} from preview`);
+    }
+}
+
+// Helper functions
+function getTotalSelectedItems() {
+    return Object.values(selectedItems).reduce((sum, count) => sum + count, 0);
+}
+
+function getSelectedTypesCount() {
+    return Object.values(selectedItems).filter(count => count > 0).length;
+}
+
+// Update display
+function updateMenuDisplay() {
+    document.getElementById('mapSizeValue').textContent = mapSize;
+    document.getElementById('guardCountValue').textContent = guardCount;
+}
+
+function updateSelectionDisplay() {
+    const totalItems = getTotalSelectedItems();
+    const totalTypes = getSelectedTypesCount();
+    
+    // Update counters
+    document.getElementById('totalItems').textContent = totalItems;
+    document.getElementById('totalTypes').textContent = totalTypes;
+    
+    // Update item grid counts
+    Object.keys(selectedItems).forEach(itemType => {
+        const countElement = document.getElementById(itemType + 'SelCount');
+        if (countElement) {
+            countElement.textContent = selectedItems[itemType];
+            
+            // Update button state
+            const button = document.querySelector(`[data-type="${itemType}"]`);
+            if (button) {
+                if (selectedItems[itemType] > 0) {
+                    button.classList.add('selected');
+                    button.classList.remove('disabled');
+                } else {
+                    button.classList.remove('selected');
+                    
+                    // Disable if at limits
+                    if (totalItems >= 5 || (totalTypes >= 3 && selectedItems[itemType] === 0)) {
+                        button.classList.add('disabled');
+                    } else {
+                        button.classList.remove('disabled');
+                    }
+                }
+            }
+        }
+    });
+    
+    // Update selected items preview
+    updateSelectedPreview();
+    
+    // Update start button state
+    const startBtn = document.getElementById('startGameBtn');
+    if (startBtn) {
+        if (totalItems === 0) {
+            startBtn.disabled = false; // Allow starting with no items
+        } else {
+            startBtn.disabled = false;
+        }
+    }
+    
+    // Clear any error
+    hideError();
+}
+
+function updateSelectedPreview() {
+    const preview = document.getElementById('selectedPreview');
+    if (!preview) return;
+    
+    // Clear preview
+    preview.innerHTML = '';
+    
+    const totalItems = getTotalSelectedItems();
+    
+    if (totalItems === 0) {
+        preview.innerHTML = '<div class="empty-preview">Click items below to add them to your inventory</div>';
+        return;
+    }
+    
+    // Add selected items
+    Object.keys(selectedItems).forEach(itemType => {
+        const count = selectedItems[itemType];
+        if (count > 0) {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'selected-item-preview';
+            itemDiv.setAttribute('data-type', itemType);
+            itemDiv.onclick = () => removeItem(itemType);
+            
+            // Get item display info
+            const itemInfo = getItemInfo(itemType);
+            
+            itemDiv.innerHTML = `
+                <div class="item-icon">${itemInfo.icon}</div>
+                <div class="item-name">${itemInfo.name}</div>
+                <div class="item-count">${count}</div>
+                <button class="remove-btn" onclick="event.stopPropagation(); removeItem('${itemType}')">×</button>
+            `;
+            
+            preview.appendChild(itemDiv);
+        }
+    });
+}
+
+function getItemInfo(itemType) {
+    const items = {
+        trap: { icon: '⚠️', name: 'Trap' },
+        rice: { icon: '🍚', name: 'Rice' },
+        bomb: { icon: '💣', name: 'Bomb' },
+        gas: { icon: '💨', name: 'Gas' },
+        health: { icon: '❤️', name: 'Heal' },
+        coin: { icon: '💰', name: 'Coin' },
+        sight: { icon: '👁️', name: 'Sight' },
+        mark: { icon: '🎯', name: 'Mark' }
+    };
+    return items[itemType] || { icon: '❓', name: 'Unknown' };
+}
+
+// Error handling
+function showError(message) {
+    let errorDiv = document.querySelector('.error-message');
+    if (!errorDiv) {
+        errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        document.querySelector('#itemSelection .menu-box').appendChild(errorDiv);
+    }
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    
+    // Auto-hide after 3 seconds
+    setTimeout(hideError, 3000);
+}
+
+function hideError() {
+    const errorDiv = document.querySelector('.error-message');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+}
+
+// Start game
+function startGame() {
+    const totalItems = getTotalSelectedItems();
+    
+    console.log("Starting game with:", {
+        mapSize: mapSize,
+        guardCount: guardCount,
+        selectedItems: selectedItems,
+        totalItems: totalItems
+    });
+    
+    // Set global variables
+    window.mapDim = mapSize;
+    window.selectedItemsForGame = { ...selectedItems };
+    
+    // Override guard count input
+    const guardInput = document.getElementById('guardCount');
+    if (guardInput) guardInput.value = guardCount;
+    
+    // Hide all menus
+    document.getElementById('mainMenu').classList.add('hidden');
+    document.getElementById('itemSelection').classList.add('hidden');
+    document.getElementById('tutorialScreen').classList.add('hidden');
+    
+    // Initialize game
+    if (typeof initGame === 'function') {
+        initGame();
+    } else {
+        console.error("initGame function not found!");
+    }
+}
+
+// Modified initGame to use selected items
+const originalInitGame = window.initGame;
+window.initGame = function () {
+    // Call original initGame
+    originalInitGame();
+    
+    // Show the status circle
+    const statusCircle = document.getElementById('playerStatus');
+    if (statusCircle) {
+        statusCircle.classList.remove('hidden');
+    }
+    
+    // Initialize status circle to stealth
+    if (window.updateStatusCircle) {
+        updateStatusCircle('stealth', '🥷');
+    }
+    
+    // Override starting inventory with selected items
+    if (window.selectedItemsForGame) {
+        console.log("Setting inventory from selection:", window.selectedItemsForGame);
+        
+        if (window.inv) {
+            window.inv.trap = window.selectedItemsForGame.trap || 0;
+            window.inv.rice = window.selectedItemsForGame.rice || 0;
+            window.inv.bomb = window.selectedItemsForGame.bomb || 0;
+            window.inv.gas = window.selectedItemsForGame.gas || 0;
+            
+            // Note: Additional items need game implementation
+            console.log('Additional selected items (need implementation):', {
+                health: window.selectedItemsForGame.health,
+                coin: window.selectedItemsForGame.coin,
+                sight: window.selectedItemsForGame.sight,
+                mark: window.selectedItemsForGame.mark
+            });
+        }
+        
+        // Update tool counts display
+        if (window.updateToolCounts) {
+            updateToolCounts();
+        }
+    }
+};
+
+// Initialize on load
+window.addEventListener('load', () => {
+    initMenu();
+    if (typeof loadSprites === 'function') loadSprites();
+    if (typeof initAudio === 'function') initAudio();
+});
+
+// Export functions
+window.changeMapSize = changeMapSize;
+window.changeGuardCount = changeGuardCount;
+window.toggleItem = toggleItem;
+window.removeItem = removeItem;
+window.showItemSelection = showItemSelection;
+window.backToMainMenu = backToMainMenu;
+window.showTutorial = showTutorial;
+window.hideTutorial = hideTutorial;
+window.startGame = startGame;
