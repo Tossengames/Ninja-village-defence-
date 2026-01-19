@@ -103,24 +103,23 @@ canvas {
     transform: translateY(2px);
 }
 
-/* --- FIXED STATUS CIRCLE (Left of toolbar) --- */
+/* --- FIXED STATUS CIRCLE --- */
 .status-circle {
-    position: fixed;
+    position: fixed !important;
     width: 65px;
     height: 65px;
     min-width: 65px;
     border-radius: 50%;
     background: #1a1a1a;
-    border: 3px solid #00ff00; /* Default green border */
+    border: 3px solid #00ff00;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 300; /* Above toolbar */
+    z-index: 101;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
-    bottom: 990px; /* Same as toolbar */
-    left: 65%;
-    /* Position left of toolbar center */
+    bottom: 100px !important;
+    left: 20px !important;
 }
 
 .status-emoji {
@@ -138,7 +137,7 @@ canvas {
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: rgba(0, 255, 0, 0.25); /* Default green fill */
+    background: rgba(0, 255, 0, 0.25);
     z-index: 1;
     animation: pulse 2s infinite;
     transition: background 0.3s ease;
@@ -195,9 +194,9 @@ canvas {
 
 /* Alert pulse for spotted state */
 @keyframes alertPulse {
-    0% { transform: translateX(calc(-50% - 240px)) scale(1); }
-    50% { transform: translateX(calc(-50% - 240px)) scale(1.1); }
-    100% { transform: translateX(calc(-50% - 240px)) scale(1); }
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
 }
 
 /* --- TOOLBAR (Bottom Center) - FIXED POSITION --- */
@@ -501,6 +500,12 @@ input[type="number"] {
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* Hide status circle when victory/game over screens are active */
+#resultScreen:not(.hidden) ~ #playerStatus,
+#gameOverScreen:not(.hidden) ~ #playerStatus {
+    display: none !important;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     #toolbar {
@@ -513,8 +518,8 @@ input[type="number"] {
         width: 55px;
         height: 55px;
         min-width: 55px;
-        bottom: 15px;
-        transform: translateX(calc(-50% - 200px)); /* Adjusted for mobile */
+        bottom: 90px !important; /* Adjust for mobile */
+        left: 10px !important; /* Adjust for mobile */
     }
     
     .status-emoji {
