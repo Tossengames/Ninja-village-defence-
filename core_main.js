@@ -1243,265 +1243,10 @@ window.initGame = initGame;
 window.toggleMinimap = toggleMinimap;
 
 // ============================================
-// ENHANCED MENU SYSTEM
+// ENHANCED MENU SYSTEM - WORKING VERSION
 // ============================================
 
-// Menu state variables
-let selectedItems = {
-    trap: 0, rice: 0, bomb: 0, gas: 0,
-    health: 0, coin: 0, sight: 0, mark: 0
-};
-
-let mapSize = 12;
-let guardCount = 5;
-
-// Initialize menu state
-function initMenu() {
-    // Load saved preferences if any
-    const savedMapSize = localStorage.getItem('stealthMapSize');
-    const savedGuardCount = localStorage.getItem('stealthGuardCount');
-    
-    if(savedMapSize) mapSize = parseInt(savedMapSize);
-    if(savedGuardCount) guardCount = parseInt(savedGuardCount);
-    
-    updateMenuDisplay();
-}
-
-// Update map size
-function changeMapSize(delta) {
-    mapSize += delta;
-    mapSize = Math.max(8, Math.min(20, mapSize));
-    document.getElementById('mapSizeValue').textContent = mapSize;
-    localStorage.setItem('stealthMapSize', mapSize);
-}
-
-// Update guard count
-function changeGuardCount(delta) {
-    guardCount += delta;
-    guardCount = Math.max(1, Math.min(15, guardCount));
-    document.getElementById('guardCountValue').textContent = guardCount;
-    localStorage.setItem('stealthGuardCount', guardCount);
-}
-
-// Toggle item selection
-function toggleItem(itemType) {
-    const currentCount = selectedItems[itemType];
-    const totalSelected = getTotalSelectedItems();
-    const selectedTypes = getSelectedTypesCount();
-    
-    // Calculate if this item is currently selected (count > 0)
-    const isCurrentlySelected = currentCount > 0;
-    
-    if(isCurrentlySelected) {
-        // Decrease count (remove item)
-        selectedItems[itemType]--;
-        updateItemDisplay(itemType);
-    } else {
-        // Check if we can add this item
-        if(totalSelected >= 5) {
-            createSpeechBubble(0, 0, "Max 5 items total!", "#ff9900", 2);
-            return;
-        }
-        if(selectedTypes >= 3 && currentCount === 0) {
-            createSpeechBubble(0, 0, "Max 3 item types!", "#ff9900", 2);
-            return;
-        }
-        
-        // Increase count (add item)
-        selectedItems[itemType]++;
-        updateItemDisplay(itemType);
-    }
-    
-    updateSelectionStats();
-    updateItemButtonStates();
-}
-
-// Get total number of selected items
-function getTotalSelectedItems() {
-    return Object.values(selectedItems).reduce((sum, count) => sum + count, 0);
-}
-
-// Get number of selected item types
-function getSelectedTypesCount() {
-    return Object.values(selectedItems).filter(count => count > 0).length;
-}
-
-// Update item display counter
-function updateItemDisplay(itemType) {
-    const countElement = document.getElementById(itemType + 'SelCount');
-    if(countElement) {
-        countElement.textContent = selectedItems[itemType];
-        
-        // Update button visual state
-        const button = document.querySelector(`[data-type="${itemType}"]`);
-        if(button) {
-            if(selectedItems[itemType] > 0) {
-                button.classList.add('selected');
-            } else {
-                button.classList.remove('selected');
-            }
-        }
-    }
-}
-
-// Update selection statistics display
-function updateSelectionStats() {
-    const totalItems = getTotalSelectedItems();
-    const totalTypes = getSelectedTypesCount();
-    
-    document.getElementById('totalItems').textContent = totalItems;
-    document.getElementById('totalTypes').textContent = totalTypes;
-}
-
-// Update item button states (enable/disable based on constraints)
-function updateItemButtonStates() {
-    const totalSelected = getTotalSelectedItems();
-    const selectedTypes = getSelectedTypesCount();
-    
-    // Get all item buttons
-    const itemButtons = document.querySelectorAll('.item-btn');
-    
-    itemButtons.forEach(button => {
-        const itemType = button.getAttribute('data-type');
-        const currentCount = selectedItems[itemType];
-        
-        // Remove disabled class first
-        button.classList.remove('disabled');
-        
-        // Check if this button should be disabled
-        if(currentCount === 0) {
-            // Item not selected - disable if we're at max types or max items
-            if(selectedTypes >= 3 || totalSelected >= 5) {
-                button.classList.add('disabled');
-            }
-        }
-    });
-}
-
-// Update entire menu display
-function updateMenuDisplay() {
-    document.getElementById('mapSizeValue').textContent = mapSize;
-    document.getElementById('guardCountValue').textContent = guardCount;
-    
-    // Update all item counts
-    Object.keys(selectedItems).forEach(itemType => {
-        updateItemDisplay(itemType);
-    });
-    
-    updateSelectionStats();
-    updateItemButtonStates();
-}
-
-// Show tutorial screen
-function showTutorial() {
-    document.getElementById('menu').classList.add('hidden');
-    document.getElementById('tutorialScreen').classList.remove('hidden');
-}
-
-// Hide tutorial screen
-function hideTutorial() {
-    document.getElementById('tutorialScreen').classList.add('hidden');
-    document.getElementById('menu').classList.remove('hidden');
-}
-
-// Start game with selected items
-function startGame() {
-    const totalSelected = getTotalSelectedItems();
-    
-    // Validate selection
-    if(totalSelected > 5) {
-        createSpeechBubble(0, 0, "Too many items selected!", "#ff9900", 2);
-        return;
-    }
-    
-    if(totalSelected === 0) {
-        // Optional: Allow starting with no items
-        if(!confirm("Start mission with no items?")) {
-            return;
-        }
-    }
-    
-    // Set global variables for game start
-    window.mapDim = mapSize; // This will be used by initGame
-    
-    // Override the guard count input
-    const guardInput = document.getElementById('guardCount');
-    if(guardInput) guardInput.value = guardCount;
-    
-    // Store selected items for use in game
-    window.selectedItemsForGame = {...selectedItems};
-    
-    // Hide menu and tutorial if open
-    document.getElementById('menu').classList.add('hidden');
-    document.getElementById('tutorialScreen').classList.add('hidden');
-    
-    // Initialize game
-    initGame();
-}
-
-// Modified initGame to use selected items
-const originalInitGame = window.initGame;
-window.initGame = function() {
-    // Call original initGame
-    originalInitGame();
-    
-    // Show the status circle
-    const statusCircle = document.getElementById('playerStatus');
-    if(statusCircle) {
-        statusCircle.classList.remove('hidden');
-    }
-    
-    // Initialize status circle to stealth
-    if(window.updateStatusCircle) {
-        updateStatusCircle('stealth', '🥷');
-    }
-    
-    // Override starting inventory with selected items
-    if(window.selectedItemsForGame) {
-        // Only set the items that exist in your game
-        if(window.inv) {
-            window.inv.trap = window.selectedItemsForGame.trap || 0;
-            window.inv.rice = window.selectedItemsForGame.rice || 0;
-            window.inv.bomb = window.selectedItemsForGame.bomb || 0;
-            window.inv.gas = window.selectedItemsForGame.gas || 0;
-            
-            // Note: health, coin, sight, mark would need game implementation
-            // For now, we'll just log them
-            console.log('Additional selected items:', {
-                health: window.selectedItemsForGame.health,
-                coin: window.selectedItemsForGame.coin,
-                sight: window.selectedItemsForGame.sight,
-                mark: window.selectedItemsForGame.mark
-            });
-        }
-        
-        // Update tool counts display
-        if(window.updateToolCounts) {
-            updateToolCounts();
-        }
-    }
-};
-
-// Initialize menu when page loads
-window.addEventListener('load', () => {
-    initMenu();
-    loadSprites();
-    initAudio();
-});
-
-// Export menu functions
-window.changeMapSize = changeMapSize;
-window.changeGuardCount = changeGuardCount;
-window.toggleItem = toggleItem;
-window.showTutorial = showTutorial;
-window.hideTutorial = hideTutorial;
-window.startGame = startGame;
-
-// ============================================
-// ENHANCED MENU SYSTEM - COMPLETE WORKING
-// ============================================
-
-// Menu state
+// Menu state - SINGLE SET OF VARIABLES
 let selectedItems = {
     trap: 0, rice: 0, bomb: 0, gas: 0,
     health: 0, coin: 0, sight: 0, mark: 0
@@ -1550,45 +1295,57 @@ function hideTutorial() {
     }
 }
 
-// Map/Guard controls
+// Map/Guard controls - SIMPLE VERSION
 function changeMapSize(delta) {
     mapSize += delta;
-    mapSize = Math.max(8, Math.min(20, mapSize));
-    document.getElementById('mapSizeValue').textContent = mapSize;
-    console.log("Map size:", mapSize);
+    if (mapSize < 8) mapSize = 8;
+    if (mapSize > 20) mapSize = 20;
+    
+    const element = document.getElementById('mapSizeValue');
+    if (element) {
+        element.textContent = mapSize;
+        console.log("Map size:", mapSize);
+    }
 }
 
 function changeGuardCount(delta) {
     guardCount += delta;
-    guardCount = Math.max(1, Math.min(15, guardCount));
-    document.getElementById('guardCountValue').textContent = guardCount;
-    console.log("Guard count:", guardCount);
+    if (guardCount < 1) guardCount = 1;
+    if (guardCount > 15) guardCount = 15;
+    
+    const element = document.getElementById('guardCountValue');
+    if (element) {
+        element.textContent = guardCount;
+        console.log("Guard count:", guardCount);
+    }
 }
 
-// Item selection logic
+// Item selection logic - SIMPLE VERSION
 function toggleItem(itemType) {
-    const currentCount = selectedItems[itemType];
+    console.log("Toggling item:", itemType);
+    
+    const currentCount = selectedItems[itemType] || 0;
     const totalSelected = getTotalSelectedItems();
     const selectedTypes = getSelectedTypesCount();
     
+    // If already selected, remove it
     if (currentCount > 0) {
-        // Remove item
         selectedItems[itemType]--;
-        console.log(`Removed ${itemType}, now: ${selectedItems[itemType]}`);
+        console.log(`Removed ${itemType}`);
     } else {
-        // Check if we can add item
+        // Check limits
         if (totalSelected >= 5) {
-            showError("Maximum 5 items total!");
+            alert("Maximum 5 items total!");
             return;
         }
         if (selectedTypes >= 3) {
-            showError("Maximum 3 different item types!");
+            alert("Maximum 3 item types!");
             return;
         }
         
         // Add item
-        selectedItems[itemType]++;
-        console.log(`Added ${itemType}, now: ${selectedItems[itemType]}`);
+        selectedItems[itemType] = 1;
+        console.log(`Added ${itemType}`);
     }
     
     updateSelectionDisplay();
@@ -1604,94 +1361,85 @@ function removeItem(itemType) {
 
 // Helper functions
 function getTotalSelectedItems() {
-    return Object.values(selectedItems).reduce((sum, count) => sum + count, 0);
+    let total = 0;
+    for (const key in selectedItems) {
+        total += selectedItems[key];
+    }
+    return total;
 }
 
 function getSelectedTypesCount() {
-    return Object.values(selectedItems).filter(count => count > 0).length;
+    let types = 0;
+    for (const key in selectedItems) {
+        if (selectedItems[key] > 0) types++;
+    }
+    return types;
 }
 
 // Update display
 function updateMenuDisplay() {
-    document.getElementById('mapSizeValue').textContent = mapSize;
-    document.getElementById('guardCountValue').textContent = guardCount;
+    const mapElement = document.getElementById('mapSizeValue');
+    const guardElement = document.getElementById('guardCountValue');
+    
+    if (mapElement) mapElement.textContent = mapSize;
+    if (guardElement) guardElement.textContent = guardCount;
 }
 
 function updateSelectionDisplay() {
     const totalItems = getTotalSelectedItems();
     const totalTypes = getSelectedTypesCount();
     
-    // Update counters
-    document.getElementById('totalItems').textContent = totalItems;
-    document.getElementById('totalTypes').textContent = totalTypes;
+    console.log("Updating display:", totalItems, "items,", totalTypes, "types");
     
-    // Update item grid counts
-    Object.keys(selectedItems).forEach(itemType => {
+    // Update counters
+    const totalItemsEl = document.getElementById('totalItems');
+    const totalTypesEl = document.getElementById('totalTypes');
+    if (totalItemsEl) totalItemsEl.textContent = totalItems;
+    if (totalTypesEl) totalTypesEl.textContent = totalTypes;
+    
+    // Update item counts
+    for (const itemType in selectedItems) {
         const countElement = document.getElementById(itemType + 'SelCount');
         if (countElement) {
-            countElement.textContent = selectedItems[itemType];
+            countElement.textContent = selectedItems[itemType] || 0;
             
             // Update button state
             const button = document.querySelector(`[data-type="${itemType}"]`);
             if (button) {
                 if (selectedItems[itemType] > 0) {
                     button.classList.add('selected');
-                    button.classList.remove('disabled');
                 } else {
                     button.classList.remove('selected');
-                    
-                    // Disable if at limits
-                    if (totalItems >= 5 || (totalTypes >= 3 && selectedItems[itemType] === 0)) {
-                        button.classList.add('disabled');
-                    } else {
-                        button.classList.remove('disabled');
-                    }
                 }
             }
         }
-    });
-    
-    // Update selected items preview
-    updateSelectedPreview();
-    
-    // Update start button state
-    const startBtn = document.getElementById('startGameBtn');
-    if (startBtn) {
-        if (totalItems === 0) {
-            startBtn.disabled = false; // Allow starting with no items
-        } else {
-            startBtn.disabled = false;
-        }
     }
     
-    // Clear any error
-    hideError();
+    // Update preview
+    updateSelectedPreview();
 }
 
 function updateSelectedPreview() {
     const preview = document.getElementById('selectedPreview');
     if (!preview) return;
     
-    // Clear preview
     preview.innerHTML = '';
     
     const totalItems = getTotalSelectedItems();
-    
     if (totalItems === 0) {
         preview.innerHTML = '<div class="empty-preview">Click items below to add them to your inventory</div>';
         return;
     }
     
     // Add selected items
-    Object.keys(selectedItems).forEach(itemType => {
+    for (const itemType in selectedItems) {
         const count = selectedItems[itemType];
         if (count > 0) {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'selected-item-preview';
-            itemDiv.setAttribute('data-type', itemType);
             itemDiv.onclick = () => removeItem(itemType);
             
-            // Get item display info
+            // Get item info
             const itemInfo = getItemInfo(itemType);
             
             itemDiv.innerHTML = `
@@ -1703,7 +1451,7 @@ function updateSelectedPreview() {
             
             preview.appendChild(itemDiv);
         }
-    });
+    }
 }
 
 function getItemInfo(itemType) {
@@ -1720,46 +1468,16 @@ function getItemInfo(itemType) {
     return items[itemType] || { icon: '❓', name: 'Unknown' };
 }
 
-// Error handling
-function showError(message) {
-    let errorDiv = document.querySelector('.error-message');
-    if (!errorDiv) {
-        errorDiv = document.createElement('div');
-        errorDiv.className = 'error-message';
-        document.querySelector('#itemSelection .menu-box').appendChild(errorDiv);
-    }
-    errorDiv.textContent = message;
-    errorDiv.style.display = 'block';
-    
-    // Auto-hide after 3 seconds
-    setTimeout(hideError, 3000);
-}
-
-function hideError() {
-    const errorDiv = document.querySelector('.error-message');
-    if (errorDiv) {
-        errorDiv.style.display = 'none';
-    }
-}
-
 // Start game
 function startGame() {
-    const totalItems = getTotalSelectedItems();
-    
-    console.log("Starting game with:", {
-        mapSize: mapSize,
-        guardCount: guardCount,
-        selectedItems: selectedItems,
-        totalItems: totalItems
-    });
+    console.log("Starting game...");
+    console.log("Map size:", mapSize);
+    console.log("Guard count:", guardCount);
+    console.log("Selected items:", selectedItems);
     
     // Set global variables
     window.mapDim = mapSize;
     window.selectedItemsForGame = { ...selectedItems };
-    
-    // Override guard count input
-    const guardInput = document.getElementById('guardCount');
-    if (guardInput) guardInput.value = guardCount;
     
     // Hide all menus
     document.getElementById('mainMenu').classList.add('hidden');
@@ -1768,58 +1486,26 @@ function startGame() {
     
     // Initialize game
     if (typeof initGame === 'function') {
+        // Set the map size input value
+        const mapSizeInput = document.getElementById('mapSize');
+        const guardCountInput = document.getElementById('guardCount');
+        
+        if (mapSizeInput) mapSizeInput.value = mapSize;
+        if (guardCountInput) guardCountInput.value = guardCount;
+        
         initGame();
     } else {
         console.error("initGame function not found!");
+        alert("Game initialization error!");
     }
 }
 
-// Modified initGame to use selected items
-const originalInitGame = window.initGame;
-window.initGame = function () {
-    // Call original initGame
-    originalInitGame();
-    
-    // Show the status circle
-    const statusCircle = document.getElementById('playerStatus');
-    if (statusCircle) {
-        statusCircle.classList.remove('hidden');
-    }
-    
-    // Initialize status circle to stealth
-    if (window.updateStatusCircle) {
-        updateStatusCircle('stealth', '🥷');
-    }
-    
-    // Override starting inventory with selected items
-    if (window.selectedItemsForGame) {
-        console.log("Setting inventory from selection:", window.selectedItemsForGame);
-        
-        if (window.inv) {
-            window.inv.trap = window.selectedItemsForGame.trap || 0;
-            window.inv.rice = window.selectedItemsForGame.rice || 0;
-            window.inv.bomb = window.selectedItemsForGame.bomb || 0;
-            window.inv.gas = window.selectedItemsForGame.gas || 0;
-            
-            // Note: Additional items need game implementation
-            console.log('Additional selected items (need implementation):', {
-                health: window.selectedItemsForGame.health,
-                coin: window.selectedItemsForGame.coin,
-                sight: window.selectedItemsForGame.sight,
-                mark: window.selectedItemsForGame.mark
-            });
-        }
-        
-        // Update tool counts display
-        if (window.updateToolCounts) {
-            updateToolCounts();
-        }
-    }
-};
-
 // Initialize on load
-window.addEventListener('load', () => {
+window.addEventListener('load', function() {
+    console.log("Page loaded, initializing menu...");
     initMenu();
+    
+    // Initialize your other systems
     if (typeof loadSprites === 'function') loadSprites();
     if (typeof initAudio === 'function') initAudio();
 });
