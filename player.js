@@ -165,8 +165,11 @@ async function handleAttack(targetX, targetY) {
     // Check if enemy can see player (CONE VISION ONLY)
     const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
     
-    if(enemy.state === 'alerted' || enemy.state === 'chasing' || canSeePlayer) {
-        // Normal combat - enemy can see player
+    // FIXED: Check enemy state for stealth kill eligibility
+    const enemyIsAlerted = enemy.state === 'chasing' || enemy.state === 'alert' || enemy.state === 'investigating';
+    
+    if(enemyIsAlerted || canSeePlayer) {
+        // Normal combat - enemy can see player or is alerted
         createSpeechBubble(player.x, player.y, `⚔️ ATTACK!`, "#ff3333", 2);
         
         const enemyDied = await processCombatSequence(true, enemy, 2);
@@ -183,7 +186,7 @@ async function handleAttack(targetX, targetY) {
             }, 500);
         }
     } else {
-        // STEALTH KILL - INSTANT KILL if enemy can't see player
+        // STEALTH KILL - INSTANT KILL if enemy can't see player AND is not alerted
         createSpeechBubble(player.x, player.y, "🗡️ STEALTH KILL!", "#00ff00", 2);
         await new Promise(resolve => setTimeout(resolve, 300));
         
@@ -265,15 +268,27 @@ function checkAndShowStealthKillPrompt() {
         e.alive && Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1
     );
     
+    let showPrompt = false;
+    
     adjacentEnemies.forEach(enemy => {
         // Check if stealth kill is available
         const canSeePlayer = hasLineOfSight(enemy, player.x, player.y) && !player.isHidden;
         
-        if(!canSeePlayer || enemy.isSleeping) {
-            // Show stealth kill prompt above player
-            createStealthKillPromptPlayer(player.x, player.y);
+        // Check if enemy is in alerted state
+        const enemyIsAlerted = enemy.state === 'chasing' || enemy.state === 'alert' || enemy.state === 'investigating';
+        
+        // Stealth kill is available if:
+        // 1. Enemy can't see player AND enemy is not alerted
+        // 2. OR enemy is sleeping (regardless of state or visibility)
+        if((!canSeePlayer && !enemyIsAlerted) || enemy.isSleeping) {
+            showPrompt = true;
         }
     });
+    
+    if(showPrompt) {
+        // Show stealth kill prompt above player
+        createStealthKillPromptPlayer(player.x, player.y);
+    }
 }
 
 // Create stealth kill prompt above player
