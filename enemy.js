@@ -52,6 +52,29 @@ async function processEnemyTurn(e) {
         return;  
     }  
     
+    // FIXED: Player is hiding - CANNOT see player, cancel all chase/alert states
+    if(player.isHidden) {
+        // If player is hiding, enemy cannot see or chase them
+        if(e.state === 'chasing' || e.state === 'alert') {
+            e.state = 'investigating';
+            e.investigationTarget = {x: player.x, y: player.y};
+            e.investigationTurns = 3;
+            e.lastSeenPlayer = null;
+            e.alertTurns = 0;
+            createSpeechBubble(e.x, e.y, "Where'd they go?", "#ff9900", 2);
+            
+            // Move toward last known position (where player hid)
+            await moveTowardLastSeen(e);
+            return;
+        }
+        
+        // If already investigating and player is hidden, continue investigation
+        if(e.state === 'investigating') {
+            await investigateBehavior(e);
+            return;
+        }
+    }
+    
     // Check if enemy can see player RIGHT NOW  
     const canSeePlayerNow = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;  
     
@@ -59,7 +82,7 @@ async function processEnemyTurn(e) {
     const visibleRice = findVisibleRice(e);
     
     // If enemy sees rice and not currently chasing player or in alert, go eat it
-    if(visibleRice && e.state !== 'chasing' && e.state !== 'alert' && !e.ateRice) {
+    if(visibleRice && e.state !== 'chasing' && e.state !== 'alert' && e.state !== 'investigating' && !e.ateRice) {
         e.state = 'eating';
         e.investigationTarget = visibleRice;
         e.lastSeenPlayer = null; // Clear player tracking when eating
@@ -70,7 +93,7 @@ async function processEnemyTurn(e) {
     
     // IMMEDIATE SPOTTING - if enemy can see player, spot immediately  
     if(canSeePlayerNow) {  
-        if(e.state !== 'chasing' && e.state !== 'alert') {  
+        if(e.state !== 'chasing' && e.state !== 'alert' && e.state !== 'investigating') {  
             stats.timesSpotted++;  
             createAlertEffect(e.x, e.y);  
             createSpeechBubble(e.x, e.y, "! SPOTTED !", "#ff0000", 2);  
@@ -87,17 +110,6 @@ async function processEnemyTurn(e) {
         await chasePlayer(e);  
         return;  
     }  
-    
-    // If player goes into hiding state, investigating expires immediately
-    if(player.isHidden && e.state === 'alert') {
-        e.state = 'patrolling';
-        e.patrolTarget = null;
-        e.lastSeenPlayer = null;
-        e.alertTurns = 0;
-        createSpeechBubble(e.x, e.y, "Where'd they go?", "#aaa", 2);
-        await patrolBehavior(e);
-        return;
-    }
     
     // If enemy is chasing but can't see player now  
     if(e.state === 'chasing' && !canSeePlayerNow) {  
@@ -157,8 +169,32 @@ async function processEnemyTurn(e) {
         return;
     }
     
+    // If enemy is in investigating state (player hid)
+    if(e.state === 'investigating') {
+        e.investigationTurns--;
+        
+        if(e.investigationTurns <= 0) {
+            // Investigation complete, go back to patrolling
+            e.state = 'patrolling';
+            e.patrolTarget = null;
+            e.investigationTarget = null;
+            createSpeechBubble(e.x, e.y, "Nothing there...", "#aaa", 2);
+            await patrolBehavior(e);
+            return;
+        }
+        
+        // Investigate the location where player hid
+        if(e.investigationTarget) {
+            await investigateBehavior(e);
+        } else {
+            e.state = 'patrolling';
+            await patrolBehavior(e);
+        }
+        return;
+    }
+    
     // If investigating sound  
-    if(e.hasHeardSound && e.soundLocation && e.state !== 'chasing' && e.state !== 'alert' && e.state !== 'eating') {  
+    if(e.hasHeardSound && e.soundLocation && e.state !== 'chasing' && e.state !== 'alert' && e.state !== 'investigating' && e.state !== 'eating') {  
         e.state = 'alert';  
         e.lastSeenPlayer = e.soundLocation;  
         e.alertTurns = Math.floor(Math.random() * 3) + 2; // 2-4 turns for sound investigation
@@ -173,6 +209,66 @@ async function processEnemyTurn(e) {
         await patrolBehavior(e);  
     } else if(e.state === 'eating') {  
         await eatBehavior(e);  
+    }
+}
+
+// INVESTIGATE BEHAVIOR - For when player hides
+async function investigateBehavior(e) {
+    if(!e.investigationTarget) {
+        e.state = 'patrolling';
+        await patrolBehavior(e);
+        return;
+    }
+
+    const dx = e.investigationTarget.x - e.x;
+    const dy = e.investigationTarget.y - e.y;
+    const dist = Math.max(Math.abs(dx), Math.abs(dy));
+    
+    // Update direction to face investigation target
+    updateEnemyDirection(e, e.investigationTarget.x, e.investigationTarget.y);
+    
+    // If we're at or very close to the investigation location
+    if(dist <= 1) {
+        // Look around (do a random search move)
+        await doRandomSearchMove(e);
+        return;
+    }
+    
+    // Find path to investigation target
+    const nextStep = findPathStep(e.x, e.y, e.investigationTarget.x, e.investigationTarget.y);
+    if(nextStep) {
+        const nx = nextStep.x;
+        const ny = nextStep.y;
+        
+        // Update direction based on movement
+        updateEnemyDirection(e, nx, ny);
+        
+        // Check if tile is valid and not occupied
+        if(isValidMove(e, nx, ny)) {
+            await animMove(e, nx, ny, e.speed * 1.2, () => {
+                e.x = nx;
+                e.y = ny;
+            });
+            
+            // Check if we can see player after moving
+            const canSeePlayerAfterMove = !e.isSleeping && hasLineOfSight(e, player.x, player.y) && !player.isHidden;
+            if(canSeePlayerAfterMove) {
+                // Found player!
+                e.state = 'chasing';
+                e.lastSeenPlayer = {x: player.x, y: player.y};
+                e.alertTurns = Math.floor(Math.random() * 5) + 1;
+                e.investigationTarget = null;
+                createSpeechBubble(e.x, e.y, "Found you!", "#ff0000", 2);
+                await chasePlayer(e);
+                return;
+            }
+        } else {
+            // Can't move to planned step, try alternative
+            await doRandomSearchMove(e);
+        }
+    } else {
+        // No path found, try random move
+        await doRandomSearchMove(e);
     }
 }
 
