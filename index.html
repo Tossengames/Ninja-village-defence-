@@ -51,7 +51,6 @@
     <div id="mainMenu" class="overlay-screen">
         <div class="menu-box">
             <h1>STEALTH GAME</h1>
-            
             <div class="menu-item">
                 <label>Map Size:</label>
                 <div class="number-selector">
@@ -60,7 +59,6 @@
                     <button class="num-btn" onclick="changeMapSize(1)">▶</button>
                 </div>
             </div>
-            
             <div class="menu-item">
                 <label>Guard Count:</label>
                 <div class="number-selector">
@@ -69,7 +67,6 @@
                     <button class="num-btn" onclick="changeGuardCount(1)">▶</button>
                 </div>
             </div>
-            
             <div class="menu-actions">
                 <button class="menu-action-btn" onclick="showTutorial()">HOW TO PLAY</button>
                 <button class="start-btn" onclick="showItemSelection()">NEXT →</button>
@@ -78,15 +75,11 @@
     </div>
     
     <div id="itemSelection" class="overlay-screen hidden">
-        <div class="menu-box" style="max-width: 600px;">
+        <div class="menu-box">
             <h1>SELECT YOUR ITEMS</h1>
-            <div class="selection-stats">
-                Selected: <span id="totalItems">0</span>/5 items, 
-                <span id="totalTypes">0</span>/3 types
-            </div>
             
             <div class="selected-preview" id="selectedPreview">
-                <div class="empty-preview">Click items below to add them to your inventory</div>
+                <div class="empty-preview">Click items to add to inventory</div>
             </div>
             
             <div class="item-grid">
@@ -133,8 +126,8 @@
             </div>
             
             <div class="menu-actions">
-                <button class="menu-action-btn" onclick="backToMainMenu()">← BACK</button>
                 <button class="start-btn" onclick="startGame()" id="startGameBtn">START MISSION</button>
+                <button class="menu-action-btn" onclick="backToMainMenu()">← BACK</button>
             </div>
         </div>
     </div>
@@ -145,16 +138,16 @@
             <div class="tutorial-content">
                 <div class="tutorial-section">
                     <h2>🎮 CONTROLS</h2>
-                    <p>• <strong>Click/Tap</strong> on highlighted tiles to move, attack, or use items</p>
-                    <p>• <strong>Drag</strong> to pan the camera; <strong>Pinch</strong> to zoom</p>
+                    <p>• <strong>Click/Tap</strong> on tiles to move or act</p>
+                    <p>• <strong>Drag</strong> to pan; <strong>Pinch</strong> to zoom</p>
                 </div>
                 <div class="tutorial-section">
                     <h2>🕵️ STEALTH</h2>
-                    <p>• Enemies have <strong>60° cone vision</strong>. Stay behind them!</p>
-                    <p>• <strong>Stealth kills</strong> are instant if you aren't seen.</p>
+                    <p>• Enemies have <strong>60° vision</strong>. Stay behind!</p>
+                    <p>• <strong>Stealth kills</strong> are instant kills.</p>
                 </div>
             </div>
-            <button class="back-btn" onclick="hideTutorial()">BACK TO MENU</button>
+            <button class="back-btn" onclick="hideTutorial()">BACK</button>
         </div>
     </div>
 
@@ -170,7 +163,6 @@
     <div id="gameOverScreen" class="overlay-screen hidden">
         <div class="result-scroll">
             <h1>MISSION FAILED</h1>
-            <div class="fail-text">You have been defeated.</div>
             <button class="reload-btn" onclick="window.location.reload()">TRY AGAIN</button>
         </div>
     </div>
