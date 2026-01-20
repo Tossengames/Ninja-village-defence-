@@ -1,15 +1,22 @@
 // ============================================
-// MISSION MANAGER - COMPLETE VERSION
+// MISSION MANAGER - LOCAL GITHUB PAGES VERSION
 // ============================================
 
 const MISSION_STORAGE_KEY = 'stealthGame_customMissions';
+const MAPS_FOLDER = 'maps/'; // Folder in the same directory
 let customMissions = [];
-let availableMissions = []; // Missions from maps folder
+let localMissions = [];
 
 // Initialize mission manager
-function initMissionManager() {
-    loadCustomMissions(); // Load user-created missions from localStorage
-    loadAvailableMissions(); // Load missions from maps folder
+async function initMissionManager() {
+    console.log("Initializing Mission Manager...");
+    
+    // Load user-created missions from localStorage
+    loadCustomMissions();
+    
+    // Load missions from local maps folder
+    await loadMissionsFromLocalFolder();
+    
     console.log("Mission Manager initialized");
 }
 
@@ -30,6 +37,176 @@ function loadCustomMissions() {
     }
 }
 
+// Load missions from local maps folder
+async function loadMissionsFromLocalFolder() {
+    try {
+        console.log("Loading missions from local maps folder...");
+        
+        // Try to load missions.json which contains the list of available missions
+        // This is a better approach than trying to list files directly
+        const missionsListUrl = MAPS_FOLDER + 'missions.json';
+        
+        let missionsList = [];
+        
+        try {
+            const response = await fetch(missionsListUrl);
+            if (response.ok) {
+                missionsList = await response.json();
+                console.log("Found missions.json with", missionsList.length, "missions");
+            } else {
+                // If missions.json doesn't exist, try to auto-discover .json files
+                console.log("missions.json not found, trying to discover mission files...");
+                missionsList = await discoverMissionFiles();
+            }
+        } catch (error) {
+            console.log("Error loading missions.json, trying discovery:", error.message);
+            missionsList = await discoverMissionFiles();
+        }
+        
+        // Load each mission from the list
+        localMissions = [];
+        
+        for (const missionInfo of missionsList) {
+            try {
+                const missionUrl = MAPS_FOLDER + missionInfo.file;
+                const missionResponse = await fetch(missionUrl);
+                
+                if (missionResponse.ok) {
+                    const missionData = await missionResponse.json();
+                    
+                    // Validate mission data
+                    if (isValidMission(missionData)) {
+                        // Add metadata
+                        missionData.id = 'local_' + missionInfo.file.replace('.json', '');
+                        missionData.source = 'local';
+                        missionData.fileName = missionInfo.file;
+                        missionData.filePath = missionUrl;
+                        
+                        // Add name from missionInfo if provided
+                        if (missionInfo.name && !missionData.name) {
+                            missionData.name = missionInfo.name;
+                        }
+                        
+                        // Add description from missionInfo if provided
+                        if (missionInfo.description && !missionData.story) {
+                            missionData.story = missionInfo.description;
+                        }
+                        
+                        localMissions.push(missionData);
+                        console.log(`Loaded mission: ${missionData.name}`);
+                    } else {
+                        console.warn(`Invalid mission format in ${missionInfo.file}`);
+                    }
+                } else {
+                    console.warn(`Failed to load ${missionInfo.file}: ${missionResponse.status}`);
+                }
+            } catch (error) {
+                console.error(`Error loading mission ${missionInfo.file}:`, error);
+            }
+        }
+        
+        console.log(`Successfully loaded ${localMissions.length} missions from local folder`);
+        
+        // If no missions were loaded, create a fallback
+        if (localMissions.length === 0) {
+            console.log("Creating tutorial mission...");
+            localMissions.push(createTutorialMission());
+        }
+        
+    } catch (error) {
+        console.error("Error loading missions from local folder:", error);
+        
+        // Create tutorial mission as fallback
+        localMissions = [createTutorialMission()];
+    }
+}
+
+// Try to discover mission files (simulated for GitHub Pages)
+async function discoverMissionFiles() {
+    // Since GitHub Pages doesn't allow directory listing,
+    // we need to know the mission files in advance
+    // You should create a missions.json file with the list
+    
+    // For now, let's try some common mission file names
+    const possibleMissions = [
+        { file: 'tutorial.json', name: 'Tutorial Mission' },
+        { file: 'castle_infiltration.json', name: 'Castle Infiltration' },
+        { file: 'forest_escape.json', name: 'Forest Escape' },
+        { file: 'silent_assassin.json', name: 'Silent Assassin' }
+    ];
+    
+    const discoveredMissions = [];
+    
+    // Test each possible mission file
+    for (const mission of possibleMissions) {
+        try {
+            const testResponse = await fetch(MAPS_FOLDER + mission.file);
+            if (testResponse.ok) {
+                discoveredMissions.push(mission);
+                console.log(`Found mission file: ${mission.file}`);
+            }
+        } catch (error) {
+            // File doesn't exist or other error, skip it
+        }
+    }
+    
+    return discoveredMissions;
+}
+
+// Create tutorial mission
+function createTutorialMission() {
+    return {
+        id: 'local_tutorial',
+        name: "Tutorial Mission",
+        story: "Welcome to the Stealth Game! Learn the basics:\n\n1. Use arrow keys to move\n2. Avoid guards (red squares)\n3. Collect coins (gold squares)\n4. Reach the exit (green square)\n\nStealth is key - don't get caught!",
+        goal: "escape",
+        rules: [],
+        timeLimit: 90,
+        width: 12,
+        height: 12,
+        tiles: [
+            [1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,1,1,1,1,1,1,0,0,1],
+            [1,0,0,1,0,0,0,0,1,0,0,1],
+            [1,0,0,1,0,5,5,0,1,0,0,1],
+            [1,0,0,1,0,5,5,0,1,0,0,1],
+            [1,0,0,1,0,0,0,0,1,0,0,1],
+            [1,0,0,1,1,1,1,1,1,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,3,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1]
+        ],
+        playerStart: {x: 1, y: 10},
+        exit: {x: 10, y: 10},
+        enemies: [
+            {x: 5, y: 5, type: "NORMAL"}
+        ],
+        items: [
+            {x: 6, y: 5, type: "coin"},
+            {x: 5, y: 6, type: "coin"},
+            {x: 6, y: 6, type: "coin"}
+        ],
+        difficulty: "easy",
+        source: "builtin",
+        version: "1.0"
+    };
+}
+
+// Validate mission data structure
+function isValidMission(missionData) {
+    return missionData && 
+           typeof missionData.name === 'string' &&
+           typeof missionData.width === 'number' &&
+           typeof missionData.height === 'number' &&
+           Array.isArray(missionData.tiles) &&
+           missionData.tiles.length === missionData.height &&
+           missionData.playerStart &&
+           typeof missionData.playerStart.x === 'number' &&
+           typeof missionData.playerStart.y === 'number';
+}
+
 // Save custom missions to localStorage
 function saveCustomMissions() {
     try {
@@ -42,147 +219,15 @@ function saveCustomMissions() {
     }
 }
 
-// Load missions from maps folder
-function loadAvailableMissions() {
-    // Create some default missions if maps folder doesn't exist
-    availableMissions = createDefaultMissions();
-    
-    console.log("Loaded", availableMissions.length, "available missions");
-    
-    // Try to load from external file (for future enhancement)
-    try {
-        // This would require a server or a predefined missions.js file
-        // For now, we use the default missions
-    } catch (error) {
-        console.log("Using default missions:", error.message);
-    }
-}
-
-// Create default missions
-function createDefaultMissions() {
-    return [
-        {
-            id: 'mission_castle',
-            name: "Castle Infiltration",
-            story: "Infiltrate the castle walls and steal the royal scroll.\n\nAvoid the guards patrolling the courtyard.",
-            goal: "steal",
-            rules: ["no_alert"],
-            timeLimit: 30,
-            width: 12,
-            height: 12,
-            tiles: [
-                [1,1,1,1,1,1,1,1,1,1,1,1],
-                [1,0,0,0,0,0,1,0,0,0,0,1],
-                [1,0,1,1,0,0,0,0,0,1,0,1],
-                [1,0,0,1,0,1,1,1,0,1,0,1],
-                [1,0,0,0,0,0,0,0,0,0,0,1],
-                [1,1,0,1,1,1,0,1,1,1,0,1],
-                [1,0,0,0,0,0,0,0,0,0,0,1],
-                [1,0,1,1,1,1,1,1,1,1,0,1],
-                [1,0,0,0,0,0,0,0,0,0,0,1],
-                [1,1,0,1,1,1,1,1,0,1,1,1],
-                [1,0,0,0,0,0,0,0,0,0,10,1],
-                [1,1,1,1,1,1,1,1,1,1,1,1]
-            ],
-            playerStart: {x: 1, y: 1},
-            exit: {x: 10, y: 10},
-            enemies: [
-                {x: 5, y: 5, type: "NORMAL"},
-                {x: 8, y: 3, type: "NORMAL"},
-                {x: 6, y: 8, type: "ARCHER"}
-            ],
-            items: [
-                {x: 10, y: 9, type: "scroll"},
-                {x: 3, y: 3, type: "coin"},
-                {x: 8, y: 7, type: "coin"}
-            ],
-            difficulty: "medium",
-            version: "1.0"
-        },
-        {
-            id: 'mission_forest',
-            name: "Forest Escape",
-            story: "You've been spotted! Escape through the forest while avoiding pursuit.\n\nUse the trees for cover.",
-            goal: "escape",
-            rules: ["no_kills", "time_limit"],
-            timeLimit: 20,
-            width: 10,
-            height: 10,
-            tiles: [
-                [1,1,1,1,1,1,1,1,1,1],
-                [1,0,25,0,0,26,0,0,0,1],
-                [1,0,0,25,0,0,0,26,0,1],
-                [1,0,25,0,0,0,25,0,0,1],
-                [1,0,0,0,26,0,0,0,25,1],
-                [1,0,25,0,0,0,26,0,0,1],
-                [1,0,0,0,25,0,0,0,26,1],
-                [1,0,26,0,0,0,25,0,0,1],
-                [1,0,0,0,0,0,0,0,3,1],
-                [1,1,1,1,1,1,1,1,1,1]
-            ],
-            playerStart: {x: 1, y: 1},
-            exit: {x: 8, y: 8},
-            enemies: [
-                {x: 5, y: 3, type: "NORMAL"},
-                {x: 3, y: 6, type: "SPEAR"},
-                {x: 7, y: 4, type: "ARCHER"}
-            ],
-            items: [
-                {x: 4, y: 4, type: "coin"},
-                {x: 6, y: 6, type: "coin"}
-            ],
-            difficulty: "easy",
-            version: "1.0"
-        },
-        {
-            id: 'mission_assassin',
-            name: "Silent Assassin",
-            story: "Eliminate all targets without raising the alarm.\n\nStealth kills only.",
-            goal: "kill_all",
-            rules: ["no_alert", "no_items"],
-            width: 14,
-            height: 14,
-            tiles: [
-                [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-                [1,0,0,0,0,1,0,0,0,1,0,0,0,1],
-                [1,0,1,1,0,1,0,1,0,1,0,1,0,1],
-                [1,0,1,0,0,0,0,1,0,0,0,1,0,1],
-                [1,0,1,0,1,1,1,1,1,1,0,1,0,1],
-                [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
-                [1,1,1,1,1,0,1,1,1,0,1,1,1,1],
-                [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
-                [1,0,1,1,1,1,1,1,1,1,1,1,0,1],
-                [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
-                [1,0,1,0,1,1,1,1,1,1,0,1,0,1],
-                [1,0,1,0,0,0,0,0,0,0,0,1,0,1],
-                [1,0,0,0,1,0,1,0,1,0,1,0,0,1],
-                [1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-            ],
-            playerStart: {x: 1, y: 1},
-            exit: {x: 12, y: 12},
-            enemies: [
-                {x: 4, y: 4, type: "NORMAL"},
-                {x: 9, y: 4, type: "NORMAL"},
-                {x: 6, y: 8, type: "SPEAR"},
-                {x: 8, y: 10, type: "ARCHER"},
-                {x: 11, y: 6, type: "NORMAL"}
-            ],
-            items: [],
-            difficulty: "hard",
-            version: "1.0"
-        }
-    ];
-}
-
-// Get all missions (both available and custom)
+// Get all missions (both local and custom)
 function getAllMissions() {
-    return [...availableMissions, ...customMissions];
+    return [...localMissions, ...customMissions];
 }
 
 // Get mission by ID
 function getMissionById(missionId) {
-    // Check available missions first
-    let mission = availableMissions.find(m => m.id === missionId);
+    // Check local missions first
+    let mission = localMissions.find(m => m.id === missionId);
     if (!mission) {
         // Check custom missions
         mission = customMissions.find(m => m.id === missionId);
@@ -207,19 +252,6 @@ function addCustomMission(missionData) {
     
     console.log("Added custom mission:", missionData.name);
     return missionData.id;
-}
-
-// Update a custom mission
-function updateCustomMission(missionId, missionData) {
-    const index = customMissions.findIndex(m => m.id === missionId);
-    if (index !== -1) {
-        missionData.updatedAt = new Date().toISOString();
-        customMissions[index] = { ...customMissions[index], ...missionData };
-        saveCustomMissions();
-        console.log("Updated mission:", missionId);
-        return true;
-    }
-    return false;
 }
 
 // Delete a custom mission
@@ -321,30 +353,36 @@ function loadMissionListUI() {
     if (allMissions.length === 0) {
         missionList.innerHTML = `
             <div class="empty-preview">
-                <div style="margin-bottom: 10px;">No missions available!</div>
-                <div style="font-size: 12px; color: #888;">
-                    Create your first mission using the Map Editor
+                <div style="margin-bottom: 10px;">No missions available yet!</div>
+                <div style="font-size: 12px; color: #888; text-align: left; padding: 10px;">
+                    <p>To add missions:</p>
+                    <p>1. Create mission files in the <strong>maps/</strong> folder</p>
+                    <p>2. Or use the Map Editor to create missions</p>
+                    <p>3. Or import mission files below</p>
+                    <p style="margin-top: 10px; font-size: 11px;">
+                        Mission files should be .json format and follow the mission structure.
+                    </p>
                 </div>
             </div>
         `;
         return;
     }
     
-    // Add default missions first
-    const defaultMissions = allMissions.filter(m => !m.isCustom);
+    // Group missions by source
+    const localMissionsList = allMissions.filter(m => m.source === 'local' || m.source === 'builtin');
     const customMissionsList = allMissions.filter(m => m.isCustom);
     
-    // Default missions section
-    if (defaultMissions.length > 0) {
-        const defaultSection = document.createElement('div');
-        defaultSection.className = 'mission-section';
-        defaultSection.innerHTML = '<div class="section-title">📁 DEFAULT MISSIONS</div>';
+    // Local missions section
+    if (localMissionsList.length > 0) {
+        const localSection = document.createElement('div');
+        localSection.className = 'mission-section';
+        localSection.innerHTML = '<div class="section-title">🗺️ GAME MISSIONS</div>';
         
-        defaultMissions.forEach(mission => {
-            defaultSection.appendChild(createMissionItem(mission));
+        localMissionsList.forEach(mission => {
+            localSection.appendChild(createMissionItem(mission));
         });
         
-        missionList.appendChild(defaultSection);
+        missionList.appendChild(localSection);
     }
     
     // Custom missions section
@@ -373,13 +411,21 @@ function loadMissionListUI() {
             <button class="import-btn" onclick="document.getElementById('missionFileInput').click()">
                 📥 Choose File
             </button>
+            <div style="margin-top: 15px; font-size: 12px; color: #888;">
+                <button class="refresh-btn" onclick="refreshMissionsFromFolder()" style="background: transparent; border: none; color: var(--accent); cursor: pointer; text-decoration: underline;">
+                    🔄 Refresh Mission List
+                </button>
+            </div>
         </div>
     `;
     
     missionList.appendChild(importDiv);
     
     // Set up file input handler
-    document.getElementById('missionFileInput')?.addEventListener('change', handleMissionFileUpload);
+    const fileInput = document.getElementById('missionFileInput');
+    if (fileInput) {
+        fileInput.addEventListener('change', handleMissionFileUpload);
+    }
 }
 
 // Create a mission item for the UI
@@ -402,10 +448,18 @@ function createMissionItem(mission) {
     
     const difficultyColor = difficultyColors[mission.difficulty] || '#888';
     
+    // Source indicator
+    let sourceIndicator = '';
+    if (mission.source === 'local') {
+        sourceIndicator = '<span style="background: #3366cc; color: #fff; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; margin-left: 5px;">Game</span>';
+    } else if (mission.isCustom) {
+        sourceIndicator = '<span style="background: #ff9900; color: #000; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; margin-left: 5px;">Custom</span>';
+    }
+    
     missionDiv.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: start;">
             <div>
-                <div class="mission-title">${mission.name}</div>
+                <div class="mission-title">${mission.name} ${sourceIndicator}</div>
                 <div class="mission-description">${shortStory}</div>
             </div>
             <div style="background: ${difficultyColor}; color: #000; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">
@@ -413,7 +467,7 @@ function createMissionItem(mission) {
             </div>
         </div>
         <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: #888;">
-            <div>${mission.goal.toUpperCase().replace('_', ' ')}</div>
+            <div>${mission.goal ? mission.goal.toUpperCase().replace('_', ' ') : 'ESCAPE'}</div>
             <div>${mission.width}x${mission.height}</div>
         </div>
         <div style="display: flex; gap: 5px; margin-top: 10px;">
@@ -422,6 +476,9 @@ function createMissionItem(mission) {
                 <button class="small-btn edit-btn">✏️ Edit</button>
                 <button class="small-btn delete-btn">🗑️ Delete</button>
                 <button class="small-btn export-btn">📤 Export</button>
+            ` : ''}
+            ${mission.source === 'local' && mission.fileName ? `
+                <button class="small-btn info-btn" onclick="showMissionInfo('${mission.id}')">ℹ️ Info</button>
             ` : ''}
         </div>
     `;
@@ -468,6 +525,24 @@ function createMissionItem(mission) {
     return missionDiv;
 }
 
+// Show mission info
+function showMissionInfo(missionId) {
+    const mission = getMissionById(missionId);
+    if (!mission) return;
+    
+    const infoText = `
+        Mission: ${mission.name}
+        Source: ${mission.source === 'local' ? 'Game Folder' : 'Custom'}
+        File: ${mission.fileName || 'Not saved as file'}
+        Size: ${mission.width}x${mission.height}
+        Goal: ${mission.goal || 'escape'}
+        Difficulty: ${mission.difficulty || 'medium'}
+        ${mission.timeLimit ? `Time Limit: ${mission.timeLimit} seconds` : ''}
+    `;
+    
+    alert(infoText);
+}
+
 // Handle mission file upload
 function handleMissionFileUpload(event) {
     const file = event.target.files[0];
@@ -483,6 +558,33 @@ function handleMissionFileUpload(event) {
             alert("Error importing mission: " + error.message);
             event.target.value = '';
         });
+}
+
+// Refresh missions from folder
+async function refreshMissionsFromFolder() {
+    try {
+        console.log("Refreshing missions from folder...");
+        
+        // Show loading indicator
+        const missionList = document.getElementById('missionList');
+        if (missionList) {
+            missionList.innerHTML = `
+                <div class="empty-preview">
+                    <div style="margin-bottom: 10px;">🔄 Loading missions...</div>
+                </div>
+            `;
+        }
+        
+        await loadMissionsFromLocalFolder();
+        loadMissionListUI();
+        
+        console.log("Missions refreshed");
+        alert(`Loaded ${localMissions.length} game missions and ${customMissions.length} custom missions`);
+        
+    } catch (error) {
+        console.error("Error refreshing missions:", error);
+        alert("Error refreshing missions: " + error.message);
+    }
 }
 
 // Play mission
@@ -510,7 +612,7 @@ function editMission(missionId) {
     
     // Only custom missions can be edited
     if (!mission.isCustom) {
-        alert("Default missions cannot be edited. Create a copy using the Map Editor.");
+        alert("Game missions cannot be edited. You can create a copy:\n1. Export this mission\n2. Import it back\n3. Edit the copy");
         return;
     }
     
@@ -533,7 +635,7 @@ function deleteMissionUI(missionId) {
     if (!mission) return;
     
     if (!mission.isCustom) {
-        alert("Default missions cannot be deleted.");
+        alert("Game missions cannot be deleted.");
         return;
     }
     
@@ -640,6 +742,36 @@ window.addEventListener('load', function() {
                 .mission-item {
                     padding: 15px;
                 }
+            }
+            
+            .refresh-btn {
+                background: transparent;
+                border: none;
+                color: var(--accent);
+                cursor: pointer;
+                font-size: inherit;
+                text-decoration: underline;
+                padding: 0;
+                margin: 0;
+            }
+            
+            .refresh-btn:hover {
+                color: #fff;
+            }
+            
+            .info-btn {
+                background: #3366cc !important;
+                color: white !important;
+                border-color: #4488ee !important;
+            }
+            
+            .empty-preview {
+                text-align: center;
+                padding: 40px 20px;
+                color: #888;
+                background: rgba(0, 0, 0, 0.3);
+                border-radius: 10px;
+                border: 2px dashed #444;
             }
         `;
         document.head.appendChild(style);
