@@ -4,22 +4,32 @@
 
 // Tile types matching game constants
 const TILE_TYPES = {
-    FLOOR: 0,
-    WALL: 1,
-    HIDE: 2,
+    // Walkable tiles
+    FLOOR1: 0,
+    FLOOR2: 21,
+    GRASS1: 22,
+    
+    // Not walkable (walls/obstacles)
+    WALL1: 1,
+    WALL2: 23,
+    WATER: 24,
+    TREE1: 25,
+    TREE2: 26,
+    
+    // Hiding places
+    BUSH1: 2,
+    BUSH2: 27,
+    BOX1: 28,
+    
+    // Special tiles
     EXIT: 3,
     COIN: 5,
-    TRAP: 6,
-    RICE: 7,
-    BOMB: 8,
-    GAS: 9,
-    SCROLL: 10,
-    MYSTERY_BOX: 11
+    SCROLL: 10
 };
 
 // Editor state
 let editorState = {
-    selectedTile: TILE_TYPES.WALL,
+    selectedTile: TILE_TYPES.WALL1,
     mapWidth: 12,
     mapHeight: 12,
     tiles: [],
@@ -37,27 +47,51 @@ let editorState = {
     gridVisible: true,
     showValidation: true,
     lastTile: null,
-    currentTool: 'brush'
+    currentTool: 'brush',
+    spriteCache: {},
+    currentPalette: 'tiles' // 'tiles', 'entities', 'items'
 };
 
-// Tile palette definitions
-const TILE_PALETTE = [
-    { id: TILE_TYPES.FLOOR, name: "Floor", icon: "⬜", color: "#333" },
-    { id: TILE_TYPES.WALL, name: "Wall", icon: "🧱", color: "#666" },
-    { id: TILE_TYPES.HIDE, name: "Hide Spot", icon: "👤", color: "#3333aa" },
-    { id: TILE_TYPES.EXIT, name: "Exit", icon: "🚪", color: "#0f0" },
-    { id: TILE_TYPES.COIN, name: "Coin", icon: "💰", color: "#ffd700" },
-    { id: TILE_TYPES.SCROLL, name: "Scroll", icon: "📜", color: "#9932cc" },
-    { id: TILE_TYPES.MYSTERY_BOX, name: "Mystery Box", icon: "❓", color: "#ff9900" },
-    { id: TILE_TYPES.TRAP, name: "Trap", icon: "⚠️", color: "#ff6666" },
-    { id: TILE_TYPES.RICE, name: "Rice", icon: "🍚", color: "#ffff66" },
-    { id: TILE_TYPES.BOMB, name: "Bomb", icon: "💣", color: "#ff3399" },
-    { id: TILE_TYPES.GAS, name: "Gas", icon: "💨", color: "#9932cc" },
-    { id: 'player', name: "Player Start", icon: "🥷", color: "#00d2ff" },
-    { id: 'enemy_normal', name: "Normal Guard", icon: "🔴", color: "#ff3333" },
-    { id: 'enemy_archer', name: "Archer", icon: "🏹", color: "#33cc33" },
-    { id: 'enemy_spear', name: "Spear Guard", icon: "🔱", color: "#3366ff" }
-];
+// Tile palette definitions with proper organization
+const TILE_PALETTE = {
+    // Walkable tiles
+    walkable: [
+        { id: TILE_TYPES.FLOOR1, name: "Floor 1", sprite: "floor", color: "#666666", category: "walkable" },
+        { id: TILE_TYPES.FLOOR2, name: "Floor 2", sprite: "floor2", color: "#777777", category: "walkable" },
+        { id: TILE_TYPES.GRASS1, name: "Grass", sprite: "grass", color: "#33aa33", category: "walkable" }
+    ],
+    
+    // Not walkable
+    obstacles: [
+        { id: TILE_TYPES.WALL1, name: "Wall 1", sprite: "wall", color: "#888888", category: "obstacle" },
+        { id: TILE_TYPES.WALL2, name: "Wall 2", sprite: "wall2", color: "#999999", category: "obstacle" },
+        { id: TILE_TYPES.WATER, name: "Water", sprite: "water", color: "#3366cc", category: "obstacle" },
+        { id: TILE_TYPES.TREE1, name: "Tree 1", sprite: "tree1", color: "#228822", category: "obstacle" },
+        { id: TILE_TYPES.TREE2, name: "Tree 2", sprite: "tree2", color: "#226622", category: "obstacle" }
+    ],
+    
+    // Hiding places
+    hiding: [
+        { id: TILE_TYPES.BUSH1, name: "Bush 1", sprite: "bush1", color: "#33cc33", category: "hiding" },
+        { id: TILE_TYPES.BUSH2, name: "Bush 2", sprite: "bush2", color: "#44dd44", category: "hiding" },
+        { id: TILE_TYPES.BOX1, name: "Box", sprite: "box", color: "#996633", category: "hiding" }
+    ],
+    
+    // Special tiles
+    special: [
+        { id: TILE_TYPES.EXIT, name: "Exit", sprite: "exit", color: "#00ff00", category: "special" },
+        { id: TILE_TYPES.COIN, name: "Coin", sprite: "coin", color: "#ffd700", category: "special" },
+        { id: TILE_TYPES.SCROLL, name: "Scroll", sprite: "scroll", color: "#9932cc", category: "special" }
+    ],
+    
+    // Characters (entities)
+    characters: [
+        { id: 'player', name: "Player Start", sprite: "player", color: "#00d2ff", isEntity: true },
+        { id: 'enemy_normal', name: "Normal Guard", sprite: "guard", color: "#ff3333", isEntity: true },
+        { id: 'enemy_archer', name: "Archer", sprite: "archer", color: "#33cc33", isEntity: true },
+        { id: 'enemy_spear', name: "Spear Guard", sprite: "spear", color: "#3366ff", isEntity: true }
+    ]
+};
 
 // Mission goals
 const MISSION_GOALS = [
@@ -81,6 +115,7 @@ const MISSION_RULES = [
 // DOM Elements
 let editorCanvas, editorCtx;
 let tileSize = 40;
+let loadedSprites = {};
 
 // Initialize editor
 function initMapEditor() {
@@ -99,6 +134,9 @@ function initMapEditor() {
     editorCanvas = document.getElementById('editorCanvas');
     editorCtx = editorCanvas.getContext('2d');
     
+    // Load sprites
+    loadAllSprites();
+    
     // Set up event listeners
     setupEditorEvents();
     
@@ -109,6 +147,55 @@ function initMapEditor() {
     renderEditor();
     
     console.log("Map Editor initialized");
+    
+    // Update palette display
+    updatePaletteDisplay();
+}
+
+// Load all sprites
+function loadAllSprites() {
+    // Collect all unique sprite names from palette
+    const spriteNames = new Set();
+    
+    // Check each category
+    Object.values(TILE_PALETTE).forEach(category => {
+        category.forEach(item => {
+            if (item.sprite) {
+                spriteNames.add(item.sprite);
+            }
+        });
+    });
+    
+    // Load each sprite
+    spriteNames.forEach(spriteName => {
+        const img = new Image();
+        img.src = `sprites/${spriteName}.png`;
+        img.onload = () => {
+            loadedSprites[spriteName] = img;
+            // Redraw if this was a missing sprite
+            renderEditor();
+        };
+        img.onerror = () => {
+            console.log(`Sprite not found: sprites/${spriteName}.png, using placeholder`);
+            // Create placeholder
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            
+            // Create colored placeholder based on tile type
+            ctx.fillStyle = '#333';
+            ctx.fillRect(0, 0, 64, 64);
+            
+            // Add text for debugging
+            ctx.fillStyle = '#fff';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(spriteName, 32, 32);
+            
+            loadedSprites[spriteName] = canvas;
+        };
+    });
 }
 
 // Create editor screen HTML
@@ -122,7 +209,49 @@ function createEditorScreen() {
             <!-- Left Panel - Tile Palette -->
             <div class="editor-panel editor-left">
                 <div class="editor-title">TILE PALETTE</div>
-                <div id="tilePalette" class="tile-palette"></div>
+                
+                <!-- Palette Tabs -->
+                <div class="palette-tabs">
+                    <button class="palette-tab active" onclick="switchPalette('tiles')">Tiles</button>
+                    <button class="palette-tab" onclick="switchPalette('entities')">Entities</button>
+                    <button class="palette-tab" onclick="switchPalette('items')">Items</button>
+                </div>
+                
+                <!-- Tiles Palette -->
+                <div id="tilesPalette" class="palette-content active">
+                    <div class="palette-category">
+                        <div class="category-title">Walkable</div>
+                        <div id="walkableTiles" class="tile-grid"></div>
+                    </div>
+                    <div class="palette-category">
+                        <div class="category-title">Obstacles</div>
+                        <div id="obstacleTiles" class="tile-grid"></div>
+                    </div>
+                    <div class="palette-category">
+                        <div class="category-title">Hiding Spots</div>
+                        <div id="hidingTiles" class="tile-grid"></div>
+                    </div>
+                    <div class="palette-category">
+                        <div class="category-title">Special</div>
+                        <div id="specialTiles" class="tile-grid"></div>
+                    </div>
+                </div>
+                
+                <!-- Entities Palette -->
+                <div id="entitiesPalette" class="palette-content">
+                    <div class="palette-category">
+                        <div class="category-title">Characters</div>
+                        <div id="characterTiles" class="tile-grid"></div>
+                    </div>
+                </div>
+                
+                <!-- Items Palette -->
+                <div id="itemsPalette" class="palette-content">
+                    <div class="palette-category">
+                        <div class="category-title">Collectibles</div>
+                        <div id="collectibleTiles" class="tile-grid"></div>
+                    </div>
+                </div>
                 
                 <div class="editor-title" style="margin-top: 20px;">TOOLS</div>
                 <div class="editor-tools">
@@ -171,6 +300,11 @@ function createEditorScreen() {
                     <canvas id="editorCanvas"></canvas>
                     <div class="grid-overlay" id="gridOverlay"></div>
                 </div>
+                <div class="editor-status">
+                    <div>Selected: <span id="selectedTileName">Wall 1</span></div>
+                    <div>Tool: <span id="currentToolName">Brush</span></div>
+                    <div>Position: <span id="cursorPosition">0,0</span></div>
+                </div>
                 <div class="validation-message" id="validationMessage"></div>
             </div>
             
@@ -209,6 +343,15 @@ function createEditorScreen() {
                         `).join('')}
                     </div>
                     
+                    <div class="editor-title" style="margin-top: 20px;">MAP INFO</div>
+                    <div class="map-stats" id="mapStats">
+                        <div>Player: <span id="playerStat">Not placed</span></div>
+                        <div>Exit: <span id="exitStat">Not placed</span></div>
+                        <div>Enemies: <span id="enemyStat">0</span></div>
+                        <div>Coins: <span id="coinStat">0</span></div>
+                        <div>Scrolls: <span id="scrollStat">0</span></div>
+                    </div>
+                    
                     <div class="editor-title" style="margin-top: 20px;">EXPORT</div>
                     <textarea id="jsonOutput" class="json-preview" readonly placeholder="JSON will appear here..."></textarea>
                     
@@ -226,9 +369,6 @@ function createEditorScreen() {
     `;
     
     document.body.appendChild(editorScreen);
-    
-    // Populate tile palette
-    populateTilePalette();
     
     // Set up event listeners for form inputs
     document.getElementById('missionGoalSelect').addEventListener('change', updateGoalSettings);
@@ -249,38 +389,103 @@ function createEditorScreen() {
     document.getElementById('timeLimitInput').addEventListener('input', function() {
         editorState.timeLimit = parseInt(this.value) || 20;
     });
+    
+    // Populate tile palette
+    updatePaletteDisplay();
 }
 
-// Populate tile palette
-function populateTilePalette() {
-    const palette = document.getElementById('tilePalette');
-    palette.innerHTML = '';
+// Update palette display based on current category
+function updatePaletteDisplay() {
+    // Clear all grids
+    document.getElementById('walkableTiles').innerHTML = '';
+    document.getElementById('obstacleTiles').innerHTML = '';
+    document.getElementById('hidingTiles').innerHTML = '';
+    document.getElementById('specialTiles').innerHTML = '';
+    document.getElementById('characterTiles').innerHTML = '';
+    document.getElementById('collectibleTiles').innerHTML = '';
     
-    TILE_PALETTE.forEach(tile => {
-        const tileBtn = document.createElement('div');
-        tileBtn.className = 'tile-btn';
-        tileBtn.dataset.tileId = tile.id;
-        tileBtn.title = tile.name;
-        
-        tileBtn.innerHTML = `
-            <div class="tile-icon">${tile.icon}</div>
-            <div class="tile-name">${tile.name}</div>
-        `;
-        
-        tileBtn.style.backgroundColor = tile.color + '20';
-        tileBtn.style.borderColor = tile.color;
-        
-        tileBtn.onclick = () => selectTile(tile.id);
-        
-        palette.appendChild(tileBtn);
+    // Populate walkable tiles
+    TILE_PALETTE.walkable.forEach(tile => {
+        createTileButton(tile, 'walkableTiles');
     });
     
-    // Select first tile by default
-    selectTile(TILE_TYPES.WALL);
+    // Populate obstacle tiles
+    TILE_PALETTE.obstacles.forEach(tile => {
+        createTileButton(tile, 'obstacleTiles');
+    });
+    
+    // Populate hiding tiles
+    TILE_PALETTE.hiding.forEach(tile => {
+        createTileButton(tile, 'hidingTiles');
+    });
+    
+    // Populate special tiles
+    TILE_PALETTE.special.forEach(tile => {
+        createTileButton(tile, 'specialTiles');
+    });
+    
+    // Populate characters
+    TILE_PALETTE.characters.forEach(tile => {
+        createTileButton(tile, 'characterTiles');
+    });
+    
+    // Populate collectibles (already in special, but we can add more)
+    const collectibles = TILE_PALETTE.special.filter(t => t.id === TILE_TYPES.COIN || t.id === TILE_TYPES.SCROLL);
+    collectibles.forEach(tile => {
+        createTileButton(tile, 'collectibleTiles');
+    });
+}
+
+// Create a tile button
+function createTileButton(tile, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    const tileBtn = document.createElement('div');
+    tileBtn.className = 'tile-btn';
+    tileBtn.dataset.tileId = tile.id;
+    tileBtn.title = tile.name;
+    
+    // Check if we have a sprite for this tile
+    const hasSprite = loadedSprites[tile.sprite];
+    
+    tileBtn.innerHTML = `
+        <div class="tile-icon">
+            ${hasSprite ? 
+                `<img src="${hasSprite.src || ''}" alt="${tile.name}" style="width: 32px; height: 32px;">` : 
+                `<div style="width: 32px; height: 32px; background-color: ${tile.color};"></div>`
+            }
+        </div>
+        <div class="tile-name">${tile.name}</div>
+    `;
+    
+    tileBtn.onclick = (e) => {
+        e.stopPropagation();
+        selectTile(tile.id, tile.isEntity);
+    };
+    
+    container.appendChild(tileBtn);
+}
+
+// Switch palette category
+function switchPalette(category) {
+    editorState.currentPalette = category;
+    
+    // Update active tab
+    document.querySelectorAll('.palette-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelector(`.palette-tab[onclick*="${category}"]`).classList.add('active');
+    
+    // Update active content
+    document.querySelectorAll('.palette-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(category + 'Palette').classList.add('active');
 }
 
 // Select a tile
-function selectTile(tileId) {
+function selectTile(tileId, isEntity = false) {
     editorState.selectedTile = tileId;
     
     // Update UI
@@ -293,7 +498,27 @@ function selectTile(tileId) {
         selectedBtn.classList.add('selected');
     }
     
-    console.log("Selected tile:", tileId);
+    // Update status display
+    let tileName = "Unknown";
+    if (isEntity) {
+        const entity = TILE_PALETTE.characters.find(t => t.id === tileId);
+        if (entity) tileName = entity.name;
+    } else {
+        // Search through all tile categories
+        for (const category of Object.values(TILE_PALETTE)) {
+            if (Array.isArray(category)) {
+                const tile = category.find(t => t.id === tileId);
+                if (tile) {
+                    tileName = tile.name;
+                    break;
+                }
+            }
+        }
+    }
+    
+    document.getElementById('selectedTileName').textContent = tileName;
+    
+    console.log("Selected tile:", tileId, tileName);
 }
 
 // Set editor tool
@@ -309,6 +534,9 @@ function setEditorTool(tool) {
     if (toolBtn) {
         toolBtn.classList.add('active');
     }
+    
+    // Update status
+    document.getElementById('currentToolName').textContent = tool.charAt(0).toUpperCase() + tool.slice(1);
 }
 
 // Create empty map
@@ -317,7 +545,7 @@ function createEmptyMap() {
     const height = editorState.mapHeight;
     
     // Initialize empty tiles
-    editorState.tiles = Array(height).fill().map(() => Array(width).fill(TILE_TYPES.FLOOR));
+    editorState.tiles = Array(height).fill().map(() => Array(width).fill(TILE_TYPES.FLOOR1));
     
     // Reset other data
     editorState.playerStart = null;
@@ -329,6 +557,7 @@ function createEmptyMap() {
     addBorderWalls();
     
     updateValidation();
+    updateMapStats();
 }
 
 // Add border walls
@@ -339,7 +568,7 @@ function addBorderWalls() {
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {
-                editorState.tiles[y][x] = TILE_TYPES.WALL;
+                editorState.tiles[y][x] = TILE_TYPES.WALL1;
             }
         }
     }
@@ -366,7 +595,7 @@ function randomizeWalls() {
             const hasEnemy = editorState.enemies.some(enemy => enemy.x === x && enemy.y === y);
             
             if (!hasItem && !hasEnemy) {
-                editorState.tiles[y][x] = Math.random() < 0.2 ? TILE_TYPES.WALL : TILE_TYPES.FLOOR;
+                editorState.tiles[y][x] = Math.random() < 0.2 ? TILE_TYPES.WALL1 : TILE_TYPES.FLOOR1;
             }
         }
     }
@@ -394,7 +623,7 @@ function resizeMap() {
     editorState.mapHeight = newHeight;
     
     // Create new empty tiles array
-    const newTiles = Array(newHeight).fill().map(() => Array(newWidth).fill(TILE_TYPES.FLOOR));
+    const newTiles = Array(newHeight).fill().map(() => Array(newWidth).fill(TILE_TYPES.FLOOR1));
     
     // Copy existing tiles that fit
     for (let y = 0; y < Math.min(newHeight, editorState.tiles.length); y++) {
@@ -431,6 +660,7 @@ function resizeMap() {
     
     renderEditor();
     updateValidation();
+    updateMapStats();
 }
 
 // Update canvas size
@@ -469,8 +699,8 @@ function setupEditorEvents() {
     editorCanvas.addEventListener('mouseleave', handleCanvasMouseUp);
     
     // Touch events for mobile
-    editorCanvas.addEventListener('touchstart', handleCanvasTouchStart);
-    editorCanvas.addEventListener('touchmove', handleCanvasTouchMove);
+    editorCanvas.addEventListener('touchstart', handleCanvasTouchStart, { passive: false });
+    editorCanvas.addEventListener('touchmove', handleCanvasTouchMove, { passive: false });
     editorCanvas.addEventListener('touchend', handleCanvasTouchEnd);
     editorCanvas.addEventListener('touchcancel', handleCanvasTouchEnd);
     
@@ -489,6 +719,10 @@ function setupEditorEvents() {
         updateCanvasSize();
         renderEditor();
     });
+    
+    // Update cursor position display
+    editorCanvas.addEventListener('mousemove', updateCursorPosition);
+    editorCanvas.addEventListener('touchmove', updateCursorPosition);
 }
 
 // Get canvas coordinates from mouse/touch event
@@ -513,6 +747,14 @@ function getCanvasCoordinates(event) {
     }
     
     return null;
+}
+
+// Update cursor position display
+function updateCursorPosition(e) {
+    const pos = getCanvasCoordinates(e);
+    if (pos) {
+        document.getElementById('cursorPosition').textContent = `${pos.x},${pos.y}`;
+    }
 }
 
 // Handle canvas mouse down
@@ -577,17 +819,22 @@ function placeTile(x, y) {
     
     const selected = editorState.selectedTile;
     
-    // Handle special tiles
-    if (typeof selected === 'string' && selected.startsWith('enemy_')) {
-        // Add enemy
-        const enemyType = selected.replace('enemy_', '').toUpperCase();
-        addEnemy(x, y, enemyType);
-        return;
-    } else if (selected === 'player') {
-        // Set player start
-        setPlayerStart(x, y);
-        return;
-    } else if (selected === 'erase' || editorState.currentTool === 'eraser') {
+    // Handle entity placement (player, enemies)
+    if (typeof selected === 'string') {
+        if (selected === 'player') {
+            // Set player start
+            setPlayerStart(x, y);
+            return;
+        } else if (selected.startsWith('enemy_')) {
+            // Add enemy
+            const enemyType = selected.replace('enemy_', '').toUpperCase();
+            addEnemy(x, y, enemyType);
+            return;
+        }
+    }
+    
+    // Handle tools
+    if (editorState.currentTool === 'eraser') {
         // Erase tile
         eraseTile(x, y);
         return;
@@ -604,15 +851,12 @@ function placeTile(x, y) {
     if (selected === TILE_TYPES.EXIT) {
         // Set exit position
         setExitPos(x, y);
-    } else if (selected === TILE_TYPES.SCROLL) {
-        // Add scroll item
-        addItem(x, y, 'scroll');
     } else if (selected === TILE_TYPES.COIN) {
         // Add coin item
         addItem(x, y, 'coin');
-    } else if (selected === TILE_TYPES.MYSTERY_BOX) {
-        // Add mystery box
-        addItem(x, y, 'mystery');
+    } else if (selected === TILE_TYPES.SCROLL) {
+        // Add scroll item
+        addItem(x, y, 'scroll');
     } else {
         // Regular tile
         editorState.tiles[y][x] = selected;
@@ -620,18 +864,20 @@ function placeTile(x, y) {
     
     renderEditor();
     updateValidation();
+    updateMapStats();
 }
 
 // Erase tile
 function eraseTile(x, y) {
     // Remove tile
-    editorState.tiles[y][x] = TILE_TYPES.FLOOR;
+    editorState.tiles[y][x] = TILE_TYPES.FLOOR1;
     
     // Remove any entity at this position
     removeEntityAt(x, y);
     
     renderEditor();
     updateValidation();
+    updateMapStats();
 }
 
 // Fill area with tile
@@ -665,6 +911,7 @@ function fillArea(startX, startY, tileId) {
     
     renderEditor();
     updateValidation();
+    updateMapStats();
 }
 
 // Add enemy
@@ -677,6 +924,7 @@ function addEnemy(x, y, type) {
     
     renderEditor();
     updateValidation();
+    updateMapStats();
 }
 
 // Set player start
@@ -688,6 +936,7 @@ function setPlayerStart(x, y) {
     
     renderEditor();
     updateValidation();
+    updateMapStats();
 }
 
 // Set exit position
@@ -699,6 +948,7 @@ function setExitPos(x, y) {
     
     renderEditor();
     updateValidation();
+    updateMapStats();
 }
 
 // Add item
@@ -710,6 +960,7 @@ function addItem(x, y, type) {
     
     renderEditor();
     updateValidation();
+    updateMapStats();
 }
 
 // Remove any entity at position
@@ -778,28 +1029,39 @@ function renderEditor() {
 
 // Draw a tile
 function drawTile(x, y, tileId) {
-    const paletteItem = TILE_PALETTE.find(t => t.id === tileId);
-    if (!paletteItem) return;
+    // Find tile definition
+    let tileDef = null;
+    for (const category of Object.values(TILE_PALETTE)) {
+        if (Array.isArray(category)) {
+            tileDef = category.find(t => t.id === tileId);
+            if (tileDef) break;
+        }
+    }
+    
+    if (!tileDef) {
+        tileDef = { color: '#ff00ff', name: 'Unknown' }; // Fallback
+    }
     
     const tx = x * tileSize;
     const ty = y * tileSize;
     
     // Draw tile background
-    editorCtx.fillStyle = paletteItem.color + '40';
+    editorCtx.fillStyle = tileDef.color + '40';
     editorCtx.fillRect(tx, ty, tileSize, tileSize);
     
     // Draw tile border
-    editorCtx.strokeStyle = paletteItem.color + '80';
+    editorCtx.strokeStyle = tileDef.color + '80';
     editorCtx.lineWidth = 1;
     editorCtx.strokeRect(tx, ty, tileSize, tileSize);
     
-    // Draw icon if tile has one
-    if (paletteItem.icon) {
-        editorCtx.font = `${Math.floor(tileSize * 0.5)}px Arial`;
-        editorCtx.fillStyle = paletteItem.color;
-        editorCtx.textAlign = 'center';
-        editorCtx.textBaseline = 'middle';
-        editorCtx.fillText(paletteItem.icon, tx + tileSize/2, ty + tileSize/2);
+    // Try to draw sprite if available
+    if (tileDef.sprite && loadedSprites[tileDef.sprite]) {
+        const sprite = loadedSprites[tileDef.sprite];
+        editorCtx.drawImage(sprite, tx, ty, tileSize, tileSize);
+    } else {
+        // Fallback: draw colored square
+        editorCtx.fillStyle = tileDef.color;
+        editorCtx.fillRect(tx + 2, ty + 2, tileSize - 4, tileSize - 4);
     }
 }
 
@@ -808,65 +1070,83 @@ function drawEntity(x, y, type) {
     const tx = x * tileSize;
     const ty = y * tileSize;
     
-    let icon, color;
+    let spriteName, color, isCharacter = false;
     
     switch(type) {
         case 'player':
-            icon = '🥷';
+            spriteName = 'player';
             color = '#00d2ff';
+            isCharacter = true;
             break;
         case 'exit':
-            icon = '🚪';
+            spriteName = 'exit';
             color = '#0f0';
             break;
-        case 'scroll':
-            icon = '📜';
-            color = '#9932cc';
-            break;
         case 'coin':
-            icon = '💰';
+            spriteName = 'coin';
             color = '#ffd700';
             break;
-        case 'mystery':
-            icon = '❓';
-            color = '#ff9900';
+        case 'scroll':
+            spriteName = 'scroll';
+            color = '#9932cc';
             break;
         case 'NORMAL':
-            icon = '🔴';
+            spriteName = 'guard';
             color = '#ff3333';
+            isCharacter = true;
             break;
         case 'ARCHER':
-            icon = '🏹';
+            spriteName = 'archer';
             color = '#33cc33';
+            isCharacter = true;
             break;
         case 'SPEAR':
-            icon = '🔱';
+            spriteName = 'spear';
             color = '#3366ff';
+            isCharacter = true;
             break;
         default:
-            icon = '❓';
+            spriteName = 'unknown';
             color = '#fff';
     }
     
-    // Draw background circle
-    editorCtx.fillStyle = color + '40';
-    editorCtx.beginPath();
-    editorCtx.arc(tx + tileSize/2, ty + tileSize/2, tileSize/2 - 2, 0, Math.PI * 2);
-    editorCtx.fill();
+    // Draw background for characters
+    if (isCharacter) {
+        editorCtx.fillStyle = color + '40';
+        editorCtx.beginPath();
+        editorCtx.arc(tx + tileSize/2, ty + tileSize/2, tileSize/2 - 2, 0, Math.PI * 2);
+        editorCtx.fill();
+        
+        editorCtx.strokeStyle = color + '80';
+        editorCtx.lineWidth = 2;
+        editorCtx.beginPath();
+        editorCtx.arc(tx + tileSize/2, ty + tileSize/2, tileSize/2 - 2, 0, Math.PI * 2);
+        editorCtx.stroke();
+    }
     
-    // Draw border
-    editorCtx.strokeStyle = color + '80';
-    editorCtx.lineWidth = 2;
-    editorCtx.beginPath();
-    editorCtx.arc(tx + tileSize/2, ty + tileSize/2, tileSize/2 - 2, 0, Math.PI * 2);
-    editorCtx.stroke();
-    
-    // Draw icon
-    editorCtx.font = `${Math.floor(tileSize * 0.5)}px Arial`;
-    editorCtx.fillStyle = color;
-    editorCtx.textAlign = 'center';
-    editorCtx.textBaseline = 'middle';
-    editorCtx.fillText(icon, tx + tileSize/2, ty + tileSize/2);
+    // Draw sprite if available
+    if (loadedSprites[spriteName]) {
+        const sprite = loadedSprites[spriteName];
+        editorCtx.drawImage(sprite, tx, ty, tileSize, tileSize);
+    } else {
+        // Fallback: draw colored circle/square
+        if (isCharacter) {
+            editorCtx.fillStyle = color;
+            editorCtx.beginPath();
+            editorCtx.arc(tx + tileSize/2, ty + tileSize/2, tileSize/3, 0, Math.PI * 2);
+            editorCtx.fill();
+        } else {
+            editorCtx.fillStyle = color;
+            editorCtx.fillRect(tx + 4, ty + 4, tileSize - 8, tileSize - 8);
+        }
+        
+        // Draw type indicator
+        editorCtx.fillStyle = '#fff';
+        editorCtx.font = 'bold ' + (tileSize/3) + 'px Arial';
+        editorCtx.textAlign = 'center';
+        editorCtx.textBaseline = 'middle';
+        editorCtx.fillText(type.charAt(0), tx + tileSize/2, ty + tileSize/2);
+    }
 }
 
 // Draw grid
@@ -933,17 +1213,24 @@ function updateValidation() {
     
     // Check map connectivity (basic)
     if (editorState.playerStart && editorState.exitPos) {
-        // Simple check - are start and exit surrounded by walls?
         const startX = editorState.playerStart.x;
         const startY = editorState.playerStart.y;
         const exitX = editorState.exitPos.x;
         const exitY = editorState.exitPos.y;
         
-        if (editorState.tiles[startY][startX] === TILE_TYPES.WALL) {
-            messages.push("❌ Player start is inside a wall!");
+        // Check if start or exit are on walls
+        const isWallTile = (x, y) => {
+            const tile = editorState.tiles[y][x];
+            return tile === TILE_TYPES.WALL1 || tile === TILE_TYPES.WALL2 || 
+                   tile === TILE_TYPES.WATER || tile === TILE_TYPES.TREE1 || 
+                   tile === TILE_TYPES.TREE2;
+        };
+        
+        if (isWallTile(startX, startY)) {
+            messages.push("❌ Player start is on an impassable tile!");
         }
-        if (editorState.tiles[exitY][exitX] === TILE_TYPES.WALL) {
-            messages.push("❌ Exit is inside a wall!");
+        if (isWallTile(exitX, exitY)) {
+            messages.push("❌ Exit is on an impassable tile!");
         }
     }
     
@@ -958,6 +1245,29 @@ function updateValidation() {
     
     // Update JSON preview
     updateJSONPreview();
+}
+
+// Update map statistics
+function updateMapStats() {
+    const playerStat = document.getElementById('playerStat');
+    const exitStat = document.getElementById('exitStat');
+    const enemyStat = document.getElementById('enemyStat');
+    const coinStat = document.getElementById('coinStat');
+    const scrollStat = document.getElementById('scrollStat');
+    
+    if (playerStat) playerStat.textContent = editorState.playerStart ? 
+        `(${editorState.playerStart.x},${editorState.playerStart.y})` : 'Not placed';
+    
+    if (exitStat) exitStat.textContent = editorState.exitPos ? 
+        `(${editorState.exitPos.x},${editorState.exitPos.y})` : 'Not placed';
+    
+    if (enemyStat) enemyStat.textContent = editorState.enemies.length;
+    
+    const coinCount = editorState.items.filter(item => item.type === 'coin').length;
+    const scrollCount = editorState.items.filter(item => item.type === 'scroll').length;
+    
+    if (coinStat) coinStat.textContent = coinCount;
+    if (scrollStat) scrollStat.textContent = scrollCount;
 }
 
 // Update JSON preview
@@ -978,6 +1288,11 @@ function getMissionData() {
     // Update form values to state
     updateEditorStateFromForm();
     
+    // Convert tiles to numeric IDs
+    const exportTiles = editorState.tiles.map(row => 
+        row.map(tile => typeof tile === 'number' ? tile : TILE_TYPES.FLOOR1)
+    );
+    
     return {
         name: editorState.missionName,
         story: editorState.missionStory,
@@ -986,7 +1301,7 @@ function getMissionData() {
         timeLimit: editorState.timeLimit,
         width: editorState.mapWidth,
         height: editorState.mapHeight,
-        tiles: editorState.tiles,
+        tiles: exportTiles,
         playerStart: editorState.playerStart,
         exit: editorState.exitPos,
         enemies: editorState.enemies,
@@ -1032,18 +1347,17 @@ function exportMissionJSON() {
         const jsonString = JSON.stringify(missionData, null, 2);
         
         // Copy to clipboard
-        navigator.clipboard.writeText(jsonString).then(() => {
-            alert("Mission JSON copied to clipboard!\n\nYou can save it as a .json file and load it in the game.");
-        }).catch(err => {
-            // Fallback if clipboard fails
-            const textArea = document.createElement('textarea');
-            textArea.value = jsonString;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            alert("Mission JSON copied to clipboard!");
-        });
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(jsonString).then(() => {
+                alert("Mission JSON copied to clipboard!\n\nYou can save it as a .json file and load it in the game.");
+            }).catch(err => {
+                // Fallback if clipboard fails
+                copyToClipboardFallback(jsonString);
+            });
+        } else {
+            // Fallback for non-HTTPS or older browsers
+            copyToClipboardFallback(jsonString);
+        }
         
         // Also show in textarea
         const jsonOutput = document.getElementById('jsonOutput');
@@ -1054,6 +1368,25 @@ function exportMissionJSON() {
     } catch (error) {
         alert("Error exporting mission: " + error.message);
     }
+}
+
+// Fallback clipboard copy
+function copyToClipboardFallback(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.select();
+    
+    try {
+        document.execCommand('copy');
+        alert("Mission JSON copied to clipboard!");
+    } catch (err) {
+        alert("Failed to copy to clipboard. Please copy the JSON from the textarea below.");
+    }
+    
+    document.body.removeChild(textArea);
 }
 
 // Import mission from JSON
@@ -1086,11 +1419,11 @@ function loadMissionData(data) {
     document.getElementById('mapHeightInput').value = editorState.mapHeight;
     
     // Load tiles
-    editorState.tiles = Array(editorState.mapHeight).fill().map(() => Array(editorState.mapWidth).fill(TILE_TYPES.FLOOR));
+    editorState.tiles = Array(editorState.mapHeight).fill().map(() => Array(editorState.mapWidth).fill(TILE_TYPES.FLOOR1));
     
     for (let y = 0; y < Math.min(editorState.mapHeight, data.tiles.length); y++) {
         for (let x = 0; x < Math.min(editorState.mapWidth, data.tiles[y].length); x++) {
-            editorState.tiles[y][x] = data.tiles[y][x] || TILE_TYPES.FLOOR;
+            editorState.tiles[y][x] = data.tiles[y][x] || TILE_TYPES.FLOOR1;
         }
     }
     
@@ -1123,6 +1456,7 @@ function loadMissionData(data) {
     updateCanvasSize();
     renderEditor();
     updateValidation();
+    updateMapStats();
 }
 
 // Save to localStorage
@@ -1190,4 +1524,181 @@ window.addEventListener('load', function() {
     window.showMapEditor = initMapEditor;
     
     console.log("Map Editor loaded and ready");
+    
+    // Add CSS for new editor components
+    if (!document.querySelector('style#editor-styles')) {
+        const style = document.createElement('style');
+        style.id = 'editor-styles';
+        style.textContent = `
+            .palette-tabs {
+                display: flex;
+                margin-bottom: 10px;
+                border-bottom: 1px solid #444;
+            }
+            
+            .palette-tab {
+                flex: 1;
+                background: #222;
+                border: none;
+                border-bottom: 2px solid transparent;
+                color: #aaa;
+                padding: 8px;
+                cursor: pointer;
+                transition: all 0.2s;
+                font-size: 12px;
+                text-align: center;
+            }
+            
+            .palette-tab:hover {
+                background: #2a2a2a;
+                color: #ccc;
+            }
+            
+            .palette-tab.active {
+                border-bottom-color: var(--accent);
+                color: #fff;
+                background: #2a1a1a;
+            }
+            
+            .palette-content {
+                display: none;
+                max-height: 300px;
+                overflow-y: auto;
+            }
+            
+            .palette-content.active {
+                display: block;
+            }
+            
+            .palette-category {
+                margin-bottom: 15px;
+            }
+            
+            .category-title {
+                font-size: 11px;
+                color: var(--accent);
+                margin-bottom: 5px;
+                padding-left: 5px;
+                border-left: 2px solid var(--accent);
+            }
+            
+            .tile-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 5px;
+                margin-bottom: 10px;
+            }
+            
+            .tile-grid .tile-btn {
+                min-height: 60px;
+                padding: 8px 4px;
+            }
+            
+            .tile-grid .tile-icon img {
+                width: 24px;
+                height: 24px;
+                object-fit: contain;
+            }
+            
+            .tile-grid .tile-name {
+                font-size: 9px;
+                margin-top: 3px;
+            }
+            
+            .editor-status {
+                background: rgba(0, 0, 0, 0.3);
+                padding: 8px;
+                border-radius: 6px;
+                margin-top: 10px;
+                font-size: 12px;
+                display: flex;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            
+            .editor-status div {
+                color: #aaa;
+            }
+            
+            .editor-status span {
+                color: #fff;
+                font-weight: bold;
+            }
+            
+            .map-stats {
+                background: rgba(0, 0, 0, 0.3);
+                padding: 10px;
+                border-radius: 6px;
+                font-size: 12px;
+            }
+            
+            .map-stats div {
+                margin-bottom: 5px;
+                display: flex;
+                justify-content: space-between;
+            }
+            
+            .map-stats div:last-child {
+                margin-bottom: 0;
+            }
+            
+            .map-stats span {
+                color: var(--green);
+                font-weight: bold;
+            }
+            
+            /* Mobile optimizations */
+            @media (max-width: 768px) {
+                .editor-container {
+                    flex-direction: column;
+                }
+                
+                .editor-left, .editor-right {
+                    width: 100%;
+                    max-height: 300px;
+                }
+                
+                .editor-center {
+                    min-height: 300px;
+                }
+                
+                .tile-grid {
+                    grid-template-columns: repeat(4, 1fr);
+                }
+                
+                .editor-tools {
+                    grid-template-columns: repeat(6, 1fr);
+                }
+                
+                .editor-actions {
+                    grid-template-columns: repeat(3, 1fr);
+                }
+                
+                .editor-status {
+                    flex-direction: column;
+                    gap: 5px;
+                }
+            }
+            
+            /* Touch optimizations */
+            .tile-btn:active,
+            .tool-btn-small:active,
+            .editor-action-btn:active {
+                transform: scale(0.95);
+                transition: transform 0.1s;
+            }
+            
+            /* Better scrollbars for mobile */
+            .palette-content::-webkit-scrollbar {
+                width: 4px;
+            }
+            
+            .palette-content::-webkit-scrollbar-thumb {
+                background: var(--accent);
+                border-radius: 2px;
+            }
+        `;
+        document.head.appendChild(style);
+    }
 });
