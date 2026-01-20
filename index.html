@@ -8,7 +8,6 @@
 </head>
 <body>
     <canvas id="game"></canvas>
-    
     <div id="missionLog" class="hidden"></div>
     
     <div id="ui-controls" class="hidden">
@@ -21,31 +20,13 @@
     </div>
     
     <div id="toolbar" class="hidden">
-        <div class="tool-btn" id="btnMove" onclick="setMode('move')">
-            <span>👣</span> Move
-        </div>
-        <div class="tool-btn" id="btnAttack" onclick="setMode('attack')">
-            <span>⚔️</span> Attack
-        </div>
-        <div class="tool-btn" id="btnTrap" onclick="setMode('trap')">
-            <span>⚠️</span> Trap
-            <div class="tool-count" id="trapCount">0</div>
-        </div>
-        <div class="tool-btn" id="btnRice" onclick="setMode('rice')">
-            <span>🍚</span> Rice
-            <div class="tool-count" id="riceCount">0</div>
-        </div>
-        <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')">
-            <span>💣</span> Bomb
-            <div class="tool-count" id="bombCount">0</div>
-        </div>
-        <div class="tool-btn" id="btnGas" onclick="setMode('gas')">
-            <span>💨</span> Gas
-            <div class="tool-count" id="gasCount">0</div>
-        </div>
-        <div class="tool-btn" onclick="playerWait()">
-            <span>⏳</span> Wait
-        </div>
+        <div class="tool-btn" id="btnMove" onclick="setMode('move')"><span>👣</span> Move</div>
+        <div class="tool-btn" id="btnAttack" onclick="setMode('attack')"><span>⚔️</span> Attack</div>
+        <div class="tool-btn" id="btnTrap" onclick="setMode('trap')"><span>⚠️</span> Trap<div class="tool-count" id="trapCount">0</div></div>
+        <div class="tool-btn" id="btnRice" onclick="setMode('rice')"><span>🍚</span> Rice<div class="tool-count" id="riceCount">0</div></div>
+        <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')"><span>💣</span> Bomb<div class="tool-count" id="bombCount">0</div></div>
+        <div class="tool-btn" id="btnGas" onclick="setMode('gas')"><span>💨</span> Gas<div class="tool-count" id="gasCount">0</div></div>
+        <div class="tool-btn" onclick="playerWait()"><span>⏳</span> Wait</div>
     </div>
     
     <div id="mainMenu" class="overlay-screen">
@@ -78,8 +59,8 @@
         <div class="menu-box">
             <h1>SELECT YOUR ITEMS</h1>
             
-            <div class="selected-preview" id="selectedPreview">
-                <div class="empty-preview">Click items to add to inventory</div>
+            <div id="selectedPreview" class="selected-preview">
+                <div class="empty-preview">Tap items to add them</div>
             </div>
             
             <div class="item-grid">
@@ -103,26 +84,10 @@
                     <div class="item-name">Gas</div>
                     <div class="item-count" id="gasSelCount">0</div>
                 </div>
-                <div class="item-btn" data-type="health" onclick="toggleItem('health')">
-                    <div class="item-icon">❤️</div>
-                    <div class="item-name">Heal</div>
-                    <div class="item-count" id="healthSelCount">0</div>
-                </div>
-                <div class="item-btn" data-type="coin" onclick="toggleItem('coin')">
-                    <div class="item-icon">💰</div>
-                    <div class="item-name">Coin</div>
-                    <div class="item-count" id="coinSelCount">0</div>
-                </div>
-                <div class="item-btn" data-type="sight" onclick="toggleItem('sight')">
-                    <div class="item-icon">👁️</div>
-                    <div class="item-name">Sight</div>
-                    <div class="item-count" id="sightSelCount">0</div>
-                </div>
-                <div class="item-btn" data-type="mark" onclick="toggleItem('mark')">
-                    <div class="item-icon">🎯</div>
-                    <div class="item-name">Mark</div>
-                    <div class="item-count" id="markSelCount">0</div>
-                </div>
+                <div class="item-btn" data-type="health" onclick="toggleItem('health')"><div class="item-icon">❤️</div><div class="item-name">Heal</div><div class="item-count" id="healthSelCount">0</div></div>
+                <div class="item-btn" data-type="coin" onclick="toggleItem('coin')"><div class="item-icon">💰</div><div class="item-name">Coin</div><div class="item-count" id="coinSelCount">0</div></div>
+                <div class="item-btn" data-type="sight" onclick="toggleItem('sight')"><div class="item-icon">👁️</div><div class="item-name">Sight</div><div class="item-count" id="sightSelCount">0</div></div>
+                <div class="item-btn" data-type="mark" onclick="toggleItem('mark')"><div class="item-icon">🎯</div><div class="item-name">Mark</div><div class="item-count" id="markSelCount">0</div></div>
             </div>
             
             <div class="menu-actions">
@@ -131,41 +96,9 @@
             </div>
         </div>
     </div>
-    
-    <div id="tutorialScreen" class="overlay-screen hidden">
-        <div class="tutorial-box">
-            <h1>HOW TO PLAY</h1>
-            <div class="tutorial-content">
-                <div class="tutorial-section">
-                    <h2>🎮 CONTROLS</h2>
-                    <p>• <strong>Click/Tap</strong> on tiles to move or act</p>
-                    <p>• <strong>Drag</strong> to pan; <strong>Pinch</strong> to zoom</p>
-                </div>
-                <div class="tutorial-section">
-                    <h2>🕵️ STEALTH</h2>
-                    <p>• Enemies have <strong>60° vision</strong>. Stay behind!</p>
-                    <p>• <strong>Stealth kills</strong> are instant kills.</p>
-                </div>
-            </div>
-            <button class="back-btn" onclick="hideTutorial()">BACK</button>
-        </div>
-    </div>
 
-    <div id="resultScreen" class="overlay-screen hidden">
-        <div class="result-scroll">
-            <h1>MISSION COMPLETE</h1>
-            <div class="rank-text" id="rankLabel">RANK</div>
-            <div id="statsTable"></div>
-            <button class="reload-btn" onclick="window.location.reload()">NEW MISSION</button>
-        </div>
-    </div>
-    
-    <div id="gameOverScreen" class="overlay-screen hidden">
-        <div class="result-scroll">
-            <h1>MISSION FAILED</h1>
-            <button class="reload-btn" onclick="window.location.reload()">TRY AGAIN</button>
-        </div>
-    </div>
+    <span id="totalItems" class="hidden">0</span>
+    <span id="totalTypes" class="hidden">0</span>
 
     <script src="core_main.js"></script>
 </body>
