@@ -1,9 +1,9 @@
 // ============================================
-// MISSION MANAGER - LOCAL GITHUB PAGES VERSION
+// MISSION MANAGER - LOAD ALL JSON FROM MAPS FOLDER
 // ============================================
 
 const MISSION_STORAGE_KEY = 'stealthGame_customMissions';
-const MAPS_FOLDER = 'maps/'; // Folder in the same directory
+const MAPS_FOLDER = './maps/'; // Maps folder in root directory
 let customMissions = [];
 let localMissions = [];
 
@@ -15,7 +15,7 @@ async function initMissionManager() {
     loadCustomMissions();
     
     // Load missions from local maps folder
-    await loadMissionsFromLocalFolder();
+    await loadAllJsonFilesFromMapsFolder();
     
     console.log("Mission Manager initialized");
 }
@@ -37,174 +37,232 @@ function loadCustomMissions() {
     }
 }
 
-// Load missions from local maps folder
-async function loadMissionsFromLocalFolder() {
+// Load ALL .json files from maps folder
+async function loadAllJsonFilesFromMapsFolder() {
     try {
-        console.log("Loading missions from local maps folder...");
+        console.log("Loading all JSON files from maps folder...");
         
-        // Try to load missions.json which contains the list of available missions
-        // This is a better approach than trying to list files directly
-        const missionsListUrl = MAPS_FOLDER + 'missions.json';
+        localMissions = [];
+        let loadedCount = 0;
         
-        let missionsList = [];
-        
+        // Method 1: Try to get directory listing
+        console.log("Attempting directory listing...");
         try {
-            const response = await fetch(missionsListUrl);
+            const response = await fetch(MAPS_FOLDER);
             if (response.ok) {
-                missionsList = await response.json();
-                console.log("Found missions.json with", missionsList.length, "missions");
-            } else {
-                // If missions.json doesn't exist, try to auto-discover .json files
-                console.log("missions.json not found, trying to discover mission files...");
-                missionsList = await discoverMissionFiles();
+                const html = await response.text();
+                const jsonFiles = extractJsonFilesFromHtml(html);
+                
+                if (jsonFiles.length > 0) {
+                    console.log(`Found ${jsonFiles.length} .json files via directory listing`);
+                    for (const fileName of jsonFiles) {
+                        const loaded = await loadMissionFile(fileName);
+                        if (loaded) loadedCount++;
+                    }
+                    
+                    if (loadedCount > 0) {
+                        console.log(`Successfully loaded ${loadedCount} missions`);
+                        return;
+                    }
+                }
             }
         } catch (error) {
-            console.log("Error loading missions.json, trying discovery:", error.message);
-            missionsList = await discoverMissionFiles();
+            console.log("Directory listing not available:", error.message);
         }
         
-        // Load each mission from the list
-        localMissions = [];
+        // Method 2: Probe for files
+        console.log("Probing for mission files...");
         
-        for (const missionInfo of missionsList) {
-            try {
-                const missionUrl = MAPS_FOLDER + missionInfo.file;
-                const missionResponse = await fetch(missionUrl);
+        // Try mission1.json through mission100.json
+        for (let i = 1; i <= 100; i++) {
+            const loaded = await loadMissionFile(`mission${i}.json`);
+            if (loaded) loadedCount++;
+            
+            // Stop if we haven't found any in the last 10 tries
+            if (i > 10 && loadedCount === 0) break;
+        }
+        
+        // Try other naming patterns
+        const patterns = [
+            'level', 'map', 'campaign', 'stage', 'mission_',
+            'tutorial', 'castle', 'forest', 'dungeon', 'escape'
+        ];
+        
+        for (const pattern of patterns) {
+            for (let i = 1; i <= 10; i++) {
+                const loaded = await loadMissionFile(`${pattern}${i}.json`);
+                if (loaded) loadedCount++;
                 
-                if (missionResponse.ok) {
-                    const missionData = await missionResponse.json();
-                    
-                    // Validate mission data
-                    if (isValidMission(missionData)) {
-                        // Add metadata
-                        missionData.id = 'local_' + missionInfo.file.replace('.json', '');
-                        missionData.source = 'local';
-                        missionData.fileName = missionInfo.file;
-                        missionData.filePath = missionUrl;
-                        
-                        // Add name from missionInfo if provided
-                        if (missionInfo.name && !missionData.name) {
-                            missionData.name = missionInfo.name;
-                        }
-                        
-                        // Add description from missionInfo if provided
-                        if (missionInfo.description && !missionData.story) {
-                            missionData.story = missionInfo.description;
-                        }
-                        
-                        localMissions.push(missionData);
-                        console.log(`Loaded mission: ${missionData.name}`);
-                    } else {
-                        console.warn(`Invalid mission format in ${missionInfo.file}`);
-                    }
-                } else {
-                    console.warn(`Failed to load ${missionInfo.file}: ${missionResponse.status}`);
-                }
-            } catch (error) {
-                console.error(`Error loading mission ${missionInfo.file}:`, error);
+                const loaded2 = await loadMissionFile(`${pattern}_${i}.json`);
+                if (loaded2) loadedCount++;
             }
         }
         
-        console.log(`Successfully loaded ${localMissions.length} missions from local folder`);
-        
-        // If no missions were loaded, create a fallback
-        if (localMissions.length === 0) {
-            console.log("Creating tutorial mission...");
-            localMissions.push(createTutorialMission());
-        }
+        console.log(`Total loaded: ${loadedCount} missions`);
         
     } catch (error) {
-        console.error("Error loading missions from local folder:", error);
-        
-        // Create tutorial mission as fallback
-        localMissions = [createTutorialMission()];
+        console.error("Error loading missions from folder:", error);
+        localMissions = [];
     }
 }
 
-// Try to discover mission files (simulated for GitHub Pages)
-async function discoverMissionFiles() {
-    // Since GitHub Pages doesn't allow directory listing,
-    // we need to know the mission files in advance
-    // You should create a missions.json file with the list
+// Load a single mission file
+async function loadMissionFile(fileName) {
+    try {
+        const missionUrl = MAPS_FOLDER + fileName;
+        const missionResponse = await fetch(missionUrl);
+        
+        if (missionResponse.ok) {
+            const missionData = await missionResponse.json();
+            
+            // Validate it's a mission file
+            if (isValidMission(missionData)) {
+                // Generate ID from filename
+                const missionId = 'file_' + fileName.replace('.json', '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+                
+                // Add metadata
+                missionData.id = missionId;
+                missionData.source = 'game';
+                missionData.fileName = fileName;
+                missionData.filePath = missionUrl;
+                missionData.loadedAt = new Date().toISOString();
+                
+                // If mission doesn't have a name, use filename
+                if (!missionData.name || missionData.name.trim() === '') {
+                    missionData.name = formatFileName(fileName);
+                }
+                
+                localMissions.push(missionData);
+                console.log(`✓ Loaded: ${missionData.name}`);
+                return true;
+            } else {
+                console.log(`✗ Invalid mission format: ${fileName}`);
+            }
+        }
+        return false;
+    } catch (error) {
+        return false;
+    }
+}
+
+// Extract .json files from HTML directory listing
+function extractJsonFilesFromHtml(html) {
+    const jsonFiles = [];
     
-    // For now, let's try some common mission file names
-    const possibleMissions = [
-        { file: 'tutorial.json', name: 'Tutorial Mission' },
-        { file: 'castle_infiltration.json', name: 'Castle Infiltration' },
-        { file: 'forest_escape.json', name: 'Forest Escape' },
-        { file: 'silent_assassin.json', name: 'Silent Assassin' }
+    // Try different patterns for directory listings
+    const patterns = [
+        /href="([^"]+\.json)"/gi,
+        /href='([^']+\.json)'/gi,
+        /<a[^>]*href="([^"]+\.json)"[^>]*>/gi,
+        /<a[^>]*href='([^']+\.json)'[^>]*>/gi,
+        /"([^"]+\.json)"/g,
+        /'([^']+\.json)'/g
     ];
     
-    const discoveredMissions = [];
-    
-    // Test each possible mission file
-    for (const mission of possibleMissions) {
-        try {
-            const testResponse = await fetch(MAPS_FOLDER + mission.file);
-            if (testResponse.ok) {
-                discoveredMissions.push(mission);
-                console.log(`Found mission file: ${mission.file}`);
+    for (const pattern of patterns) {
+        let match;
+        while ((match = pattern.exec(html)) !== null) {
+            const fileName = match[1];
+            if (fileName && 
+                !fileName.startsWith('http') && 
+                !fileName.startsWith('/') && 
+                !fileName.includes('?')) {
+                jsonFiles.push(fileName);
             }
-        } catch (error) {
-            // File doesn't exist or other error, skip it
         }
     }
     
-    return discoveredMissions;
+    // Remove duplicates and sort
+    return [...new Set(jsonFiles)].sort();
 }
 
-// Create tutorial mission
-function createTutorialMission() {
-    return {
-        id: 'local_tutorial',
-        name: "Tutorial Mission",
-        story: "Welcome to the Stealth Game! Learn the basics:\n\n1. Use arrow keys to move\n2. Avoid guards (red squares)\n3. Collect coins (gold squares)\n4. Reach the exit (green square)\n\nStealth is key - don't get caught!",
-        goal: "escape",
-        rules: [],
-        timeLimit: 90,
-        width: 12,
-        height: 12,
-        tiles: [
-            [1,1,1,1,1,1,1,1,1,1,1,1],
-            [1,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,1,1,1,1,1,1,0,0,1],
-            [1,0,0,1,0,0,0,0,1,0,0,1],
-            [1,0,0,1,0,5,5,0,1,0,0,1],
-            [1,0,0,1,0,5,5,0,1,0,0,1],
-            [1,0,0,1,0,0,0,0,1,0,0,1],
-            [1,0,0,1,1,1,1,1,1,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,3,1],
-            [1,1,1,1,1,1,1,1,1,1,1,1]
-        ],
-        playerStart: {x: 1, y: 10},
-        exit: {x: 10, y: 10},
-        enemies: [
-            {x: 5, y: 5, type: "NORMAL"}
-        ],
-        items: [
-            {x: 6, y: 5, type: "coin"},
-            {x: 5, y: 6, type: "coin"},
-            {x: 6, y: 6, type: "coin"}
-        ],
-        difficulty: "easy",
-        source: "builtin",
-        version: "1.0"
-    };
+// Format filename to nice display name
+function formatFileName(fileName) {
+    // Remove .json extension
+    let name = fileName.replace('.json', '');
+    
+    // Convert camelCase to spaces
+    name = name.replace(/([A-Z])/g, ' $1');
+    
+    // Convert underscores, hyphens, and dots to spaces
+    name = name.replace(/[._-]/g, ' ');
+    
+    // Capitalize first letter of each word
+    name = name.toLowerCase()
+               .split(' ')
+               .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+               .join(' ');
+    
+    // Remove extra spaces
+    name = name.replace(/\s+/g, ' ').trim();
+    
+    // If it's missionX format, make it "Mission X"
+    const missionMatch = name.match(/^Mission\s*(\d+)$/i);
+    if (missionMatch) {
+        return `Mission ${missionMatch[1]}`;
+    }
+    
+    const levelMatch = name.match(/^Level\s*(\d+)$/i);
+    if (levelMatch) {
+        return `Level ${levelMatch[1]}`;
+    }
+    
+    return name || 'Unnamed Mission';
 }
 
 // Validate mission data structure
 function isValidMission(missionData) {
-    return missionData && 
-           typeof missionData.name === 'string' &&
-           typeof missionData.width === 'number' &&
-           typeof missionData.height === 'number' &&
-           Array.isArray(missionData.tiles) &&
-           missionData.tiles.length === missionData.height &&
-           missionData.playerStart &&
-           typeof missionData.playerStart.x === 'number' &&
-           typeof missionData.playerStart.y === 'number';
+    if (!missionData || typeof missionData !== 'object') {
+        return false;
+    }
+    
+    // Check for required properties
+    const requiredProps = ['width', 'height', 'tiles', 'playerStart'];
+    for (const prop of requiredProps) {
+        if (!(prop in missionData)) {
+            console.log(`Missing property: ${prop}`);
+            return false;
+        }
+    }
+    
+    // Check types
+    if (typeof missionData.width !== 'number' || 
+        typeof missionData.height !== 'number' ||
+        missionData.width <= 0 || 
+        missionData.height <= 0) {
+        console.log('Invalid width/height');
+        return false;
+    }
+    
+    if (!Array.isArray(missionData.tiles)) {
+        console.log('Tiles is not an array');
+        return false;
+    }
+    
+    if (missionData.tiles.length !== missionData.height) {
+        console.log(`Tiles height mismatch: ${missionData.tiles.length} != ${missionData.height}`);
+        return false;
+    }
+    
+    // Check each row
+    for (let y = 0; y < missionData.tiles.length; y++) {
+        const row = missionData.tiles[y];
+        if (!Array.isArray(row) || row.length !== missionData.width) {
+            console.log(`Row ${y} invalid: ${row ? row.length : 'null'} != ${missionData.width}`);
+            return false;
+        }
+    }
+    
+    // Check player start
+    if (!missionData.playerStart || 
+        typeof missionData.playerStart.x !== 'number' || 
+        typeof missionData.playerStart.y !== 'number') {
+        console.log('Invalid player start');
+        return false;
+    }
+    
+    // Mission is valid
+    return true;
 }
 
 // Save custom missions to localStorage
@@ -219,7 +277,7 @@ function saveCustomMissions() {
     }
 }
 
-// Get all missions (both local and custom)
+// Get all missions (both from folder and custom)
 function getAllMissions() {
     return [...localMissions, ...customMissions];
 }
@@ -353,15 +411,20 @@ function loadMissionListUI() {
     if (allMissions.length === 0) {
         missionList.innerHTML = `
             <div class="empty-preview">
-                <div style="margin-bottom: 10px;">No missions available yet!</div>
+                <div style="margin-bottom: 10px;">📁 No missions found!</div>
                 <div style="font-size: 12px; color: #888; text-align: left; padding: 10px;">
                     <p>To add missions:</p>
-                    <p>1. Create mission files in the <strong>maps/</strong> folder</p>
-                    <p>2. Or use the Map Editor to create missions</p>
-                    <p>3. Or import mission files below</p>
+                    <p>1. Place .json mission files in the <strong>maps/</strong> folder</p>
+                    <p>2. Use the Map Editor to create and export missions</p>
+                    <p>3. Import mission files below</p>
                     <p style="margin-top: 10px; font-size: 11px;">
-                        Mission files should be .json format and follow the mission structure.
+                        Refresh after adding files to the maps folder.
                     </p>
+                </div>
+                <div style="margin-top: 20px;">
+                    <button class="editor-action-btn" onclick="refreshMissionsFromFolder()" style="width: 100%;">
+                        🔄 Refresh Mission List
+                    </button>
                 </div>
             </div>
         `;
@@ -369,20 +432,20 @@ function loadMissionListUI() {
     }
     
     // Group missions by source
-    const localMissionsList = allMissions.filter(m => m.source === 'local' || m.source === 'builtin');
+    const gameMissions = allMissions.filter(m => m.source === 'game');
     const customMissionsList = allMissions.filter(m => m.isCustom);
     
-    // Local missions section
-    if (localMissionsList.length > 0) {
-        const localSection = document.createElement('div');
-        localSection.className = 'mission-section';
-        localSection.innerHTML = '<div class="section-title">🗺️ GAME MISSIONS</div>';
+    // Game missions section
+    if (gameMissions.length > 0) {
+        const gameSection = document.createElement('div');
+        gameSection.className = 'mission-section';
+        gameSection.innerHTML = '<div class="section-title">🗺️ GAME MISSIONS</div>';
         
-        localMissionsList.forEach(mission => {
-            localSection.appendChild(createMissionItem(mission));
+        gameMissions.forEach(mission => {
+            gameSection.appendChild(createMissionItem(mission));
         });
         
-        missionList.appendChild(localSection);
+        missionList.appendChild(gameSection);
     }
     
     // Custom missions section
@@ -436,7 +499,7 @@ function createMissionItem(mission) {
     
     // Truncate long descriptions
     const shortStory = mission.story 
-        ? (mission.story.length > 60 ? mission.story.substring(0, 57) + '...' : mission.story)
+        ? (mission.story.length > 80 ? mission.story.substring(0, 77) + '...' : mission.story)
         : "No description";
     
     // Difficulty badge
@@ -450,7 +513,7 @@ function createMissionItem(mission) {
     
     // Source indicator
     let sourceIndicator = '';
-    if (mission.source === 'local') {
+    if (mission.source === 'game') {
         sourceIndicator = '<span style="background: #3366cc; color: #fff; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; margin-left: 5px;">Game</span>';
     } else if (mission.isCustom) {
         sourceIndicator = '<span style="background: #ff9900; color: #000; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; margin-left: 5px;">Custom</span>';
@@ -477,7 +540,7 @@ function createMissionItem(mission) {
                 <button class="small-btn delete-btn">🗑️ Delete</button>
                 <button class="small-btn export-btn">📤 Export</button>
             ` : ''}
-            ${mission.source === 'local' && mission.fileName ? `
+            ${mission.source === 'game' && mission.fileName ? `
                 <button class="small-btn info-btn" onclick="showMissionInfo('${mission.id}')">ℹ️ Info</button>
             ` : ''}
         </div>
@@ -531,14 +594,16 @@ function showMissionInfo(missionId) {
     if (!mission) return;
     
     const infoText = `
-        Mission: ${mission.name}
-        Source: ${mission.source === 'local' ? 'Game Folder' : 'Custom'}
-        File: ${mission.fileName || 'Not saved as file'}
-        Size: ${mission.width}x${mission.height}
-        Goal: ${mission.goal || 'escape'}
-        Difficulty: ${mission.difficulty || 'medium'}
-        ${mission.timeLimit ? `Time Limit: ${mission.timeLimit} seconds` : ''}
-    `;
+Mission: ${mission.name}
+Source: ${mission.source === 'game' ? 'Game Folder' : 'Custom'}
+File: ${mission.fileName || 'Not saved as file'}
+Size: ${mission.width}x${mission.height}
+Goal: ${mission.goal || 'escape'}
+Difficulty: ${mission.difficulty || 'medium'}
+${mission.timeLimit ? `Time Limit: ${mission.timeLimit} seconds` : ''}
+Enemies: ${mission.enemies ? mission.enemies.length : 0}
+Items: ${mission.items ? mission.items.length : 0}
+    `.trim();
     
     alert(infoText);
 }
@@ -575,11 +640,11 @@ async function refreshMissionsFromFolder() {
             `;
         }
         
-        await loadMissionsFromLocalFolder();
+        await loadAllJsonFilesFromMapsFolder();
         loadMissionListUI();
         
-        console.log("Missions refreshed");
-        alert(`Loaded ${localMissions.length} game missions and ${customMissions.length} custom missions`);
+        const allMissions = getAllMissions();
+        alert(`Loaded ${allMissions.length} missions total`);
         
     } catch (error) {
         console.error("Error refreshing missions:", error);
@@ -779,3 +844,7 @@ window.addEventListener('load', function() {
     
     console.log("Mission Manager loaded successfully");
 });
+
+// Make functions globally available
+window.refreshMissionsFromFolder = refreshMissionsFromFolder;
+window.showMissionInfo = showMissionInfo;
