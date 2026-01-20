@@ -9,21 +9,17 @@
 <body>
     <canvas id="game"></canvas>
     
-    <!-- Mission Log (Top Left) -->
     <div id="missionLog" class="hidden"></div>
     
-    <!-- UI Controls (Top Right) -->
     <div id="ui-controls" class="hidden">
         <button id="mapToggle" onclick="toggleMinimap()">Toggle Map</button>
     </div>
     
-    <!-- Status Circle -->
     <div id="playerStatus" class="status-circle stealth hidden">
         <div class="status-emoji">🥷</div>
         <div class="status-glow"></div>
     </div>
     
-    <!-- Toolbar -->
     <div id="toolbar" class="hidden">
         <div class="tool-btn" id="btnMove" onclick="setMode('move')">
             <span>👣</span> Move
@@ -52,7 +48,6 @@
         </div>
     </div>
     
-    <!-- SCREEN 1: MAIN MENU -->
     <div id="mainMenu" class="overlay-screen">
         <div class="menu-box">
             <h1>STEALTH GAME</h1>
@@ -82,7 +77,6 @@
         </div>
     </div>
     
-    <!-- SCREEN 2: ITEM SELECTION -->
     <div id="itemSelection" class="overlay-screen hidden">
         <div class="menu-box" style="max-width: 600px;">
             <h1>SELECT YOUR ITEMS</h1>
@@ -91,14 +85,11 @@
                 <span id="totalTypes">0</span>/3 types
             </div>
             
-            <!-- Selected Items Preview -->
             <div class="selected-preview" id="selectedPreview">
                 <div class="empty-preview">Click items below to add them to your inventory</div>
             </div>
             
-            <!-- Item Grid -->
             <div class="item-grid">
-                <!-- Row 1 -->
                 <div class="item-btn" data-type="trap" onclick="toggleItem('trap')">
                     <div class="item-icon">⚠️</div>
                     <div class="item-name">Trap</div>
@@ -119,8 +110,6 @@
                     <div class="item-name">Gas</div>
                     <div class="item-count" id="gasSelCount">0</div>
                 </div>
-                
-                <!-- Row 2 -->
                 <div class="item-btn" data-type="health" onclick="toggleItem('health')">
                     <div class="item-icon">❤️</div>
                     <div class="item-name">Heal</div>
@@ -150,59 +139,25 @@
         </div>
     </div>
     
-    <!-- SCREEN 3: TUTORIAL -->
     <div id="tutorialScreen" class="overlay-screen hidden">
         <div class="tutorial-box">
             <h1>HOW TO PLAY</h1>
-            
             <div class="tutorial-content">
                 <div class="tutorial-section">
                     <h2>🎮 CONTROLS</h2>
                     <p>• <strong>Click/Tap</strong> on highlighted tiles to move, attack, or use items</p>
-                    <p>• <strong>Drag</strong> to pan the camera around the map</p>
-                    <p>• <strong>Pinch/Pull</strong> to zoom in and out</p>
+                    <p>• <strong>Drag</strong> to pan the camera; <strong>Pinch</strong> to zoom</p>
                 </div>
-                
                 <div class="tutorial-section">
-                    <h2>🕵️ STEALTH MECHANICS</h2>
-                    <p>• Move up to <strong>3 tiles</strong> per turn</p>
-                    <p>• Hide in <strong>shadow tiles</strong> to become invisible to enemies</p>
-                    <p>• Enemies have <strong>60° cone vision</strong> - stay out of their line of sight</p>
-                    <p>• <strong>Stealth kills</strong> are instant if enemy can't see you</p>
-                </div>
-                
-                <div class="tutorial-section">
-                    <h2>⚔️ COMBAT</h2>
-                    <p>• <strong>Normal attacks</strong> trigger combat if enemy can see you</p>
-                    <p>• <strong>Stealth kills</strong> don't trigger combat (instant kill)</p>
-                    <p>• <strong>Sleeping enemies</strong> can be instantly killed</p>
-                    <p>• When spotted, enemies will chase you for several turns</p>
-                </div>
-                
-                <div class="tutorial-section">
-                    <h2>🎯 ITEMS</h2>
-                    <p>• <strong>⚠️ Trap</strong>: Instantly kills enemies that step on it</p>
-                    <p>• <strong>🍚 Rice</strong>: Enemies will eat it and die after a few turns</p>
-                    <p>• <strong>💣 Bomb</strong>: Explodes after 3 turns, damages nearby enemies</p>
-                    <p>• <strong>💨 Gas</strong>: Puts enemies to sleep for several turns</p>
-                    <p>• <strong>❤️ Heal</strong>: Restores 3 HP (if implemented)</p>
-                    <p>• <strong>💰 Coin</strong>: Bonus points if collected (if implemented)</p>
-                </div>
-                
-                <div class="tutorial-section">
-                    <h2>🏆 SCORING</h2>
-                    <p>• <strong>Stealth kills</strong> give bonus points</p>
-                    <p>• <strong>Time bonus</strong>: Faster completion = more points</p>
-                    <p>• <strong>Penalty</strong>: Getting spotted reduces score</p>
-                    <p>• <strong>Ranks</strong>: Grand Master, Master Ninja, Assassin, Shinobi, Ronin, Thug</p>
+                    <h2>🕵️ STEALTH</h2>
+                    <p>• Enemies have <strong>60° cone vision</strong>. Stay behind them!</p>
+                    <p>• <strong>Stealth kills</strong> are instant if you aren't seen.</p>
                 </div>
             </div>
-            
             <button class="back-btn" onclick="hideTutorial()">BACK TO MENU</button>
         </div>
     </div>
-    
-    <!-- Victory Screen -->
+
     <div id="resultScreen" class="overlay-screen hidden">
         <div class="result-scroll">
             <h1>MISSION COMPLETE</h1>
@@ -212,61 +167,14 @@
         </div>
     </div>
     
-    <!-- Game Over Screen -->
     <div id="gameOverScreen" class="overlay-screen hidden">
         <div class="result-scroll">
             <h1>MISSION FAILED</h1>
-            <div class="fail-text">You have been defeated.<br>Better luck next time!</div>
+            <div class="fail-text">You have been defeated.</div>
             <button class="reload-btn" onclick="window.location.reload()">TRY AGAIN</button>
         </div>
     </div>
-    
-    <!-- OLD MENU (Hidden - for backward compatibility) -->
-    <div id="menu" class="overlay-screen hidden">
-        <div class="menu-box">
-            <h1>STEALTH GAME</h1>
-            <div class="menu-item">
-                <label>Map Size:</label>
-                <input type="number" id="mapSize" min="8" max="20" value="12">
-            </div>
-            <div class="menu-item">
-                <label>Guard Count:</label>
-                <input type="number" id="guardCount" min="1" max="15" value="5">
-            </div>
-            <button class="start-btn" onclick="initGame()">START MISSION</button>
-        </div>
-    </div>
-    
-    <!-- Main Game Script -->
+
     <script src="core_main.js"></script>
-    <script src="core_vfx.js"></script>
-    <script src="core_highlight.js"></script>
-    <script src="player.js"></script>
-    <script src="enemy.js"></script>
-    
-    <!-- Inline script to ensure menu loads -->
-    <script>
-        // Quick debug check
-        console.log("HTML loaded, checking functions...");
-        
-        // Check if menu functions exist
-        window.addEventListener('load', function() {
-            console.log("Page fully loaded");
-            console.log("changeMapSize function:", typeof changeMapSize);
-            console.log("showItemSelection function:", typeof showItemSelection);
-            console.log("startGame function:", typeof startGame);
-            
-            // Force show main menu on load
-            const mainMenu = document.getElementById('mainMenu');
-            const oldMenu = document.getElementById('menu');
-            if (mainMenu) {
-                console.log("Main menu found, showing it");
-                mainMenu.classList.remove('hidden');
-            }
-            if (oldMenu) {
-                oldMenu.classList.add('hidden');
-            }
-        });
-    </script>
 </body>
 </html>
