@@ -233,7 +233,7 @@ function updateToolCounts() {
 }
 
 // ============================================
-// MENU SYSTEM LOGIC
+// ENHANCED MENU SYSTEM - FIXED LOGIC
 // ============================================
 
 let selectedItems = { trap: 0, rice: 0, bomb: 0, gas: 0, health: 0, coin: 0, sight: 0, mark: 0 };
@@ -335,7 +335,7 @@ function updateSelectedPreview() {
             preview.appendChild(itemDiv);
         }
     }
-    if (!hasAny) preview.innerHTML = '<div class="empty-preview">Select up to 3 types / 5 total</div>';
+    if (!hasAny) preview.innerHTML = '<div class="empty-preview">Click items below to add</div>';
 }
 
 function startGame() {
@@ -365,7 +365,7 @@ window.addEventListener('load', () => {
     initMenu();
 });
 
-// Map buttons and item interactions to global window scope so HTML can see them
+// Exposed for HTML
 window.changeMapSize = changeMapSize;
 window.changeGuardCount = changeGuardCount;
 window.showItemSelection = showItemSelection;
