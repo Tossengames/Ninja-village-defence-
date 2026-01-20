@@ -46,7 +46,6 @@ canvas {
     padding: 10px;
     font-size: 11px;
     pointer-events: none;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
     z-index: 100;
@@ -1143,4 +1142,500 @@ input[type="number"] {
     background: #111;
     padding-top: 10px;
     margin-bottom: 0;
+}
+
+/* =========================================== */
+/* MISSION SYSTEM STYLES */
+/* =========================================== */
+
+.mission-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin: 15px 0;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+    padding: 10px;
+}
+
+.mission-item {
+    background: linear-gradient(145deg, #1a1a1a, #222);
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mission-item:hover {
+    border-color: #666;
+    transform: translateX(5px);
+}
+
+.mission-item.selected {
+    border-color: var(--accent);
+    background: linear-gradient(145deg, #2a1a1a, #331a1a);
+    box-shadow: 0 0 10px rgba(255, 51, 51, 0.4);
+}
+
+.mission-title {
+    color: var(--accent);
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.mission-description {
+    color: #aaa;
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+
+.mission-goal {
+    color: var(--green);
+    font-size: 11px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.mission-story {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 15px;
+    border-radius: 10px;
+    margin: 15px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    max-height: 200px;
+    overflow-y: auto;
+    border-left: 3px solid var(--accent);
+}
+
+#goalTracker {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 15px;
+    border-radius: 10px;
+    margin: 15px 0;
+    font-size: 13px;
+    border: 1px solid #333;
+}
+
+.goal-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.goal-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.goal-label {
+    color: #aaa;
+}
+
+.goal-status {
+    color: var(--green);
+    font-weight: bold;
+}
+
+.goal-status.failed {
+    color: var(--red);
+}
+
+.goal-status.incomplete {
+    color: #ff9900;
+}
+
+/* =========================================== */
+/* MAP EDITOR STYLES */
+/* =========================================== */
+
+#mapEditorScreen {
+    background: rgba(5, 5, 5, 0.98);
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+}
+
+.editor-container {
+    display: flex;
+    flex: 1;
+    gap: 10px;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.editor-panel {
+    background: rgba(20, 20, 20, 0.9);
+    border: 1px solid #333;
+    border-radius: 10px;
+    padding: 15px;
+    overflow-y: auto;
+}
+
+.editor-left {
+    width: 250px;
+    min-width: 200px;
+}
+
+.editor-center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.editor-right {
+    width: 300px;
+    min-width: 250px;
+}
+
+.editor-title {
+    color: var(--accent);
+    font-size: 18px;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent);
+    text-align: center;
+}
+
+/* Tile Palette */
+.tile-palette {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.tile-btn {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 70px;
+}
+
+.tile-btn:hover {
+    border-color: #666;
+    transform: translateY(-2px);
+}
+
+.tile-btn.selected {
+    border-color: var(--accent);
+    background: #2a1a1a;
+    box-shadow: 0 0 10px rgba(255, 51, 51, 0.4);
+}
+
+.tile-icon {
+    font-size: 24px;
+    margin-bottom: 5px;
+}
+
+.tile-name {
+    font-size: 10px;
+    color: #aaa;
+    text-align: center;
+}
+
+.tile-count {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: var(--accent);
+    color: #000;
+    font-size: 9px;
+    font-weight: bold;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Editor Tools */
+.editor-tools {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.tool-btn-small {
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 10px;
+}
+
+.tool-btn-small:hover {
+    background: #2a2a2a;
+    border-color: #666;
+}
+
+.tool-btn-small.active {
+    border-color: var(--blue);
+    background: #1e2a30;
+}
+
+/* Map Size Controls */
+.map-size-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.size-input {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.size-input label {
+    font-size: 11px;
+    color: #aaa;
+}
+
+.size-input input {
+    background: #222;
+    border: 1px solid #444;
+    color: #fff;
+    padding: 6px;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 14px;
+}
+
+/* Editor Canvas */
+.editor-canvas-container {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid #333;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    min-height: 300px;
+}
+
+#editorCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+
+.grid-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background-image: 
+        linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px);
+}
+
+/* Mission Info Form */
+.mission-info-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.form-group label {
+    font-size: 12px;
+    color: #aaa;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    background: #222;
+    border: 1px solid #444;
+    color: #fff;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.form-group textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+/* Rules Checklist */
+.rules-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 10px 0;
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.checkbox-item input[type="checkbox"] {
+    margin: 0;
+    width: 14px;
+    height: 14px;
+}
+
+/* JSON Preview */
+.json-preview {
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 11px;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 10px 0;
+}
+
+/* Editor Action Buttons */
+.editor-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.editor-action-btn {
+    padding: 12px;
+    background: linear-gradient(to bottom, #333, #222);
+    border: 1px solid #444;
+    color: #aaa;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.editor-action-btn:hover {
+    background: linear-gradient(to bottom, #3a3a3a, #2a2a2a);
+    color: #ccc;
+    border-color: #666;
+}
+
+.editor-action-btn.primary {
+    background: linear-gradient(to bottom, var(--accent), #cc0000);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+.editor-action-btn.primary:hover {
+    background: linear-gradient(to bottom, #ff4444, #dd0000);
+}
+
+/* Validation Messages */
+.validation-message {
+    padding: 8px;
+    border-radius: 6px;
+    margin: 10px 0;
+    font-size: 12px;
+}
+
+.validation-message.success {
+    background: rgba(0, 255, 0, 0.1);
+    border: 1px solid #0f0;
+    color: #0f0;
+}
+
+.validation-message.warning {
+    background: rgba(255, 255, 0, 0.1);
+    border: 1px solid #ff0;
+    color: #ff0;
+}
+
+.validation-message.error {
+    background: rgba(255, 0, 0, 0.1);
+    border: 1px solid #f00;
+    color: #f00;
+}
+
+/* Responsive Editor */
+@media (max-width: 1024px) {
+    .editor-container {
+        flex-direction: column;
+    }
+    
+    .editor-left,
+    .editor-right {
+        width: 100%;
+        max-height: 300px;
+    }
+    
+    .editor-center {
+        min-height: 400px;
+    }
+}
+
+@media (max-width: 768px) {
+    .tile-palette {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .editor-tools {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .editor-actions {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Mobile touch improvements */
+.tile-btn:active,
+.tool-btn-small:active,
+.editor-action-btn:active {
+    transform: scale(0.95);
+}
+
+/* Scrollbars for editor panels */
+.editor-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+.editor-panel::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+}
+
+.editor-panel::-webkit-scrollbar-thumb {
+    background: var(--accent);
+    border-radius: 3px;
 }
