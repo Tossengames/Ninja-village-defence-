@@ -84,7 +84,7 @@
     
     <!-- SCREEN 2: ITEM SELECTION -->
     <div id="itemSelection" class="overlay-screen hidden">
-        <div class="menu-box" style="max-width: 600px;">
+        <div class="menu-box">
             <h1>SELECT YOUR ITEMS</h1>
             <div class="selection-stats">
                 Selected: <span id="totalItems">0</span>/5 items, 
@@ -144,8 +144,8 @@
             </div>
             
             <div class="menu-actions">
-                <button class="menu-action-btn" onclick="backToMainMenu()">← BACK</button>
                 <button class="start-btn" onclick="startGame()" id="startGameBtn">START MISSION</button>
+                <button class="menu-action-btn" onclick="backToMainMenu()">← BACK</button>
             </div>
         </div>
     </div>
@@ -256,18 +256,7 @@
             console.log("showItemSelection function:", typeof showItemSelection);
             console.log("startGame function:", typeof startGame);
             
-            // Force show main menu on load
-            const mainMenu = document.getElementById('mainMenu');
-            const oldMenu = document.getElementById('menu');
-            if (mainMenu) {
-                console.log("Main menu found, showing it");
-                mainMenu.classList.remove('hidden');
-            }
-            if (oldMenu) {
-                oldMenu.classList.add('hidden');
-            }
-            
-            // Initialize menu
+            // Initialize menu on load
             if (typeof initMenu === 'function') {
                 initMenu();
             }
