@@ -1,4 +1,234 @@
 // ============================================
+// MISSION SYSTEM (NEW - ADDED FOR MAP EDITOR)
+// ============================================
+
+let currentMission = {
+    goal: "escape",       // escape, kill_all, steal, pacifist, time_trial, collect_all_coins
+    rules: [],           // ["no_kills", "no_items", "no_alert", "all_coins", "time_limit_X"]
+    story: "",
+    name: "Random Mission",
+    timeLimit: 0,        // turns for time trial
+    items: [],          // mission-specific items
+    coinsRequired: 0,   // for collect all coins
+    scrollPos: null     // for steal mission
+};
+
+// New tile types for mission system
+const SCROLL = 10;
+const MYSTERY_BOX = 11;
+
+// Add this function to load custom missions
+function loadMissionFromJSON(jsonData) {
+    try {
+        console.log("Loading mission from JSON:", jsonData.name);
+        
+        // Store mission data
+        currentMission.name = jsonData.name || "Custom Mission";
+        currentMission.story = jsonData.story || "";
+        currentMission.goal = jsonData.goal || "escape";
+        currentMission.rules = jsonData.rules || [];
+        currentMission.timeLimit = parseInt(jsonData.timeLimit) || 0;
+        
+        // Set map size from mission
+        mapDim = jsonData.width || 12;
+        const width = jsonData.width || 12;
+        const height = jsonData.height || 12;
+        
+        // Create empty grid
+        grid = Array.from({length: height}, () => Array(width).fill(FLOOR));
+        
+        // Place tiles from mission data
+        if (jsonData.tiles && Array.isArray(jsonData.tiles)) {
+            for(let y = 0; y < height && y < jsonData.tiles.length; y++) {
+                for(let x = 0; x < width && x < jsonData.tiles[y].length; x++) {
+                    grid[y][x] = jsonData.tiles[y][x] || FLOOR;
+                }
+            }
+        }
+        
+        // Place player
+        if (jsonData.playerStart) {
+            player.x = jsonData.playerStart.x;
+            player.y = jsonData.playerStart.y;
+            player.ax = player.x;
+            player.ay = player.y;
+        } else {
+            player.x = player.y = 1;
+            player.ax = player.ay = 1;
+        }
+        
+        // Place exit
+        if (jsonData.exit) {
+            grid[jsonData.exit.y][jsonData.exit.x] = EXIT;
+        } else {
+            grid[height-2][width-2] = EXIT;
+        }
+        
+        // Create enemies
+        enemies = [];
+        if (jsonData.enemies && Array.isArray(jsonData.enemies)) {
+            jsonData.enemies.forEach(e => {
+                if (e.x >= 0 && e.x < width && e.y >= 0 && e.y < height) {
+                    const type = e.type || 'NORMAL';
+                    const stats = ENEMY_TYPES[type] || ENEMY_TYPES.NORMAL;
+                    
+                    enemies.push({
+                        x: e.x, y: e.y,
+                        ax: e.x, ay: e.y,
+                        dir: {x: 1, y: 0},
+                        alive: true,
+                        hp: stats.hp,
+                        maxHP: stats.hp,
+                        type: type,
+                        attackRange: stats.range,
+                        damage: stats.damage,
+                        speed: stats.speed,
+                        visionRange: 3,
+                        state: 'patrolling',
+                        investigationTarget: null,
+                        investigationTurns: 0,
+                        poisonTimer: 0,
+                        hearingRange: 6,
+                        hasHeardSound: false,
+                        soundLocation: null,
+                        returnToPatrolPos: {x: e.x, y: e.y},
+                        lastSeenPlayer: null,
+                        chaseTurns: 0,
+                        chaseMemory: 5,
+                        color: stats.color,
+                        tint: stats.tint,
+                        isSleeping: false,
+                        sleepTimer: 0,
+                        ateRice: false,
+                        riceDeathTimer: Math.floor(Math.random() * 5) + 1
+                    });
+                }
+            });
+        }
+        
+        // Place items (coins, scrolls, etc.)
+        if (jsonData.items && Array.isArray(jsonData.items)) {
+            jsonData.items.forEach(item => {
+                if (item.x >= 0 && item.x < width && item.y >= 0 && item.y < height) {
+                    if (item.type === 'scroll') {
+                        grid[item.y][item.x] = SCROLL; // SCROLL tile
+                        currentMission.scrollPos = {x: item.x, y: item.y};
+                    } else if (item.type === 'coin') {
+                        grid[item.y][item.x] = COIN;
+                    } else if (item.type === 'mystery') {
+                        grid[item.y][item.x] = MYSTERY_BOX; // MYSTERY_BOX tile
+                    }
+                }
+            });
+        }
+        
+        // Count coins for "collect all coins" rule
+        currentMission.coinsRequired = jsonData.items?.filter(item => item.type === 'coin').length || 0;
+        
+        return true;
+    } catch (error) {
+        console.error("Failed to load mission:", error);
+        return false;
+    }
+}
+
+// Add this function to check mission goals
+function checkMissionGoal() {
+    switch(currentMission.goal) {
+        case "escape":
+            return hasReachedExit ? "victory" : "in_progress";
+            
+        case "kill_all":
+            const allDead = enemies.every(e => !e.alive);
+            return allDead ? "victory" : "in_progress";
+            
+        case "steal":
+            const hasScroll = currentMission.scrollPos && 
+                             player.x === currentMission.scrollPos.x && 
+                             player.y === currentMission.scrollPos.y;
+            if (!hasScroll) return "in_progress";
+            return hasReachedExit ? "victory" : "in_progress";
+            
+        case "pacifist":
+            if (stats.kills > 0) return "failure";
+            return hasReachedExit ? "victory" : "in_progress";
+            
+        case "time_trial":
+            if (turnCount > currentMission.timeLimit) return "failure";
+            return hasReachedExit ? "victory" : "in_progress";
+            
+        case "collect_all_coins":
+            if (stats.coins < currentMission.coinsRequired) return "in_progress";
+            return hasReachedExit ? "victory" : "in_progress";
+            
+        default:
+            return hasReachedExit ? "victory" : "in_progress";
+    }
+}
+
+// Add this function to update pause menu
+function updateMissionProgress() {
+    const goalTracker = document.getElementById('goalTracker');
+    if (!goalTracker) return;
+    
+    let html = '<div class="goal-item">';
+    html += `<span class="goal-label">Mission:</span>`;
+    html += `<span class="goal-status">${currentMission.name}</span>`;
+    html += '</div>';
+    
+    html += '<div class="goal-item">';
+    html += `<span class="goal-label">Objective:</span>`;
+    html += `<span class="goal-status">${currentMission.goal.toUpperCase().replace('_', ' ')}</span>`;
+    html += '</div>';
+    
+    if (currentMission.goal === 'steal' && currentMission.scrollPos) {
+        const hasScroll = player.x === currentMission.scrollPos.x && player.y === currentMission.scrollPos.y;
+        html += '<div class="goal-item">';
+        html += `<span class="goal-label">Scroll Collected:</span>`;
+        html += `<span class="goal-status ${hasScroll ? '' : 'incomplete'}">${hasScroll ? '✓' : '✗'}</span>`;
+        html += '</div>';
+    }
+    
+    if (currentMission.goal === 'collect_all_coins') {
+        html += '<div class="goal-item">';
+        html += `<span class="goal-label">Coins:</span>`;
+        html += `<span class="goal-status ${stats.coins >= currentMission.coinsRequired ? '' : 'incomplete'}">`;
+        html += `${stats.coins}/${currentMission.coinsRequired}`;
+        html += `</span>`;
+        html += '</div>';
+    }
+    
+    if (currentMission.goal === 'kill_all') {
+        const aliveCount = enemies.filter(e => e.alive).length;
+        html += '<div class="goal-item">';
+        html += `<span class="goal-label">Enemies Left:</span>`;
+        html += `<span class="goal-status ${aliveCount === 0 ? '' : 'incomplete'}">`;
+        html += `${aliveCount}`;
+        html += `</span>`;
+        html += '</div>';
+    }
+    
+    if (currentMission.goal === 'time_trial') {
+        const turnsLeft = currentMission.timeLimit - turnCount;
+        html += '<div class="goal-item">';
+        html += `<span class="goal-label">Turns Left:</span>`;
+        html += `<span class="goal-status ${turnsLeft > 0 ? '' : 'failed'}`;
+        html += `>${turnsLeft}</span>`;
+        html += '</div>';
+    }
+    
+    if (currentMission.rules.includes('no_kills')) {
+        html += '<div class="goal-item">';
+        html += `<span class="goal-label">No Kills Rule:</span>`;
+        html += `<span class="goal-status ${stats.kills === 0 ? '' : 'failed'}`;
+        html += `>${stats.kills === 0 ? '✓' : '✗'}</span>`;
+        html += '</div>';
+    }
+    
+    goalTracker.innerHTML = html;
+}
+
+// ============================================
 // MENU SYSTEM - MUST BE AT TOP
 // ============================================
 
@@ -19,6 +249,11 @@ function initMenu() {
     document.getElementById('tutorialScreen').classList.add('hidden');
     document.getElementById('menu').classList.add('hidden');
     
+    // Hide mission screens
+    document.getElementById('missionBriefingScreen').classList.add('hidden');
+    document.getElementById('customMissionsScreen').classList.add('hidden');
+    document.getElementById('pauseScreen').classList.add('hidden');
+    
     updateMenuDisplay();
 }
 
@@ -32,6 +267,9 @@ function showItemSelection() {
 
 function backToMainMenu() {
     document.getElementById('itemSelection').classList.add('hidden');
+    document.getElementById('missionBriefingScreen').classList.add('hidden');
+    document.getElementById('customMissionsScreen').classList.add('hidden');
+    document.getElementById('tutorialScreen').classList.add('hidden');
     document.getElementById('mainMenu').classList.remove('hidden');
 }
 
@@ -272,7 +510,7 @@ function getItemInfo(itemType) {
     return items[itemType] || { icon: '❓', name: 'Unknown' };
 }
 
-// Start game
+// Start game - MODIFIED FOR MISSION SYSTEM
 function startGame() {
     console.log("Starting game...");
     console.log("Map size:", mapSize);
@@ -288,8 +526,11 @@ function startGame() {
     document.getElementById('mainMenu').classList.add('hidden');
     document.getElementById('itemSelection').classList.add('hidden');
     document.getElementById('tutorialScreen').classList.add('hidden');
+    document.getElementById('missionBriefingScreen').classList.add('hidden');
+    document.getElementById('customMissionsScreen').classList.add('hidden');
+    document.getElementById('pauseScreen').classList.add('hidden');
     
-    // Initialize game
+    // Initialize game with random generation (default)
     if (typeof initGame === 'function') {
         initGame();
     } else {
@@ -297,6 +538,214 @@ function startGame() {
         alert("Game initialization error!");
     }
 }
+
+// NEW: Start custom mission
+function startCustomMission(missionData) {
+    console.log("Starting custom mission:", missionData.name);
+    
+    // Reset mission data
+    currentMission = {
+        goal: missionData.goal || "escape",
+        rules: missionData.rules || [],
+        story: missionData.story || "",
+        name: missionData.name || "Custom Mission",
+        timeLimit: parseInt(missionData.timeLimit) || 0,
+        items: missionData.items || [],
+        coinsRequired: 0,
+        scrollPos: null
+    };
+    
+    // Hide briefing screen
+    document.getElementById('missionBriefingScreen').classList.add('hidden');
+    
+    // Hide all other menus
+    document.getElementById('mainMenu').classList.add('hidden');
+    document.getElementById('itemSelection').classList.add('hidden');
+    document.getElementById('tutorialScreen').classList.add('hidden');
+    document.getElementById('customMissionsScreen').classList.add('hidden');
+    
+    // Show game UI
+    document.getElementById('toolbar').classList.remove('hidden');
+    document.getElementById('ui-controls').classList.remove('hidden');
+    document.getElementById('playerStatus').classList.remove('hidden');
+    
+    // Load the mission
+    if (loadMissionFromJSON(missionData)) {
+        // Start game loop
+        gameOver = false;
+        hasReachedExit = false;
+        playerTurn = true;
+        turnCount = 1;
+        startTime = Date.now();
+        stats = { kills: 0, coins: 0, itemsUsed: 0, timesSpotted: 0, stealthKills: 0, timeBonus: 0 };
+        
+        centerCamera();
+        updateToolCounts();
+        requestAnimationFrame(gameLoop);
+    } else {
+        alert("Failed to load mission!");
+        showCustomMissions();
+    }
+}
+
+// NEW: Show custom missions screen
+function showCustomMissions() {
+    document.getElementById('mainMenu').classList.add('hidden');
+    document.getElementById('customMissionsScreen').classList.remove('hidden');
+    
+    // Load mission list
+    loadMissionList();
+}
+
+// NEW: Show mission briefing
+function showMissionBriefing(missionData) {
+    document.getElementById('customMissionsScreen').classList.add('hidden');
+    
+    // Update briefing screen
+    document.getElementById('missionName').textContent = missionData.name || "Mission Briefing";
+    document.getElementById('missionStory').textContent = missionData.story || "No mission story provided.";
+    
+    let goalText = "";
+    switch(missionData.goal) {
+        case "escape": goalText = "Reach the exit point"; break;
+        case "kill_all": goalText = "Eliminate all enemies"; break;
+        case "steal": goalText = "Steal the scroll and escape"; break;
+        case "pacifist": goalText = "Escape without killing anyone"; break;
+        case "time_trial": goalText = `Escape within ${missionData.timeLimit || 20} turns`; break;
+        case "collect_all_coins": goalText = "Collect all coins and escape"; break;
+        default: goalText = "Reach the exit point";
+    }
+    
+    document.getElementById('missionGoal').innerHTML = `<strong>Objective:</strong> ${goalText}`;
+    
+    // Set up start button
+    const startBtn = document.getElementById('startMissionBtn');
+    startBtn.onclick = function() {
+        startCustomMission(missionData);
+    };
+    
+    document.getElementById('missionBriefingScreen').classList.remove('hidden');
+}
+
+// NEW: Load mission list
+function loadMissionList() {
+    const missionList = document.getElementById('missionList');
+    missionList.innerHTML = '<div class="empty-preview">Loading missions...</div>';
+    
+    // For now, show sample missions
+    // In a real implementation, this would load from localStorage or a server
+    const sampleMissions = [
+        {
+            name: "Castle Infiltration",
+            story: "Infiltrate the castle and steal the secret scroll from the throne room.",
+            goal: "steal",
+            rules: ["no_alert"],
+            width: 12,
+            height: 12,
+            playerStart: {x: 1, y: 1},
+            exit: {x: 10, y: 10},
+            enemies: [
+                {x: 5, y: 5, type: "NORMAL"},
+                {x: 8, y: 3, type: "ARCHER"}
+            ],
+            items: [
+                {x: 6, y: 6, type: "scroll"},
+                {x: 3, y: 3, type: "coin"}
+            ]
+        },
+        {
+            name: "Silent Assassin",
+            story: "Eliminate all targets without being detected.",
+            goal: "kill_all",
+            rules: ["no_alert", "no_items"],
+            width: 10,
+            height: 10,
+            playerStart: {x: 1, y: 1},
+            exit: {x: 8, y: 8},
+            enemies: [
+                {x: 3, y: 3, type: "NORMAL"},
+                {x: 6, y: 4, type: "NORMAL"},
+                {x: 4, y: 7, type: "SPEAR"}
+            ]
+        }
+    ];
+    
+    missionList.innerHTML = '';
+    
+    sampleMissions.forEach((mission, index) => {
+        const missionDiv = document.createElement('div');
+        missionDiv.className = 'mission-item';
+        missionDiv.onclick = () => showMissionBriefing(mission);
+        
+        missionDiv.innerHTML = `
+            <div class="mission-title">${mission.name}</div>
+            <div class="mission-description">${mission.story.substring(0, 60)}...</div>
+            <div class="mission-goal">${mission.goal.toUpperCase().replace('_', ' ')}</div>
+        `;
+        
+        missionList.appendChild(missionDiv);
+    });
+    
+    // Add "Create New" button
+    const createDiv = document.createElement('div');
+    createDiv.className = 'mission-item';
+    createDiv.style.textAlign = 'center';
+    createDiv.style.padding = '20px';
+    createDiv.onclick = showMapEditor;
+    
+    createDiv.innerHTML = `
+        <div style="font-size: 24px; margin-bottom: 10px;">🛠️</div>
+        <div class="mission-title">CREATE NEW MISSION</div>
+        <div class="mission-description">Use the Map Editor to create your own mission</div>
+    `;
+    
+    missionList.appendChild(createDiv);
+}
+
+// NEW: Show map editor
+function showMapEditor() {
+    alert("Map Editor will open in a new window/tab. This feature requires the map_editor.js script.");
+    // This will be implemented in map_editor.js
+    // For now, just show a message
+}
+
+// NEW: Pause game
+function pauseGame() {
+    if (gameOver) return;
+    
+    updateMissionProgress();
+    document.getElementById('pauseScreen').classList.remove('hidden');
+    document.getElementById('toolbar').classList.add('hidden');
+    document.getElementById('ui-controls').classList.add('hidden');
+}
+
+// NEW: Resume game
+function resumeGame() {
+    document.getElementById('pauseScreen').classList.add('hidden');
+    document.getElementById('toolbar').classList.remove('hidden');
+    document.getElementById('ui-controls').classList.remove('hidden');
+}
+
+// NEW: Check for escape key to pause
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' || e.key === 'p') {
+        if (!document.getElementById('mainMenu').classList.contains('hidden') ||
+            !document.getElementById('itemSelection').classList.contains('hidden') ||
+            !document.getElementById('tutorialScreen').classList.contains('hidden') ||
+            !document.getElementById('missionBriefingScreen').classList.contains('hidden') ||
+            !document.getElementById('customMissionsScreen').classList.contains('hidden') ||
+            !document.getElementById('resultScreen').classList.contains('hidden') ||
+            !document.getElementById('gameOverScreen').classList.contains('hidden')) {
+            return; // Don't pause if in menu
+        }
+        
+        if (!document.getElementById('pauseScreen').classList.contains('hidden')) {
+            resumeGame();
+        } else {
+            pauseGame();
+        }
+    }
+});
 
 // ============================================
 // CORE MAIN - ENGINE SETUP & GAME LOOP
@@ -382,6 +831,18 @@ function initGame() {
         console.log("Inventory set from menu:", inv);
     }
     
+    // Reset mission data for random game
+    currentMission = {
+        goal: "escape",
+        rules: [],
+        story: "",
+        name: "Random Mission",
+        timeLimit: 0,
+        items: [],
+        coinsRequired: 0,
+        scrollPos: null
+    };
+    
     hasReachedExit = false;
     playerHP = playerMaxHP;
     combatSequence = false;
@@ -414,6 +875,7 @@ function initGame() {
     // Hide result screens
     document.getElementById('resultScreen').classList.add('hidden');
     document.getElementById('gameOverScreen').classList.add('hidden');
+    document.getElementById('pauseScreen').classList.add('hidden');
     
     generateLevel(guardCount);
     centerCamera();
@@ -596,8 +1058,35 @@ function gameLoop() {
                 drawSprite('floor', x, y);
                 const c = grid[y][x];
                 if(c !== FLOOR) {
-                    const spriteMap = ['','wall','hide','exit','','coin','trap','rice','bomb','gas'];
-                    drawSprite(spriteMap[c] || '', x, y);
+                    const spriteMap = {
+                        0: '', 1: 'wall', 2: 'hide', 3: 'exit', 
+                        5: 'coin', 6: 'trap', 7: 'rice', 8: 'bomb', 
+                        9: '', 10: '', 11: ''
+                    };
+                    const spriteName = spriteMap[c];
+                    if(spriteName) {
+                        drawSprite(spriteName, x, y);
+                    } else if(c === SCROLL) {
+                        // Draw scroll as purple square
+                        ctx.fillStyle = '#9932cc';
+                        ctx.fillRect(x*TILE + 10, y*TILE + 10, TILE-20, TILE-20);
+                        ctx.fillStyle = '#fff';
+                        ctx.font = "bold 16px monospace";
+                        ctx.textAlign = "center";
+                        ctx.fillText("📜", x*TILE + TILE/2, y*TILE + TILE/2 + 5);
+                    } else if(c === MYSTERY_BOX) {
+                        // Draw mystery box
+                        ctx.fillStyle = '#ff9900';
+                        ctx.fillRect(x*TILE + 5, y*TILE + 5, TILE-10, TILE-10);
+                        ctx.fillStyle = '#000';
+                        ctx.font = "bold 16px monospace";
+                        ctx.textAlign = "center";
+                        ctx.fillText("?", x*TILE + TILE/2, y*TILE + TILE/2 + 5);
+                    } else if(c === GAS) {
+                        // Gas tile (already handled by activeGas)
+                        ctx.fillStyle = 'rgba(153, 50, 204, 0.3)';
+                        ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
+                    }
                 }
             }
         }
@@ -714,6 +1203,23 @@ function gameLoop() {
         }
         
         shake *= 0.8;
+        
+        // NEW: Check mission goal periodically
+        if(playerTurn && !combatSequence) {
+            const goalStatus = checkMissionGoal();
+            if(goalStatus === "victory") {
+                setTimeout(() => {
+                    showVictoryScreen();
+                }, 500);
+                gameOver = true;
+            } else if(goalStatus === "failure") {
+                setTimeout(() => {
+                    showGameOverScreen();
+                }, 500);
+                gameOver = true;
+            }
+        }
+        
         requestAnimationFrame(gameLoop);
     } catch (error) {
         console.error("Error in game loop:", error);
@@ -834,6 +1340,12 @@ function drawMinimap() {
                 ctx.fillRect(mx + x*ms, my + 5 + y*ms, ms, ms);
             } else if(grid[y][x] === EXIT) {
                 ctx.fillStyle = "#0f0";
+                ctx.fillRect(mx + x*ms, my + 5 + y*ms, ms, ms);
+            } else if(grid[y][x] === SCROLL) {
+                ctx.fillStyle = "#9932cc";
+                ctx.fillRect(mx + x*ms, my + 5 + y*ms, ms, ms);
+            } else if(grid[y][x] === MYSTERY_BOX) {
+                ctx.fillStyle = "#ff9900";
                 ctx.fillRect(mx + x*ms, my + 5 + y*ms, ms, ms);
             }
         }
@@ -1530,6 +2042,35 @@ window.addEventListener('load', () => {
     loadSprites();
     initAudio();
     initMenu(); // Initialize menu on load
+    
+    // Add custom missions button to main menu
+    const mainMenuActions = document.querySelector('#mainMenu .menu-actions');
+    if (mainMenuActions) {
+        // Check if button already exists
+        if (!document.querySelector('#customMissionsBtn')) {
+            const customBtn = document.createElement('button');
+            customBtn.className = 'menu-action-btn';
+            customBtn.id = 'customMissionsBtn';
+            customBtn.textContent = 'CUSTOM MISSIONS';
+            customBtn.onclick = showCustomMissions;
+            
+            const editorBtn = document.createElement('button');
+            editorBtn.className = 'menu-action-btn';
+            editorBtn.id = 'editorBtn';
+            editorBtn.textContent = 'MAP EDITOR';
+            editorBtn.onclick = showMapEditor;
+            
+            // Insert before the tutorial button
+            const tutorialBtn = mainMenuActions.querySelector('.menu-action-btn[onclick*="showTutorial"]');
+            if (tutorialBtn) {
+                mainMenuActions.insertBefore(customBtn, tutorialBtn);
+                mainMenuActions.insertBefore(editorBtn, tutorialBtn);
+            } else {
+                mainMenuActions.appendChild(customBtn);
+                mainMenuActions.appendChild(editorBtn);
+            }
+        }
+    }
 });
 
 // Export functions
@@ -1565,3 +2106,14 @@ window.showTutorial = showTutorial;
 window.hideTutorial = hideTutorial;
 window.startGame = startGame;
 window.initMenu = initMenu;
+
+// Export NEW mission functions
+window.loadMissionFromJSON = loadMissionFromJSON;
+window.checkMissionGoal = checkMissionGoal;
+window.updateMissionProgress = updateMissionProgress;
+window.showCustomMissions = showCustomMissions;
+window.showMissionBriefing = showMissionBriefing;
+window.startCustomMission = startCustomMission;
+window.pauseGame = pauseGame;
+window.resumeGame = resumeGame;
+window.showMapEditor = showMapEditor;
