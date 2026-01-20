@@ -1,27 +1,20 @@
 // ============================================
-// MAP EDITOR - FIXED VERSION
+// MAP EDITOR - MOBILE FIXED VERSION
 // ============================================
 
 // Tile types
 const TILE_TYPES = {
-    // Walkable tiles
     FLOOR1: 0,
     FLOOR2: 21,
     GRASS1: 22,
-    
-    // Not walkable
     WALL1: 1,
     WALL2: 23,
     WATER: 24,
     TREE1: 25,
     TREE2: 26,
-    
-    // Hiding places
     BUSH1: 2,
     BUSH2: 27,
     BOX1: 28,
-    
-    // Special tiles
     EXIT: 3,
     COIN: 5,
     SCROLL: 10
@@ -52,43 +45,32 @@ let editorState = {
 
 // ALL TILES IN ONE SIMPLE ARRAY
 const ALL_TILES = [
-    // Walkable
-    { id: TILE_TYPES.FLOOR1, name: "Floor 1", sprite: "floor", color: "#666666", category: "walkable" },
-    { id: TILE_TYPES.FLOOR2, name: "Floor 2", sprite: "floor2", color: "#777777", category: "walkable" },
-    { id: TILE_TYPES.GRASS1, name: "Grass", sprite: "grass", color: "#33aa33", category: "walkable" },
-    
-    // Obstacles
-    { id: TILE_TYPES.WALL1, name: "Wall 1", sprite: "wall", color: "#888888", category: "obstacle" },
-    { id: TILE_TYPES.WALL2, name: "Wall 2", sprite: "wall2", color: "#999999", category: "obstacle" },
-    { id: TILE_TYPES.WATER, name: "Water", sprite: "water", color: "#3366cc", category: "obstacle" },
-    { id: TILE_TYPES.TREE1, name: "Tree 1", sprite: "tree1", color: "#228822", category: "obstacle" },
-    { id: TILE_TYPES.TREE2, name: "Tree 2", sprite: "tree2", color: "#226622", category: "obstacle" },
-    
-    // Hiding
-    { id: TILE_TYPES.BUSH1, name: "Bush 1", sprite: "bush1", color: "#33cc33", category: "hiding" },
-    { id: TILE_TYPES.BUSH2, name: "Bush 2", sprite: "bush2", color: "#44dd44", category: "hiding" },
-    { id: TILE_TYPES.BOX1, name: "Box", sprite: "box", color: "#996633", category: "hiding" },
-    
-    // Special
-    { id: TILE_TYPES.EXIT, name: "Exit", sprite: "exit", color: "#00ff00", category: "special" },
-    { id: TILE_TYPES.COIN, name: "Coin", sprite: "coin", color: "#ffd700", category: "special" },
-    { id: TILE_TYPES.SCROLL, name: "Scroll", sprite: "scroll", color: "#9932cc", category: "special" },
-    
-    // Entities (not actual tiles, but placed as objects)
-    { id: 'player', name: "Player", sprite: "player", color: "#00d2ff", isEntity: true },
-    { id: 'enemy_normal', name: "Guard", sprite: "guard", color: "#ff3333", isEntity: true },
-    { id: 'enemy_archer', name: "Archer", sprite: "archer", color: "#33cc33", isEntity: true },
-    { id: 'enemy_spear', name: "Spear", sprite: "spear", color: "#3366ff", isEntity: true }
+    { id: TILE_TYPES.FLOOR1, name: "Floor 1", color: "#666666" },
+    { id: TILE_TYPES.FLOOR2, name: "Floor 2", color: "#777777" },
+    { id: TILE_TYPES.GRASS1, name: "Grass", color: "#33aa33" },
+    { id: TILE_TYPES.WALL1, name: "Wall 1", color: "#888888" },
+    { id: TILE_TYPES.WALL2, name: "Wall 2", color: "#999999" },
+    { id: TILE_TYPES.WATER, name: "Water", color: "#3366cc" },
+    { id: TILE_TYPES.TREE1, name: "Tree 1", color: "#228822" },
+    { id: TILE_TYPES.TREE2, name: "Tree 2", color: "#226622" },
+    { id: TILE_TYPES.BUSH1, name: "Bush 1", color: "#33cc33" },
+    { id: TILE_TYPES.BUSH2, name: "Bush 2", color: "#44dd44" },
+    { id: TILE_TYPES.BOX1, name: "Box", color: "#996633" },
+    { id: TILE_TYPES.EXIT, name: "Exit", color: "#00ff00" },
+    { id: TILE_TYPES.COIN, name: "Coin", color: "#ffd700" },
+    { id: TILE_TYPES.SCROLL, name: "Scroll", color: "#9932cc" },
+    { id: 'player', name: "Player", color: "#00d2ff", isEntity: true },
+    { id: 'enemy_normal', name: "Guard", color: "#ff3333", isEntity: true },
+    { id: 'enemy_archer', name: "Archer", color: "#33cc33", isEntity: true },
+    { id: 'enemy_spear', name: "Spear", color: "#3366ff", isEntity: true }
 ];
 
 let editorCanvas, editorCtx;
 let tileSize = 40;
-let loadedSprites = {};
+let selectedTileElement = null;
 
 // Initialize editor
 function initMapEditor() {
-    console.log("Initializing Map Editor...");
-    
     // Create editor screen if it doesn't exist
     if (!document.getElementById('mapEditorScreen')) {
         createEditorScreen();
@@ -102,22 +84,24 @@ function initMapEditor() {
     editorCanvas = document.getElementById('editorCanvas');
     editorCtx = editorCanvas.getContext('2d');
     
+    // Set canvas for mobile
+    editorCanvas.style.touchAction = 'none';
+    editorCanvas.style.userSelect = 'none';
+    
     // Set up event listeners
     setupEditorEvents();
     
     // Initialize empty map
     createEmptyMap();
     
-    // Populate tile palette - SIMPLE VERSION
+    // Populate tile palette
     populateTilePaletteSimple();
     
     // Render initial state
     renderEditor();
-    
-    console.log("Map Editor initialized");
 }
 
-// Create editor screen HTML - SIMPLIFIED
+// Create editor screen HTML
 function createEditorScreen() {
     const editorScreen = document.createElement('div');
     editorScreen.id = 'mapEditorScreen';
@@ -134,56 +118,46 @@ function createEditorScreen() {
                 
                 <div class="editor-title" style="margin-top: 20px;">TOOLS</div>
                 <div class="editor-tools">
-                    <div class="tool-btn-small active" id="toolBrush" onclick="setEditorTool('brush')">
+                    <div class="tool-btn-small active" id="toolBrush">
                         <div>🖌️</div>
                         <div>Brush</div>
                     </div>
-                    <div class="tool-btn-small" id="toolFill" onclick="setEditorTool('fill')">
+                    <div class="tool-btn-small" id="toolFill">
                         <div>🎨</div>
                         <div>Fill</div>
                     </div>
-                    <div class="tool-btn-small" id="toolEraser" onclick="setEditorTool('eraser')">
+                    <div class="tool-btn-small" id="toolEraser">
                         <div>🧹</div>
                         <div>Eraser</div>
                     </div>
-                    <div class="tool-btn-small" onclick="clearMap()">
+                    <div class="tool-btn-small" id="toolClear">
                         <div>🗑️</div>
                         <div>Clear</div>
-                    </div>
-                    <div class="tool-btn-small" onclick="randomizeWalls()">
-                        <div>🎲</div>
-                        <div>Random</div>
-                    </div>
-                    <div class="tool-btn-small" onclick="addBorderWalls()">
-                        <div>🔲</div>
-                        <div>Border</div>
                     </div>
                 </div>
                 
                 <div class="map-size-controls">
                     <div class="size-input">
-                        <label>Width (8-20):</label>
+                        <label>Width:</label>
                         <input type="number" id="mapWidthInput" min="8" max="20" value="12">
                     </div>
                     <div class="size-input">
-                        <label>Height (8-20):</label>
+                        <label>Height:</label>
                         <input type="number" id="mapHeightInput" min="8" max="20" value="12">
                     </div>
                 </div>
-                <button class="editor-action-btn" onclick="resizeMap()">RESIZE MAP</button>
+                <button class="editor-action-btn" id="resizeBtn">RESIZE MAP</button>
             </div>
             
             <!-- Center Panel - Drawing Canvas -->
             <div class="editor-center">
                 <div class="editor-canvas-container">
                     <canvas id="editorCanvas"></canvas>
-                    <div class="grid-overlay" id="gridOverlay"></div>
                 </div>
                 <div class="editor-status">
                     <div>Selected: <span id="selectedTileName">Wall 1</span></div>
                     <div>Tool: <span id="currentToolName">Brush</span></div>
                 </div>
-                <div class="validation-message" id="validationMessage"></div>
             </div>
             
             <!-- Right Panel - Mission Info -->
@@ -192,30 +166,13 @@ function createEditorScreen() {
                 <div class="mission-info-form">
                     <div class="form-group">
                         <label>Mission Name:</label>
-                        <input type="text" id="missionNameInput" value="New Mission" maxlength="30">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Mission Story:</label>
-                        <textarea id="missionStoryInput" placeholder="Enter mission briefing..."></textarea>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Goal Type:</label>
-                        <select id="missionGoalSelect">
-                            <option value="escape">Escape</option>
-                            <option value="kill_all">Kill All Enemies</option>
-                            <option value="steal">Steal Scroll</option>
-                            <option value="pacifist">Pacifist (No Kills)</option>
-                            <option value="time_trial">Time Trial</option>
-                            <option value="collect_all_coins">Collect All Coins</option>
-                        </select>
+                        <input type="text" id="missionNameInput" value="New Mission">
                     </div>
                     
                     <div class="editor-actions" style="margin-top: 20px;">
-                        <button class="editor-action-btn primary" onclick="exportMissionJSON()">📤 EXPORT JSON</button>
-                        <button class="editor-action-btn" onclick="testMission()">▶️ TEST</button>
-                        <button class="editor-action-btn" onclick="backToMainMenu()">← BACK</button>
+                        <button class="editor-action-btn primary" id="exportBtn">EXPORT JSON</button>
+                        <button class="editor-action-btn" id="testBtn">TEST</button>
+                        <button class="editor-action-btn" id="backBtn">BACK</button>
                     </div>
                 </div>
             </div>
@@ -224,85 +181,81 @@ function createEditorScreen() {
     
     document.body.appendChild(editorScreen);
     
-    // Set up form inputs
-    document.getElementById('mapWidthInput').addEventListener('change', function() {
-        editorState.mapWidth = Math.min(20, Math.max(8, parseInt(this.value) || 12));
-        this.value = editorState.mapWidth;
-    });
-    document.getElementById('mapHeightInput').addEventListener('change', function() {
-        editorState.mapHeight = Math.min(20, Math.max(8, parseInt(this.value) || 12));
-        this.value = editorState.mapHeight;
-    });
-    document.getElementById('missionNameInput').addEventListener('input', function() {
-        editorState.missionName = this.value || "New Mission";
-    });
+    // Set up button listeners
+    setupButtonListeners();
 }
 
-// SIMPLE tile palette population
+// Set up button listeners
+function setupButtonListeners() {
+    // Tool buttons
+    document.getElementById('toolBrush').onclick = () => setEditorTool('brush');
+    document.getElementById('toolFill').onclick = () => setEditorTool('fill');
+    document.getElementById('toolEraser').onclick = () => setEditorTool('eraser');
+    document.getElementById('toolClear').onclick = clearMap;
+    document.getElementById('resizeBtn').onclick = resizeMap;
+    document.getElementById('exportBtn').onclick = exportMissionJSON;
+    document.getElementById('testBtn').onclick = testMission;
+    document.getElementById('backBtn').onclick = backToMainMenu;
+    
+    // Form inputs
+    document.getElementById('mapWidthInput').onchange = function() {
+        editorState.mapWidth = Math.min(20, Math.max(8, parseInt(this.value) || 12));
+        this.value = editorState.mapWidth;
+    };
+    
+    document.getElementById('mapHeightInput').onchange = function() {
+        editorState.mapHeight = Math.min(20, Math.max(8, parseInt(this.value) || 12));
+        this.value = editorState.mapHeight;
+    };
+    
+    document.getElementById('missionNameInput').oninput = function() {
+        editorState.missionName = this.value || "New Mission";
+    };
+}
+
+// Populate tile palette
 function populateTilePaletteSimple() {
     const palette = document.getElementById('tilePalette');
-    if (!palette) {
-        console.error("Tile palette element not found!");
-        return;
-    }
+    if (!palette) return;
     
-    palette.innerHTML = ''; // Clear any existing content
-    
-    console.log("Creating", ALL_TILES.length, "tile buttons");
+    palette.innerHTML = '';
     
     ALL_TILES.forEach(tile => {
         const tileBtn = document.createElement('div');
         tileBtn.className = 'tile-btn';
         tileBtn.dataset.tileId = tile.id;
-        tileBtn.title = tile.name;
         
-        // Create a simple colored square
         tileBtn.innerHTML = `
-            <div class="tile-icon" style="background-color: ${tile.color}; width: 32px; height: 32px; margin: 0 auto 5px; border-radius: 4px;"></div>
-            <div class="tile-name" style="font-size: 10px; color: #aaa; text-align: center;">${tile.name}</div>
+            <div class="tile-icon" style="background-color: ${tile.color};"></div>
+            <div class="tile-name">${tile.name}</div>
         `;
         
-        tileBtn.style.cursor = 'pointer';
-        tileBtn.style.padding = '8px';
-        tileBtn.style.border = '2px solid #444';
-        tileBtn.style.borderRadius = '8px';
-        tileBtn.style.backgroundColor = '#222';
-        tileBtn.style.transition = 'all 0.2s';
-        
-        tileBtn.onmouseenter = function() {
-            this.style.borderColor = '#666';
-            this.style.transform = 'translateY(-2px)';
-        };
-        
-        tileBtn.onmouseleave = function() {
-            this.style.borderColor = '#444';
-            this.style.transform = 'translateY(0)';
-        };
-        
-        tileBtn.onclick = function(e) {
-            e.stopPropagation();
-            selectTile(tile.id, tile.isEntity);
+        // Add touch/click event
+        tileBtn.ontouchstart = tileBtn.onclick = function(e) {
+            if (e.cancelable) e.preventDefault();
             
-            // Update selected style
+            // Remove selection from all tiles
             document.querySelectorAll('.tile-btn').forEach(btn => {
-                btn.style.borderColor = '#444';
-                btn.style.backgroundColor = '#222';
+                btn.classList.remove('selected');
             });
-            this.style.borderColor = '#00d2ff';
-            this.style.backgroundColor = '#1e2a30';
+            
+            // Select this tile
+            this.classList.add('selected');
+            selectedTileElement = this;
+            
+            // Update editor state
+            selectTile(tile.id, tile.isEntity);
         };
         
         palette.appendChild(tileBtn);
     });
     
-    // Select first tile by default
-    if (ALL_TILES.length > 0) {
+    // Select first tile
+    const firstTile = palette.querySelector('.tile-btn');
+    if (firstTile) {
+        firstTile.classList.add('selected');
+        selectedTileElement = firstTile;
         selectTile(ALL_TILES[0].id, ALL_TILES[0].isEntity);
-        const firstBtn = palette.querySelector('.tile-btn');
-        if (firstBtn) {
-            firstBtn.style.borderColor = '#00d2ff';
-            firstBtn.style.backgroundColor = '#1e2a30';
-        }
     }
 }
 
@@ -315,12 +268,7 @@ function selectTile(tileId, isEntity = false) {
     const tileName = tile ? tile.name : "Unknown";
     
     // Update status display
-    const selectedTileName = document.getElementById('selectedTileName');
-    if (selectedTileName) {
-        selectedTileName.textContent = tileName;
-    }
-    
-    console.log("Selected:", tileName, "ID:", tileId);
+    document.getElementById('selectedTileName').textContent = tileName;
 }
 
 // Set editor tool
@@ -332,106 +280,45 @@ function setEditorTool(tool) {
         btn.classList.remove('active');
     });
     
-    const toolBtn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1));
-    if (toolBtn) {
-        toolBtn.classList.add('active');
-    }
+    document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1)).classList.add('active');
     
     // Update status
-    const toolName = document.getElementById('currentToolName');
-    if (toolName) {
-        toolName.textContent = tool.charAt(0).toUpperCase() + tool.slice(1);
-    }
+    document.getElementById('currentToolName').textContent = tool.charAt(0).toUpperCase() + tool.slice(1);
 }
 
-// Create empty map
-function createEmptyMap() {
-    const width = editorState.mapWidth;
-    const height = editorState.mapHeight;
-    
-    // Initialize empty tiles
-    editorState.tiles = Array(height).fill().map(() => Array(width).fill(TILE_TYPES.FLOOR1));
-    
-    // Reset other data
-    editorState.playerStart = null;
-    editorState.exitPos = null;
-    editorState.enemies = [];
-    editorState.items = [];
-    
-    // Add border walls
-    addBorderWalls();
-    
-    updateCanvasSize();
-}
-
-// Add border walls
-function addBorderWalls() {
-    const width = editorState.mapWidth;
-    const height = editorState.mapHeight;
-    
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {
-                editorState.tiles[y][x] = TILE_TYPES.WALL1;
-            }
-        }
-    }
-    
-    renderEditor();
-}
-
-// Update canvas size
-function updateCanvasSize() {
-    const container = document.querySelector('.editor-canvas-container');
-    if (!container || !editorCanvas) return;
-    
-    // Set canvas size to fit container
-    editorCanvas.width = container.clientWidth;
-    editorCanvas.height = container.clientHeight;
-    
-    // Calculate tile size to fit map
-    const maxTileWidth = Math.floor(editorCanvas.width / editorState.mapWidth);
-    const maxTileHeight = Math.floor(editorCanvas.height / editorState.mapHeight);
-    tileSize = Math.min(maxTileWidth, maxTileHeight, 60);
-    
-    console.log("Canvas size:", editorCanvas.width, "x", editorCanvas.height, "Tile size:", tileSize);
-}
-
-// Setup editor event listeners
+// Setup event listeners for canvas
 function setupEditorEvents() {
-    if (!editorCanvas) {
-        console.error("Editor canvas not found!");
-        return;
-    }
+    if (!editorCanvas) return;
     
-    console.log("Setting up editor events...");
+    // Prevent default touch behaviors
+    editorCanvas.addEventListener('touchstart', function(e) {
+        if (e.cancelable) e.preventDefault();
+        handleCanvasTouchStart(e);
+    }, { passive: false });
     
-    // Mouse events
+    editorCanvas.addEventListener('touchmove', function(e) {
+        if (e.cancelable) e.preventDefault();
+        handleCanvasTouchMove(e);
+    }, { passive: false });
+    
+    editorCanvas.addEventListener('touchend', function(e) {
+        if (e.cancelable) e.preventDefault();
+        handleCanvasTouchEnd(e);
+    }, { passive: false });
+    
+    // Mouse events for desktop
     editorCanvas.addEventListener('mousedown', handleCanvasMouseDown);
     editorCanvas.addEventListener('mousemove', handleCanvasMouseMove);
     editorCanvas.addEventListener('mouseup', handleCanvasMouseUp);
-    editorCanvas.addEventListener('mouseleave', handleCanvasMouseUp);
-    
-    // Touch events for mobile
-    editorCanvas.addEventListener('touchstart', handleCanvasTouchStart, { passive: false });
-    editorCanvas.addEventListener('touchmove', handleCanvasTouchMove, { passive: false });
-    editorCanvas.addEventListener('touchend', handleCanvasTouchEnd);
-    
-    // Right-click for erase
-    editorCanvas.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-        setEditorTool('eraser');
-        const pos = getCanvasCoordinates(e);
-        if (pos) placeTile(pos.x, pos.y);
-        setEditorTool('brush');
-        return false;
-    });
     
     // Window resize
     window.addEventListener('resize', function() {
         updateCanvasSize();
         renderEditor();
     });
+    
+    // Initial canvas size
+    setTimeout(updateCanvasSize, 100);
 }
 
 // Get canvas coordinates
@@ -460,11 +347,9 @@ function getCanvasCoordinates(event) {
     return null;
 }
 
-// Handle mouse down
-function handleCanvasMouseDown(e) {
-    e.preventDefault();
+// Touch handlers
+function handleCanvasTouchStart(e) {
     editorState.isDragging = true;
-    
     const pos = getCanvasCoordinates(e);
     if (pos) {
         editorState.lastTile = { x: pos.x, y: pos.y };
@@ -472,42 +357,48 @@ function handleCanvasMouseDown(e) {
     }
 }
 
-// Handle mouse move
-function handleCanvasMouseMove(e) {
-    e.preventDefault();
+function handleCanvasTouchMove(e) {
+    if (!editorState.isDragging) return;
     
     const pos = getCanvasCoordinates(e);
     if (!pos) return;
     
-    // Draw while dragging
-    if (editorState.isDragging && editorState.lastTile && 
-        (pos.x !== editorState.lastTile.x || pos.y !== editorState.lastTile.y)) {
+    if (editorState.lastTile && (pos.x !== editorState.lastTile.x || pos.y !== editorState.lastTile.y)) {
         placeTile(pos.x, pos.y);
         editorState.lastTile = { x: pos.x, y: pos.y };
     }
 }
 
-// Handle mouse up
-function handleCanvasMouseUp(e) {
-    e.preventDefault();
+function handleCanvasTouchEnd() {
     editorState.isDragging = false;
     editorState.lastTile = null;
 }
 
-// Handle touch events
-function handleCanvasTouchStart(e) {
-    e.preventDefault();
-    handleCanvasMouseDown(e.touches[0]);
+// Mouse handlers
+function handleCanvasMouseDown(e) {
+    editorState.isDragging = true;
+    const pos = getCanvasCoordinates(e);
+    if (pos) {
+        editorState.lastTile = { x: pos.x, y: pos.y };
+        placeTile(pos.x, pos.y);
+    }
 }
 
-function handleCanvasTouchMove(e) {
-    e.preventDefault();
-    handleCanvasMouseMove(e.touches[0]);
+function handleCanvasMouseMove(e) {
+    if (!editorState.isDragging) return;
+    
+    const pos = getCanvasCoordinates(e);
+    if (!pos) return;
+    
+    if (editorState.lastTile && (pos.x !== editorState.lastTile.x || pos.y !== editorState.lastTile.y)) {
+        placeTile(pos.x, pos.y);
+        editorState.lastTile = { x: pos.x, y: pos.y };
+    }
 }
 
-function handleCanvasTouchEnd(e) {
-    e.preventDefault();
-    handleCanvasMouseUp(e.changedTouches[0]);
+function handleCanvasMouseUp() {
+    editorState.isDragging = false;
+    editorState.lastTile = null;
 }
 
 // Place tile at position
@@ -516,7 +407,15 @@ function placeTile(x, y) {
     
     const selected = editorState.selectedTile;
     
-    console.log("Placing tile at", x, y, "ID:", selected);
+    // Handle tools
+    if (editorState.currentTool === 'eraser') {
+        eraseTile(x, y);
+        return;
+    } else if (editorState.currentTool === 'fill') {
+        // Simple fill (fills entire map with selected tile)
+        fillMap(selected);
+        return;
+    }
     
     // Handle entity placement
     if (typeof selected === 'string') {
@@ -528,12 +427,6 @@ function placeTile(x, y) {
             addEnemy(x, y, enemyType);
             return;
         }
-    }
-    
-    // Handle tools
-    if (editorState.currentTool === 'eraser') {
-        eraseTile(x, y);
-        return;
     }
     
     // Handle special tiles
@@ -548,6 +441,16 @@ function placeTile(x, y) {
         editorState.tiles[y][x] = selected;
     }
     
+    renderEditor();
+}
+
+// Fill entire map with tile
+function fillMap(tileId) {
+    for (let y = 0; y < editorState.mapHeight; y++) {
+        for (let x = 0; x < editorState.mapWidth; x++) {
+            editorState.tiles[y][x] = tileId;
+        }
+    }
     renderEditor();
 }
 
@@ -593,12 +496,51 @@ function removeEntityAt(x, y) {
     }
 }
 
+// Create empty map
+function createEmptyMap() {
+    const width = editorState.mapWidth;
+    const height = editorState.mapHeight;
+    
+    editorState.tiles = Array(height).fill().map(() => Array(width).fill(TILE_TYPES.FLOOR1));
+    editorState.playerStart = null;
+    editorState.exitPos = null;
+    editorState.enemies = [];
+    editorState.items = [];
+    
+    addBorderWalls();
+    updateCanvasSize();
+}
+
+// Add border walls
+function addBorderWalls() {
+    const width = editorState.mapWidth;
+    const height = editorState.mapHeight;
+    
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {
+                editorState.tiles[y][x] = TILE_TYPES.WALL1;
+            }
+        }
+    }
+}
+
+// Update canvas size
+function updateCanvasSize() {
+    const container = document.querySelector('.editor-canvas-container');
+    if (!container || !editorCanvas) return;
+    
+    editorCanvas.width = container.clientWidth;
+    editorCanvas.height = container.clientHeight;
+    
+    const maxTileWidth = Math.floor(editorCanvas.width / editorState.mapWidth);
+    const maxTileHeight = Math.floor(editorCanvas.height / editorState.mapHeight);
+    tileSize = Math.min(maxTileWidth, maxTileHeight, 60);
+}
+
 // Render editor
 function renderEditor() {
-    if (!editorCtx || !editorCanvas) {
-        console.error("Canvas context not available!");
-        return;
-    }
+    if (!editorCtx || !editorCanvas) return;
     
     // Clear canvas
     editorCtx.fillStyle = '#111';
@@ -615,9 +557,7 @@ function renderEditor() {
     }
     
     // Draw grid
-    if (editorState.gridVisible) {
-        drawGrid();
-    }
+    drawGrid();
     
     // Draw entities
     editorState.enemies.forEach(enemy => drawEntity(enemy.x, enemy.y, enemy.type));
@@ -692,40 +632,14 @@ function drawGrid() {
 function clearMap() {
     if (confirm("Clear the entire map?")) {
         createEmptyMap();
+        renderEditor();
     }
-}
-
-// Randomize walls
-function randomizeWalls() {
-    const width = editorState.mapWidth;
-    const height = editorState.mapHeight;
-    
-    for (let y = 1; y < height - 1; y++) {
-        for (let x = 1; x < width - 1; x++) {
-            if ((editorState.playerStart && x === editorState.playerStart.x && y === editorState.playerStart.y) ||
-                (editorState.exitPos && x === editorState.exitPos.x && y === editorState.exitPos.y)) {
-                continue;
-            }
-            
-            const hasItem = editorState.items.some(item => item.x === x && item.y === y);
-            const hasEnemy = editorState.enemies.some(enemy => enemy.x === x && enemy.y === y);
-            
-            if (!hasItem && !hasEnemy) {
-                editorState.tiles[y][x] = Math.random() < 0.2 ? TILE_TYPES.WALL1 : TILE_TYPES.FLOOR1;
-            }
-        }
-    }
-    
-    renderEditor();
 }
 
 // Resize map
 function resizeMap() {
-    const widthInput = document.getElementById('mapWidthInput');
-    const heightInput = document.getElementById('mapHeightInput');
-    
-    const newWidth = Math.min(20, Math.max(8, parseInt(widthInput.value) || 12));
-    const newHeight = Math.min(20, Math.max(8, parseInt(heightInput.value) || 12));
+    const newWidth = Math.min(20, Math.max(8, parseInt(document.getElementById('mapWidthInput').value) || 12));
+    const newHeight = Math.min(20, Math.max(8, parseInt(document.getElementById('mapHeightInput').value) || 12));
     
     editorState.mapWidth = newWidth;
     editorState.mapHeight = newHeight;
@@ -740,19 +654,14 @@ function resizeMap() {
     
     editorState.tiles = newTiles;
     
-    editorState.enemies = editorState.enemies.filter(e => 
-        e.x >= 0 && e.x < newWidth && e.y >= 0 && e.y < newHeight
-    );
-    editorState.items = editorState.items.filter(item => 
-        item.x >= 0 && item.x < newWidth && item.y >= 0 && item.y < newHeight
-    );
+    // Filter out of bounds entities
+    editorState.enemies = editorState.enemies.filter(e => e.x < newWidth && e.y < newHeight);
+    editorState.items = editorState.items.filter(item => item.x < newWidth && item.y < newHeight);
     
-    if (editorState.playerStart && 
-        (editorState.playerStart.x >= newWidth || editorState.playerStart.y >= newHeight)) {
+    if (editorState.playerStart && (editorState.playerStart.x >= newWidth || editorState.playerStart.y >= newHeight)) {
         editorState.playerStart = null;
     }
-    if (editorState.exitPos && 
-        (editorState.exitPos.x >= newWidth || editorState.exitPos.y >= newHeight)) {
+    if (editorState.exitPos && (editorState.exitPos.x >= newWidth || editorState.exitPos.y >= newHeight)) {
         editorState.exitPos = null;
     }
     
@@ -783,19 +692,7 @@ function exportMissionJSON() {
     
     const jsonString = JSON.stringify(missionData, null, 2);
     
-    // Try to copy to clipboard
-    if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(jsonString).then(() => {
-            alert("Mission JSON copied to clipboard!");
-        }).catch(() => {
-            showJSONPopup(jsonString);
-        });
-    } else {
-        showJSONPopup(jsonString);
-    }
-}
-
-function showJSONPopup(jsonString) {
+    // Show popup with JSON
     const popup = document.createElement('div');
     popup.style.position = 'fixed';
     popup.style.top = '50%';
@@ -806,16 +703,16 @@ function showJSONPopup(jsonString) {
     popup.style.padding = '20px';
     popup.style.borderRadius = '10px';
     popup.style.zIndex = '1000';
-    popup.style.maxWidth = '90%';
+    popup.style.width = '90%';
     popup.style.maxHeight = '80%';
     popup.style.overflow = 'auto';
     
     popup.innerHTML = `
         <h3 style="color: var(--accent); margin-top: 0;">Mission JSON</h3>
-        <textarea style="width: 100%; height: 300px; background: #222; color: #fff; border: 1px solid #444; padding: 10px; font-family: monospace;">${jsonString}</textarea>
-        <div style="margin-top: 10px; display: flex; gap: 10px;">
-            <button onclick="navigator.clipboard.writeText(this.parentElement.parentElement.querySelector('textarea').value).then(() => alert('Copied!'))" style="flex: 1; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 5px;">Copy</button>
-            <button onclick="this.parentElement.parentElement.remove()" style="flex: 1; padding: 10px; background: #333; color: #aaa; border: none; border-radius: 5px;">Close</button>
+        <textarea style="width: 100%; height: 200px; background: #222; color: #fff; border: 1px solid #444; padding: 10px; font-family: monospace;">${jsonString}</textarea>
+        <div style="margin-top: 10px;">
+            <p style="color: #aaa; font-size: 12px;">Copy this JSON and save it as a .json file</p>
+            <button onclick="this.parentElement.parentElement.remove()" style="width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 5px;">OK</button>
         </div>
     `;
     
@@ -861,5 +758,4 @@ function testMission() {
 // Initialize when page loads
 window.addEventListener('load', function() {
     window.showMapEditor = initMapEditor;
-    console.log("Map Editor script loaded");
 });
