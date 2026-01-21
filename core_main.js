@@ -423,41 +423,50 @@ function initGame() {
 }
 
 function generateLevel(guardCount) {
-
-   // === ADD THIS CODE AT THE VERY START ===
+    // === CUSTOM MAP LOADING ===
     if (window.USE_CUSTOM_MAP && window.customMapData) {
         console.log("Loading custom map:", window.customMapData.name);
         
-        // Use custom map dimensions
+        // 1. Set map dimensions
         mapDim = window.customMapData.width || 12;
         
-        // Use custom grid
-        grid = window.customMapData.grid;
+        // 2. Use custom grid (make sure it's a fresh copy)
+        grid = window.customMapData.grid.map(row => [...row]);
         
-        // Place player
+        // 3. Clear any existing exit (if already in grid)
+        for(let y = 0; y < mapDim; y++) {
+            for(let x = 0; x < mapDim; x++) {
+                if(grid[y][x] === 3) grid[y][x] = FLOOR;
+            }
+        }
+        
+        // 4. Place player
         if (window.customMapData.player) {
             player.x = window.customMapData.player.x;
             player.y = window.customMapData.player.y;
-            player.ax = player.x;
-            player.ay = player.y;
         } else {
             player.x = player.y = 1;
-            player.ax = player.ay = 1;
         }
+        player.ax = player.x;
+        player.ay = player.y;
+        player.dir = {x: 0, y: 0};
+        player.isHidden = (grid[player.y][player.x] === HIDE);
         
-        // Place exit
+        // 5. Place exit (overwrite grid position)
         if (window.customMapData.exit) {
-            // Find and set exit in grid
-            const exitValue = 3; // Your EXIT constant
-            grid[window.customMapData.exit.y][window.customMapData.exit.x] = exitValue;
+            const exitPos = window.customMapData.exit;
+            if(exitPos.y >= 0 && exitPos.y < mapDim && exitPos.x >= 0 && exitPos.x < mapDim) {
+                grid[exitPos.y][exitPos.x] = EXIT; // Use EXIT constant (3)
+            }
+        } else {
+            // Default exit position
+            grid[mapDim-2][mapDim-2] = EXIT;
         }
         
-        // Create enemies from custom data
+        // 6. Create enemies (COMPLETE with all properties)
         enemies = [];
         if (window.customMapData.enemies) {
             window.customMapData.enemies.forEach(e => {
-                // Convert JSON enemy data to your enemy format
-                // You'll need to match your enemy object structure
                 const enemyType = e.type || 'NORMAL';
                 const stats = ENEMY_TYPES[enemyType] || ENEMY_TYPES.NORMAL;
                 
@@ -472,20 +481,54 @@ function generateLevel(guardCount) {
                     attackRange: stats.range,
                     damage: stats.damage,
                     speed: stats.speed,
-                    visionRange: 3,
+                    visionRange: 3, // Default vision
                     state: 'patrolling',
-                    // ... other enemy properties ...
+                    investigationTarget: null,
+                    investigationTurns: 0,
+                    poisonTimer: 0,
+                    hearingRange: 6,
+                    hasHeardSound: false,
+                    soundLocation: null,
+                    returnToPatrolPos: {x: e.x, y: e.y},
+                    lastSeenPlayer: null,
+                    chaseTurns: 0,
+                    chaseMemory: 5,
                     color: stats.color,
-                    tint: stats.tint
+                    tint: stats.tint,
+                    isSleeping: false,
+                    sleepTimer: 0,
+                    ateRice: false,
+                    riceDeathTimer: Math.floor(Math.random() * 5) + 1
                 });
             });
         }
         
-        // Clear the flag so next game uses random generator
+        // 7. Place coins if specified
+        if (window.customMapData.coins) {
+            window.customMapData.coins.forEach(coin => {
+                if(coin.y >= 0 && coin.y < mapDim && coin.x >= 0 && coin.x < mapDim) {
+                    if(grid[coin.y][coin.x] === FLOOR) {
+                        grid[coin.y][coin.x] = COIN; // Use COIN constant (5)
+                    }
+                }
+            });
+        }
+        
+        // 8. Place hiding spots if specified (already in grid as 2)
+        // No action needed - HIDE tiles should already be in grid as value 2
+        
+        // 9. Reset flags
         window.USE_CUSTOM_MAP = false;
-        return; // Skip the rest of the random generation
+        window.customMapData = null;
+        
+        console.log("Custom map loaded. Player at", player.x, player.y, 
+                    "Enemies:", enemies.length, 
+                    "Grid size:", mapDim, "x", mapDim);
+        return; // Skip random generation
     }
-    // === END OF ADDED CODE ===
+    // === END CUSTOM MAP ===
+    
+    // Original random generation continues...
     canvas.width = window.innerWidth; 
     canvas.height = window.innerHeight;
     
