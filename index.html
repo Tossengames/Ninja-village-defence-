@@ -708,20 +708,51 @@
         return getAllMissions().find(m => m.id === missionId);
     }
     
-    // Play mission
-    function playMission(missionId) {
-        const mission = getMissionById(missionId);
-        if (!mission) {
-            alert("Mission not found");
-            return;
-        }
-        
-        if (typeof showMissionBriefing === 'function') {
-            showMissionBriefing(mission);
-        } else {
-            alert("Would play: " + mission.name);
-        }
+  // Play mission
+function playMission(missionId) {
+    const mission = getMissionById(missionId);
+    if (!mission) {
+        alert("Mission not found");
+        return;
     }
+    
+    console.log("Playing mission:", mission);
+    
+    if (typeof showMissionBriefing === 'function') {
+        showMissionBriefing(mission);
+    } else if (typeof loadMissionFromJSON === 'function') {
+        // Try to load directly
+        if (loadMissionFromJSON(mission)) {
+            // Hide menus
+            document.getElementById('customMissionsScreen').classList.add('hidden');
+            document.getElementById('mainMenu').classList.add('hidden');
+            
+            // Start game
+            if (typeof gameOver !== 'undefined') gameOver = false;
+            if (typeof hasReachedExit !== 'undefined') hasReachedExit = false;
+            if (typeof playerTurn !== 'undefined') playerTurn = true;
+            if (typeof turnCount !== 'undefined') turnCount = 1;
+            if (typeof startTime !== 'undefined') startTime = Date.now();
+            
+            // Start game loop if available
+            if (typeof requestAnimationFrame === 'function' && typeof gameLoop === 'function') {
+                requestAnimationFrame(gameLoop);
+            }
+            
+            alert("Mission loaded! Starting game...");
+        } else {
+            alert("Failed to load mission data");
+        }
+    } else {
+        // Last resort: show mission data
+        alert(`Mission: ${mission.name}\n\nGame functions not available. Check console for errors.`);
+        console.error("Missing game functions:", {
+            showMissionBriefing: typeof showMissionBriefing,
+            loadMissionFromJSON: typeof loadMissionFromJSON,
+            gameLoop: typeof gameLoop
+        });
+    }
+}
     
     // Edit mission
     function editMission(missionId) {
