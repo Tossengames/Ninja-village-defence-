@@ -1,0 +1,8 @@
+[
+  {
+    "id": "test",
+    "name": "Test Corridor",
+    "file": "maps/test_corridor.json",
+    "description": "Simple corridor with two guards"
+  }
+]
