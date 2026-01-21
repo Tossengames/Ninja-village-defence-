@@ -76,10 +76,24 @@
             </div>
             
             <div class="menu-actions">
+                <button class="menu-action-btn" onclick="openMapSelection()">🎯 SELECT MAP</button> <!-- NEW BUTTON -->
                 <button class="menu-action-btn" id="customMissionsBtn" onclick="showCustomMissions()">CUSTOM MISSIONS</button>
                 <button class="menu-action-btn" id="editorBtn" onclick="openMapEditorScreen()">MAP EDITOR</button>
                 <button class="menu-action-btn" onclick="showTutorial()">HOW TO PLAY</button>
                 <button class="start-btn" onclick="showItemSelection()">PLAY RANDOM →</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- NEW SCREEN: MAP SELECTION -->
+    <div id="mapSelectionScreen" class="overlay-screen hidden">
+        <div class="menu-box">
+            <h1>SELECT MAP</h1>
+            <div id="mapListContainer" class="selected-preview" style="max-height: 300px;">
+                <div class="empty-preview">Loading maps...</div>
+            </div>
+            <div class="menu-actions">
+                <button class="menu-action-btn" onclick="backToMainMenu()">← BACK TO MAIN MENU</button>
             </div>
         </div>
     </div>
@@ -147,7 +161,7 @@
             
             <div class="menu-actions">
                 <button class="start-btn" onclick="startGame()" id="startGameBtn">START MISSION</button>
-                <button class="menu-action-btn" onclick="backToMainMenu()">← BACK</button>
+                <button class="menu-action-btn" onclick="backToMapSelection()">← BACK TO MAPS</button> <!-- UPDATED -->
             </div>
         </div>
     </div>
@@ -420,6 +434,9 @@
     
     <!-- Mission Manager Script -->
     <script src="mission_manager.js"></script>
+    
+    <!-- Campaign System (Map Selection) -->
+    <script src="campaign.js"></script>
     
     <!-- Inline script to ensure everything loads properly -->
     <script>
