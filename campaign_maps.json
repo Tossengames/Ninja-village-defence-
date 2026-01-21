@@ -1,8 +1,10 @@
 [
   {
-    "id": "test",
+    "id": "test_corridor",
     "name": "Test Corridor",
     "file": "maps/test_corridor.json",
-    "description": "Simple corridor with two guards"
+    "description": "Simple test map",
+    "width": 8,
+    "height": 8
   }
 ]
