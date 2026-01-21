@@ -418,338 +418,399 @@
     <!-- Map Editor Script -->
     <script src="map_editor.js"></script>
     
-    <!-- Mission Manager Script -->
-    <script src="mission_manager.js"></script>
-    
-    <!-- Inline script to ensure everything loads properly -->
+    <!-- SIMPLE MISSION LOADER SCRIPT -->
     <script>
-        // Quick debug check
-        console.log("HTML loaded, checking functions...");
+    // ============================================
+    // SIMPLE MISSION LOADER FOR GITHUB PAGES
+    // ============================================
+    
+    const MAPS_FOLDER = 'maps/';
+    let gameMissions = [];
+    let customMissions = [];
+    
+    // Load all missions on page load
+    window.addEventListener('load', async function() {
+        console.log('Loading missions...');
         
-        // Check if menu functions exist
-        window.addEventListener('load', function() {
-            console.log("Page fully loaded");
-            console.log("changeMapSize function:", typeof changeMapSize);
-            console.log("showItemSelection function:", typeof showItemSelection);
-            console.log("startGame function:", typeof startGame);
-            console.log("showMapEditor function:", typeof showMapEditor);
-            console.log("showCustomMissions function:", typeof showCustomMissions);
+        // Load custom missions from localStorage
+        try {
+            const saved = localStorage.getItem('stealthGame_customMissions');
+            if (saved) {
+                customMissions = JSON.parse(saved);
+                console.log('Loaded', customMissions.length, 'custom missions');
+            }
+        } catch (e) {
+            console.log('No custom missions found');
+        }
+        
+        // Load game missions from maps folder
+        await loadGameMissions();
+        
+        console.log('Total missions:', gameMissions.length + customMissions.length);
+        
+        // Initialize menu
+        if (typeof initMenu === 'function') {
+            initMenu();
+        }
+    });
+    
+    // Load missions from maps folder
+    async function loadGameMissions() {
+        console.log('Loading from:', MAPS_FOLDER);
+        gameMissions = [];
+        
+        try {
+            // FIRST: Try to load mission_list.json
+            const listResponse = await fetch(MAPS_FOLDER + 'mission_list.json');
             
-            // Initialize menu on load
-            if (typeof initMenu === 'function') {
-                initMenu();
+            if (listResponse.ok) {
+                const fileList = await listResponse.json();
+                console.log('Found mission list:', fileList);
+                
+                // Load each file from the list
+                for (const fileName of fileList) {
+                    await loadMissionFile(fileName);
+                }
+            } else {
+                console.log('No mission_list.json found, trying direct load');
+                // Try to load mission1.json directly
+                await loadMissionFile('mission1.json');
             }
             
-            // Add small button styles for mission manager
-            if (!document.querySelector('style#mission-manager-styles')) {
-                const style = document.createElement('style');
-                style.id = 'mission-manager-styles';
-                style.textContent = `
-                    .small-btn {
-                        background: #333;
-                        border: 1px solid #444;
-                        color: #aaa;
-                        padding: 4px 8px;
-                        border-radius: 4px;
-                        font-size: 10px;
-                        cursor: pointer;
-                        transition: all 0.2s;
-                        white-space: nowrap;
-                    }
-                    .small-btn:hover {
-                        background: #3a3a3a;
-                        color: #ccc;
-                        border-color: #666;
-                    }
-                    .mission-item .small-btn {
-                        opacity: 0;
-                        transition: opacity 0.2s;
-                    }
-                    .mission-item:hover .small-btn {
-                        opacity: 1;
-                    }
-                    .mission-rules {
-                        background: rgba(0, 0, 0, 0.3);
-                        padding: 10px;
-                        border-radius: 8px;
-                        margin: 10px 0;
-                        font-size: 12px;
-                        text-align: left;
-                    }
-                    .mission-rules ul {
-                        margin: 5px 0;
-                        padding-left: 20px;
-                    }
-                    .mission-rules li {
-                        margin-bottom: 3px;
-                    }
-                `;
-                document.head.appendChild(style);
+        } catch (error) {
+            console.log('Error loading missions:', error);
+        }
+    }
+    
+    // Load a single mission file
+    async function loadMissionFile(fileName) {
+        try {
+            const url = MAPS_FOLDER + fileName;
+            console.log('Trying to load:', url);
+            
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                console.log('File not found:', fileName);
+                return;
             }
             
-            // Set up file input handler for mission imports
-            document.addEventListener('click', function(e) {
-                if (e.target && e.target.matches('.small-btn')) {
-                    const missionId = e.target.closest('.mission-item')?.dataset.missionId;
-                    if (missionId) {
-                        if (e.target.textContent.includes('Play')) {
-                            e.stopPropagation();
-                            playMission(missionId);
-                        } else if (e.target.textContent.includes('Edit')) {
-                            e.stopPropagation();
-                            editMission(missionId);
-                        } else if (e.target.textContent.includes('Delete')) {
-                            e.stopPropagation();
-                            deleteMissionUI(missionId);
-                        } else if (e.target.textContent.includes('Export')) {
-                            e.stopPropagation();
-                            exportMission(missionId);
-                        }
-                    }
-                }
-            });
+            const missionData = await response.json();
             
-            // File import handler
-            document.addEventListener('change', function(e) {
-                if (e.target && e.target.id === 'missionFileInput' && e.target.files[0]) {
-                    handleMissionFileUpload(e);
-                }
-            });
-            
-            // Helper functions for mission manager UI
-            function playMission(missionId) {
-                const mission = getMissionById(missionId);
-                if (!mission) {
-                    alert("Mission not found");
-                    return;
-                }
-                
-                if (typeof showMissionBriefing === 'function') {
-                    showMissionBriefing(mission);
-                } else {
-                    alert("Game functions not available. Please reload the page.");
-                }
+            // Basic validation
+            if (!missionData || !missionData.name || !missionData.width || !missionData.height) {
+                console.log('Invalid mission format:', fileName);
+                return;
             }
             
-            function editMission(missionId) {
-                const mission = getMissionById(missionId);
-                if (!mission) {
-                    alert("Mission not found");
-                    return;
-                }
-                
-                if (typeof initMapEditor === 'function') {
-                    initMapEditor();
-                    setTimeout(() => {
-                        if (typeof loadMissionData === 'function') {
-                            loadMissionData(mission);
-                        }
-                    }, 100);
-                } else {
-                    alert("Editor not available. Please reload the page.");
-                }
-            }
+            // Add mission
+            missionData.id = 'mission_' + fileName.replace('.json', '');
+            missionData.fileName = fileName;
+            missionData.source = 'game';
+            missionData.isCustom = false;
             
-            function deleteMissionUI(missionId) {
-                const mission = getMissionById(missionId);
-                if (!mission) return;
-                
-                if (confirm(`Delete mission "${mission.name}"? This cannot be undone.`)) {
-                    if (deleteCustomMission(missionId)) {
-                        loadMissionListUI();
-                        alert("Mission deleted");
-                    } else {
-                        alert("Error deleting mission");
-                    }
-                }
-            }
+            gameMissions.push(missionData);
+            console.log('✓ Loaded:', missionData.name);
             
-            function exportMission(missionId) {
-                const mission = getMissionById(missionId);
-                if (!mission) {
-                    alert("Mission not found");
-                    return;
-                }
-                
-                const jsonString = JSON.stringify(mission, null, 2);
-                const blob = new Blob([jsonString], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = mission.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.json';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                
-                URL.revokeObjectURL(url);
-            }
+        } catch (error) {
+            console.log('Failed to load', fileName, ':', error.message);
+        }
+    }
+    
+    // Get all missions
+    function getAllMissions() {
+        return [...gameMissions, ...customMissions];
+    }
+    
+    // Display missions in UI
+    function displayMissions() {
+        const missionList = document.getElementById('missionList');
+        if (!missionList) {
+            console.error('missionList element not found!');
+            return;
+        }
+        
+        const allMissions = getAllMissions();
+        
+        if (allMissions.length === 0) {
+            missionList.innerHTML = `
+                <div class="empty-preview">
+                    <div style="margin-bottom: 10px;">📁 No missions found!</div>
+                    <div style="font-size: 12px; color: #888; text-align: left; padding: 10px;">
+                        <p><strong>To add missions:</strong></p>
+                        <ol style="margin: 5px 0 0 15px;">
+                            <li>Create a file called "mission_list.json" in the maps/ folder</li>
+                            <li>Put your mission JSON files in the maps/ folder</li>
+                            <li>List the filenames in mission_list.json</li>
+                        </ol>
+                        <div style="margin-top: 10px; font-size: 11px; color: #aaa;">
+                            Example mission_list.json content:<br>
+                            <code>["mission1.json", "my_mission.json"]</code>
+                        </div>
+                    </div>
+                    <button onclick="refreshMissions()" style="margin-top: 15px; padding: 8px 16px; background: #333; color: #aaa; border: 1px solid #444; border-radius: 5px; cursor: pointer;">
+                        🔄 Refresh
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        missionList.innerHTML = '';
+        
+        allMissions.forEach(mission => {
+            const div = document.createElement('div');
+            div.className = 'mission-item';
+            div.dataset.missionId = mission.id;
             
-            function handleMissionFileUpload(event) {
-                const file = event.target.files[0];
-                if (!file) return;
-                
-                if (!file.name.endsWith('.json')) {
-                    alert("Please select a JSON file");
-                    event.target.value = '';
-                    return;
-                }
-                
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const missionData = JSON.parse(e.target.result);
-                        
-                        // Validate mission data
-                        if (!missionData.name || !missionData.width || !missionData.height || !missionData.tiles) {
-                            alert("Invalid mission file format");
-                            event.target.value = '';
-                            return;
-                        }
-                        
-                        // Add unique ID and timestamp
-                        missionData.id = 'mission_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                        missionData.createdAt = new Date().toISOString();
-                        missionData.version = "1.0";
-                        
-                        // Add to missions
-                        if (typeof customMissions !== 'undefined') {
-                            customMissions.push(missionData);
-                            if (typeof saveCustomMissions === 'function') {
-                                saveCustomMissions();
-                            }
-                        } else {
-                            // Fallback to localStorage
-                            const savedMissions = JSON.parse(localStorage.getItem('stealthGame_customMissions') || '[]');
-                            savedMissions.push(missionData);
-                            localStorage.setItem('stealthGame_customMissions', JSON.stringify(savedMissions));
-                        }
-                        
-                        alert(`Mission "${missionData.name}" imported successfully!`);
-                        if (typeof loadMissionListUI === 'function') {
-                            loadMissionListUI();
-                        }
-                        event.target.value = '';
-                        
-                    } catch (error) {
-                        alert("Error parsing JSON: " + error.message);
-                        event.target.value = '';
-                    }
-                };
-                
-                reader.onerror = function() {
-                    alert("Error reading file");
-                    event.target.value = '';
-                };
-                
-                reader.readAsText(file);
-            }
+            const sourceBadge = mission.isCustom 
+                ? '<span style="background: #ff9900; color: #000; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; margin-left: 5px;">Custom</span>'
+                : '<span style="background: #3366cc; color: #fff; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; margin-left: 5px;">Game</span>';
             
-            // Expose functions to global scope
-            window.playMission = playMission;
-            window.editMission = editMission;
-            window.deleteMissionUI = deleteMissionUI;
-            window.exportMission = exportMission;
-            window.handleMissionFileUpload = handleMissionFileUpload;
+            div.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div>
+                        <div class="mission-title">${mission.name} ${sourceBadge}</div>
+                        <div class="mission-description">${mission.story || 'No description'}</div>
+                    </div>
+                    <div style="background: ${mission.difficulty === 'easy' ? '#33cc33' : mission.difficulty === 'hard' ? '#ff3333' : '#ff9900'}; color: #000; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">
+                        ${mission.difficulty ? mission.difficulty.toUpperCase() : 'MEDIUM'}
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: #888;">
+                    <div>${mission.goal ? mission.goal.toUpperCase().replace('_', ' ') : 'ESCAPE'}</div>
+                    <div>${mission.width}x${mission.height}</div>
+                    <div>${mission.fileName}</div>
+                </div>
+                <div style="display: flex; gap: 5px; margin-top: 10px;">
+                    <button class="small-btn play-btn">▶️ Play</button>
+                    ${mission.isCustom ? `
+                        <button class="small-btn edit-btn">✏️ Edit</button>
+                        <button class="small-btn delete-btn">🗑️ Delete</button>
+                        <button class="small-btn export-btn">📤 Export</button>
+                    ` : ''}
+                </div>
+            `;
             
-            // Simple mission storage functions if mission_manager.js hasn't loaded
-            if (typeof getMissionById === 'undefined') {
-                window.customMissions = JSON.parse(localStorage.getItem('stealthGame_customMissions') || '[]');
-                
-                window.getMissionById = function(missionId) {
-                    return customMissions.find(m => m.id === missionId);
-                };
-                
-                window.deleteCustomMission = function(missionId) {
-                    const index = customMissions.findIndex(m => m.id === missionId);
-                    if (index !== -1) {
-                        customMissions.splice(index, 1);
-                        localStorage.setItem('stealthGame_customMissions', JSON.stringify(customMissions));
-                        return true;
-                    }
-                    return false;
-                };
-                
-                window.saveCustomMissions = function() {
-                    localStorage.setItem('stealthGame_customMissions', JSON.stringify(customMissions));
-                    return true;
-                };
-                
-                console.log("Using fallback mission storage");
-            }
-            
-            // Enhanced loadMissionList function
-            const originalLoadMissionList = window.loadMissionList;
-            window.loadMissionList = function() {
-                loadMissionListUI();
+            // Add event listeners
+            div.querySelector('.play-btn').onclick = (e) => {
+                e.stopPropagation();
+                playMission(mission.id);
             };
             
-            function loadMissionListUI() {
-                const missionList = document.getElementById('missionList');
-                if (!missionList) return;
+            if (mission.isCustom) {
+                div.querySelector('.edit-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    editMission(mission.id);
+                };
+                div.querySelector('.delete-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    deleteMissionUI(mission.id);
+                };
+                div.querySelector('.export-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    exportMission(mission.id);
+                };
+            }
+            
+            missionList.appendChild(div);
+        });
+        
+        // Add import section
+        const importDiv = document.createElement('div');
+        importDiv.className = 'mission-item';
+        importDiv.style.textAlign = 'center';
+        importDiv.style.padding = '20px';
+        importDiv.style.borderTop = '1px solid #444';
+        importDiv.style.marginTop = '20px';
+        
+        importDiv.innerHTML = `
+            <div style="font-size: 24px; margin-bottom: 10px;">📁</div>
+            <div class="mission-title">IMPORT MISSION</div>
+            <div class="mission-description">Upload a .json mission file</div>
+            <input type="file" id="missionFileInput" accept=".json" style="display: none;">
+            <button class="small-btn" onclick="document.getElementById('missionFileInput').click()" style="margin-top: 10px;">
+                📥 Choose File
+            </button>
+            <div style="margin-top: 10px;">
+                <button class="small-btn" onclick="refreshMissions()">
+                    🔄 Refresh List (${allMissions.length} missions)
+                </button>
+            </div>
+        `;
+        
+        missionList.appendChild(importDiv);
+        
+        // Setup file input
+        document.getElementById('missionFileInput').addEventListener('change', handleFileUpload);
+    }
+    
+    // Handle file upload
+    async function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        if (!file.name.endsWith('.json')) {
+            alert("Please select a JSON file");
+            event.target.value = '';
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const missionData = JSON.parse(e.target.result);
                 
-                const missions = customMissions || [];
-                
-                missionList.innerHTML = '';
-                
-                if (missions.length === 0) {
-                    missionList.innerHTML = `
-                        <div class="empty-preview">
-                            <div style="margin-bottom: 10px;">No custom missions yet!</div>
-                            <div style="font-size: 12px; color: #888;">
-                                Create your first mission using the Map Editor
-                            </div>
-                        </div>
-                    `;
+                // Validate mission data
+                if (!missionData.name || !missionData.width || !missionData.height || !missionData.tiles) {
+                    alert("Invalid mission file format");
+                    event.target.value = '';
                     return;
                 }
                 
-                missions.forEach(mission => {
-                    const missionDiv = document.createElement('div');
-                    missionDiv.className = 'mission-item';
-                    missionDiv.dataset.missionId = mission.id;
-                    
-                    // Truncate long descriptions
-                    const shortStory = mission.story 
-                        ? (mission.story.length > 80 ? mission.story.substring(0, 77) + '...' : mission.story)
-                        : "No description";
-                    
-                    missionDiv.innerHTML = `
-                        <div class="mission-title">${mission.name}</div>
-                        <div class="mission-description">${shortStory}</div>
-                        <div class="mission-goal">${mission.goal.toUpperCase().replace('_', ' ')} • ${mission.width}x${mission.height}</div>
-                        <div style="display: flex; gap: 5px; margin-top: 8px;">
-                            <button class="small-btn">▶️ Play</button>
-                            <button class="small-btn">✏️ Edit</button>
-                            <button class="small-btn">🗑️ Delete</button>
-                            <button class="small-btn">📤 Export</button>
-                        </div>
-                    `;
-                    
-                    missionList.appendChild(missionDiv);
-                });
+                // Add unique ID and timestamp
+                missionData.id = 'custom_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                missionData.createdAt = new Date().toISOString();
+                missionData.isCustom = true;
                 
-                // Add file import button
-                const importDiv = document.createElement('div');
-                importDiv.className = 'mission-item';
-                importDiv.style.textAlign = 'center';
-                importDiv.style.padding = '20px';
+                // Add to custom missions
+                customMissions.push(missionData);
                 
-                importDiv.innerHTML = `
-                    <div style="font-size: 24px; margin-bottom: 10px;">📁</div>
-                    <div class="mission-title">IMPORT MISSION FILE</div>
-                    <div class="mission-description">Upload a .json mission file</div>
-                    <input type="file" id="missionFileInput" accept=".json" style="display: none;">
-                    <button class="small-btn" onclick="document.getElementById('missionFileInput').click()" style="margin-top: 10px;">
-                        📥 Choose File
-                    </button>
-                `;
+                // Save to localStorage
+                localStorage.setItem('stealthGame_customMissions', JSON.stringify(customMissions));
                 
-                missionList.appendChild(importDiv);
+                alert(`Mission "${missionData.name}" imported successfully!`);
+                displayMissions();
+                event.target.value = '';
+                
+            } catch (error) {
+                alert("Error parsing JSON: " + error.message);
+                event.target.value = '';
             }
-            
-            window.loadMissionListUI = loadMissionListUI;
-        });
+        };
+        
+        reader.onerror = function() {
+            alert("Error reading file");
+            event.target.value = '';
+        };
+        
+        reader.readAsText(file);
+    }
+    
+    // Refresh missions
+    async function refreshMissions() {
+        await loadGameMissions();
+        displayMissions();
+    }
+    
+    // Get mission by ID
+    function getMissionById(missionId) {
+        return getAllMissions().find(m => m.id === missionId);
+    }
+    
+    // Play mission
+    function playMission(missionId) {
+        const mission = getMissionById(missionId);
+        if (!mission) {
+            alert("Mission not found");
+            return;
+        }
+        
+        if (typeof showMissionBriefing === 'function') {
+            showMissionBriefing(mission);
+        } else {
+            alert("Would play: " + mission.name);
+        }
+    }
+    
+    // Edit mission
+    function editMission(missionId) {
+        const mission = getMissionById(missionId);
+        if (!mission || !mission.isCustom) {
+            alert("Cannot edit game missions. Create a copy first.");
+            return;
+        }
+        
+        if (typeof initMapEditor === 'function') {
+            initMapEditor();
+            setTimeout(() => {
+                if (typeof loadMissionData === 'function') {
+                    loadMissionData(mission);
+                }
+            }, 100);
+        } else {
+            alert("Map editor not available");
+        }
+    }
+    
+    // Delete mission UI
+    function deleteMissionUI(missionId) {
+        const mission = getMissionById(missionId);
+        if (!mission || !mission.isCustom) {
+            alert("Cannot delete game missions");
+            return;
+        }
+        
+        if (!confirm(`Delete mission "${mission.name}"? This cannot be undone.`)) {
+            return;
+        }
+        
+        const index = customMissions.findIndex(m => m.id === missionId);
+        if (index !== -1) {
+            customMissions.splice(index, 1);
+            localStorage.setItem('stealthGame_customMissions', JSON.stringify(customMissions));
+            displayMissions();
+            alert("Mission deleted");
+        }
+    }
+    
+    // Export mission
+    function exportMission(missionId) {
+        const mission = getMissionById(missionId);
+        if (!mission) {
+            alert("Mission not found");
+            return;
+        }
+        
+        const jsonString = JSON.stringify(mission, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = mission.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        URL.revokeObjectURL(url);
+    }
+    
+    // Make functions available globally
+    window.loadMissionList = displayMissions;
+    window.refreshMissions = refreshMissions;
+    window.playMission = playMission;
+    window.editMission = editMission;
+    window.deleteMissionUI = deleteMissionUI;
+    window.exportMission = exportMission;
+    window.getMissionById = getMissionById;
+    window.customMissions = customMissions;
+    window.gameMissions = gameMissions;
+    window.getAllMissions = getAllMissions;
+    
+    // Export for mission deletion
+    window.deleteCustomMission = function(missionId) {
+        const index = customMissions.findIndex(m => m.id === missionId);
+        if (index !== -1) {
+            customMissions.splice(index, 1);
+            localStorage.setItem('stealthGame_customMissions', JSON.stringify(customMissions));
+            return true;
+        }
+        return false;
+    };
+    
+    console.log('Mission Loader ready!');
     </script>
+    
 </body>
 </html>
