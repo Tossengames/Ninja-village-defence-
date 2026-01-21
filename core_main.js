@@ -423,6 +423,69 @@ function initGame() {
 }
 
 function generateLevel(guardCount) {
+
+   // === ADD THIS CODE AT THE VERY START ===
+    if (window.USE_CUSTOM_MAP && window.customMapData) {
+        console.log("Loading custom map:", window.customMapData.name);
+        
+        // Use custom map dimensions
+        mapDim = window.customMapData.width || 12;
+        
+        // Use custom grid
+        grid = window.customMapData.grid;
+        
+        // Place player
+        if (window.customMapData.player) {
+            player.x = window.customMapData.player.x;
+            player.y = window.customMapData.player.y;
+            player.ax = player.x;
+            player.ay = player.y;
+        } else {
+            player.x = player.y = 1;
+            player.ax = player.ay = 1;
+        }
+        
+        // Place exit
+        if (window.customMapData.exit) {
+            // Find and set exit in grid
+            const exitValue = 3; // Your EXIT constant
+            grid[window.customMapData.exit.y][window.customMapData.exit.x] = exitValue;
+        }
+        
+        // Create enemies from custom data
+        enemies = [];
+        if (window.customMapData.enemies) {
+            window.customMapData.enemies.forEach(e => {
+                // Convert JSON enemy data to your enemy format
+                // You'll need to match your enemy object structure
+                const enemyType = e.type || 'NORMAL';
+                const stats = ENEMY_TYPES[enemyType] || ENEMY_TYPES.NORMAL;
+                
+                enemies.push({
+                    x: e.x, y: e.y,
+                    ax: e.x, ay: e.y,
+                    dir: e.direction || {x: 1, y: 0},
+                    alive: true,
+                    hp: stats.hp,
+                    maxHP: stats.hp,
+                    type: enemyType,
+                    attackRange: stats.range,
+                    damage: stats.damage,
+                    speed: stats.speed,
+                    visionRange: 3,
+                    state: 'patrolling',
+                    // ... other enemy properties ...
+                    color: stats.color,
+                    tint: stats.tint
+                });
+            });
+        }
+        
+        // Clear the flag so next game uses random generator
+        window.USE_CUSTOM_MAP = false;
+        return; // Skip the rest of the random generation
+    }
+    // === END OF ADDED CODE ===
     canvas.width = window.innerWidth; 
     canvas.height = window.innerHeight;
     
