@@ -1,6 +1,14 @@
 {
   "levels": [
-    { "name": "Mission 1", "file": "level1.json" },
-    { "name": "Mission 2", "file": "level2.json" }
+    { 
+      "id": "lvl1", 
+      "name": "01: THE INFILTRATION", 
+      "file": "level1.json" 
+    },
+    { 
+      "id": "lvl2", 
+      "name": "02: THE VAULT", 
+      "file": "level2.json" 
+    }
   ]
 }
