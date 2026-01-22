@@ -423,71 +423,9 @@ function initGame() {
 }
 
 function generateLevel(guardCount) {
-    // 1. ENSURE GLOBALS EXIST (Prevents "Cannot set property x of undefined")
-    if (typeof player === 'undefined' || player === null) {
-        window.player = { x: 1, y: 1, ax: 1, ay: 1, dir: {x:0, y:0} };
-    }
-    if (typeof enemies === 'undefined') window.enemies = [];
+    canvas.width = window.innerWidth; 
+    canvas.height = window.innerHeight;
     
-    // 2. CHECK FOR CUSTOM MAP DATA
-    if (window.USE_CUSTOM_MAP && window.customMapData) {
-        console.log("Loading Custom Map:", window.customMapData.name);
-        try {
-            const data = window.customMapData;
-            
-            // Set Dimensions
-            mapDim = data.width || 8;
-            
-            // Load Grid (Deep copy to prevent mutation)
-            grid = data.grid.map(row => [...row]);
-
-            // Setup Player
-            if (data.player) {
-                player.x = data.player.x;
-                player.y = data.player.y;
-                player.ax = data.player.x;
-                player.ay = data.player.y;
-            }
-
-            // Setup Enemies
-            enemies = [];
-            if (data.enemies && Array.isArray(data.enemies)) {
-                data.enemies.forEach(e => {
-                    const stats = (typeof ENEMY_TYPES !== 'undefined') ? 
-                                 (ENEMY_TYPES[e.type] || ENEMY_TYPES.NORMAL) : 
-                                 { hp: 1, range: 3, damage: 1, speed: 1, color: 'red' };
-
-                    enemies.push({
-                        x: e.x, y: e.y, ax: e.x, ay: e.y,
-                        dir: e.direction || {x: 1, y: 0},
-                        alive: true,
-                        hp: stats.hp,
-                        maxHP: stats.hp,
-                        type: e.type || 'NORMAL',
-                        state: 'patrolling',
-                        visionRange: 3,
-                        hearingRange: 6,
-                        returnToPatrolPos: {x: e.x, y: e.y},
-                        color: stats.color
-                    });
-                });
-            }
-
-            // Consumption: Clear the flag so next level doesn't loop this map
-            window.USE_CUSTOM_MAP = false;
-            window.customMapData = null;
-            
-            console.log("Custom level generation complete.");
-            return; // Exit function early
-
-        } catch (error) {
-            console.error("Custom map failed, falling back to random:", error);
-            window.USE_CUSTOM_MAP = false;
-        }
-    }
-
-    // 3. ORIGINAL RANDOM GENERATION (Fallback)
-    console.log("Generating random level...");
     grid = Array.from({length: mapDim}, (_, y) => 
         Array.from({length: mapDim}, (_, x) => 
             (x==0 || y==0 || x==mapDim-1 || y==mapDim-1) ? WALL : 
@@ -495,59 +433,6 @@ function generateLevel(guardCount) {
             Math.random() < 0.08 ? HIDE : FLOOR
         )
     );
-    
-    // Random Player Placement
-    player.x = 1; player.y = 1;
-    player.ax = 1; player.ay = 1;
-    grid[mapDim-2][mapDim-2] = EXIT;
-}
-
-
-    // Default player
-    player.x = player.y = 1;
-    player.ax = player.ay = 1;
-    player.dir = { x: 0, y: 0 };
-    player.isHidden = (grid[player.y][player.x] === HIDE);
-
-    // Default exit
-    grid[mapDim - 2][mapDim - 2] = EXIT;
-
-    // Generate enemies randomly if needed
-    enemies = [];
-    for (let i = 0; i < guardCount; i++) {
-        enemies.push({
-            x: Math.floor(Math.random() * (mapDim - 2)) + 1,
-            y: Math.floor(Math.random() * (mapDim - 2)) + 1,
-            ax: 0, ay: 0,
-            dir: { x: 1, y: 0 },
-            alive: true,
-            hp: 5,
-            maxHP: 5,
-            type: 'NORMAL',
-            attackRange: 1,
-            damage: 1,
-            speed: 1,
-            visionRange: 3,
-            state: 'patrolling',
-            investigationTarget: null,
-            investigationTurns: 0,
-            poisonTimer: 0,
-            hearingRange: 6,
-            hasHeardSound: false,
-            soundLocation: null,
-            returnToPatrolPos: { x: 0, y: 0 },
-            lastSeenPlayer: null,
-            chaseTurns: 0,
-            chaseMemory: 5,
-            color: 'white',
-            tint: 'none',
-            isSleeping: false,
-            sleepTimer: 0,
-            ateRice: false,
-            riceDeathTimer: Math.floor(Math.random() * 5) + 1
-        });
-    }
-}
     
     player = { x: 1, y: 1, ax: 1, ay: 1, isHidden: false, dir: {x: 0, y: 0} };
     grid[mapDim-2][mapDim-2] = EXIT;
