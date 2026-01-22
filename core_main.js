@@ -426,126 +426,137 @@ function generateLevel(guardCount) {
     // === CUSTOM MAP LOADING ===
     if (window.USE_CUSTOM_MAP && window.customMapData) {
         console.log("=== LOADING CUSTOM MAP ===");
-        console.log("Map data:", window.customMapData);
-        
+        const mapData = window.customMapData;
+
         try {
-            // 1. Set map dimensions
-            mapDim = window.customMapData.width || 12;
-            console.log("Map dimensions:", mapDim, "x", mapDim);
-            
-            // 2. Use custom grid
-            if (!window.customMapData.grid || !Array.isArray(window.customMapData.grid)) {
+            // 1. Validate grid
+            if (!mapData.grid || !Array.isArray(mapData.grid) || mapData.grid.length !== mapData.height) {
                 throw new Error("Invalid grid in custom map");
             }
-            grid = window.customMapData.grid.map(row => [...row]);
-            
-            // 3. Place player (SAFE)
-            if (window.customMapData.player && 
-                typeof window.customMapData.player.x === 'number' && 
-                typeof window.customMapData.player.y === 'number') {
-                
-                player.x = Math.max(0, Math.min(mapDim-1, window.customMapData.player.x));
-                player.y = Math.max(0, Math.min(mapDim-1, window.customMapData.player.y));
-                console.log("Player at:", player.x, player.y);
+            mapDim = mapData.width;
+
+            // 2. Deep copy the grid
+            grid = mapData.grid.map(row => [...row]);
+
+            // 3. Place player safely
+            const px = Math.max(0, Math.min(mapDim - 1, mapData.player?.x ?? 1));
+            const py = Math.max(0, Math.min(mapDim - 1, mapData.player?.y ?? 1));
+            player.x = player.ax = px;
+            player.y = player.ay = py;
+            player.dir = { x: 0, y: 0 };
+            player.isHidden = (grid[py][px] === HIDE);
+            console.log("Player placed at:", px, py);
+
+            // 4. Place exit safely
+            if (mapData.exit) {
+                const ex = Math.max(0, Math.min(mapDim - 1, mapData.exit.x));
+                const ey = Math.max(0, Math.min(mapDim - 1, mapData.exit.y));
+                grid[ey][ex] = EXIT;
+                console.log("Exit placed at:", ex, ey);
             } else {
-                player.x = 1;
-                player.y = 1;
-                console.warn("No player position, using (1,1)");
+                grid[mapDim - 2][mapDim - 2] = EXIT;
+                console.log("Default exit placed at:", mapDim - 2, mapDim - 2);
             }
-            player.ax = player.x;
-            player.ay = player.y;
-            player.dir = {x: 0, y: 0};
-            player.isHidden = (grid[player.y] && grid[player.y][player.x] === HIDE);
-            
-            // 4. Place exit
-            if (window.customMapData.exit && 
-                typeof window.customMapData.exit.x === 'number' && 
-                typeof window.customMapData.exit.y === 'number') {
-                
-                const ex = window.customMapData.exit.x;
-                const ey = window.customMapData.exit.y;
-                if (ex >= 0 && ex < mapDim && ey >= 0 && ey < mapDim) {
-                    grid[ey][ex] = EXIT;
-                    console.log("Exit at:", ex, ey);
-                }
-            } else {
-                grid[mapDim-2][mapDim-2] = EXIT;
-                console.log("Default exit at:", mapDim-2, mapDim-2);
-            }
-            
-            // 5. Create enemies
+
+            // 5. Create enemies safely
             enemies = [];
-            if (window.customMapData.enemies && Array.isArray(window.customMapData.enemies)) {
-                window.customMapData.enemies.forEach((e, i) => {
-                    if (e && typeof e.x === 'number' && typeof e.y === 'number') {
-                        const enemyType = e.type || 'NORMAL';
-                        const stats = ENEMY_TYPES[enemyType] || ENEMY_TYPES.NORMAL;
-                        
+            if (Array.isArray(mapData.enemies)) {
+                mapData.enemies.forEach((e, i) => {
+                    if (typeof e.x === 'number' && typeof e.y === 'number') {
+                        const type = e.type || 'NORMAL';
+                        const stats = ENEMY_TYPES[type] || ENEMY_TYPES.NORMAL;
                         enemies.push({
-                            x: e.x, y: e.y,
-                            ax: e.x, ay: e.y,
-                            dir: e.direction || {x: 1, y: 0},
-                            alive: true,
-                            hp: stats.hp,
-                            maxHP: stats.hp,
-                            type: enemyType,
-                            attackRange: stats.range,
-                            damage: stats.damage,
-                            speed: stats.speed,
-                            visionRange: 3,
-                            state: 'patrolling',
-                            investigationTarget: null,
-                            investigationTurns: 0,
-                            poisonTimer: 0,
-                            hearingRange: 6,
-                            hasHeardSound: false,
-                            soundLocation: null,
-                            returnToPatrolPos: {x: e.x, y: e.y},
-                            lastSeenPlayer: null,
-                            chaseTurns: 0,
-                            chaseMemory: 5,
-                            color: stats.color,
-                            tint: stats.tint,
-                            isSleeping: false,
-                            sleepTimer: 0,
-                            ateRice: false,
-                            riceDeathTimer: Math.floor(Math.random() * 5) + 1
+                            x: e.x, y: e.y, ax: e.x, ay: e.y,
+                            dir: e.direction || { x: 1, y: 0 },
+                            alive: true, hp: stats.hp, maxHP: stats.hp,
+                            type: type, attackRange: stats.range, damage: stats.damage, speed: stats.speed,
+                            visionRange: 3, state: 'patrolling', investigationTarget: null, investigationTurns: 0,
+                            poisonTimer: 0, hearingRange: 6, hasHeardSound: false, soundLocation: null,
+                            returnToPatrolPos: { x: e.x, y: e.y }, lastSeenPlayer: null, chaseTurns: 0, chaseMemory: 5,
+                            color: stats.color, tint: stats.tint, isSleeping: false, sleepTimer: 0,
+                            ateRice: false, riceDeathTimer: Math.floor(Math.random() * 5) + 1
                         });
-                        console.log(`Enemy ${i} at:`, e.x, e.y, "type:", enemyType);
+                        console.log(`Enemy ${i} placed at:`, e.x, e.y, "type:", type);
                     }
                 });
             }
             console.log("Total enemies:", enemies.length);
-            
-            // 6. Reset flags
+
+            // 6. Reset custom map flags
             window.USE_CUSTOM_MAP = false;
             window.customMapData = null;
-            
+
             console.log("=== CUSTOM MAP LOADED SUCCESSFULLY ===");
-            return;
-            
+            return; // Skip random generation
+
         } catch (error) {
             console.error("Error loading custom map:", error);
-            // Fall back to random generation
             console.log("Falling back to random map...");
             window.USE_CUSTOM_MAP = false;
             window.customMapData = null;
         }
     }
     // === END CUSTOM MAP ===
-    
-    // Original random generation continues...
+
+    // Original random map generation
     console.log("Generating random map...");
-    canvas.width = window.innerWidth; 
+    canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    
-    grid = Array.from({length: mapDim}, (_, y) => 
-        Array.from({length: mapDim}, (_, x) => 
-            (x==0 || y==0 || x==mapDim-1 || y==mapDim-1) ? WALL : 
-            Math.random() < 0.18 ? WALL : 
-            Math.random() < 0.08 ? HIDE : FLOOR
+
+    grid = Array.from({ length: mapDim }, (_, y) =>
+        Array.from({ length: mapDim }, (_, x) =>
+            (x === 0 || y === 0 || x === mapDim - 1 || y === mapDim - 1) ? WALL :
+            Math.random() < 0.18 ? WALL :
+            Math.random() < 0.08 ? HIDE :
+            FLOOR
         )
     );
+
+    // Default player
+    player.x = player.y = 1;
+    player.ax = player.ay = 1;
+    player.dir = { x: 0, y: 0 };
+    player.isHidden = (grid[player.y][player.x] === HIDE);
+
+    // Default exit
+    grid[mapDim - 2][mapDim - 2] = EXIT;
+
+    // Generate enemies randomly if needed
+    enemies = [];
+    for (let i = 0; i < guardCount; i++) {
+        enemies.push({
+            x: Math.floor(Math.random() * (mapDim - 2)) + 1,
+            y: Math.floor(Math.random() * (mapDim - 2)) + 1,
+            ax: 0, ay: 0,
+            dir: { x: 1, y: 0 },
+            alive: true,
+            hp: 5,
+            maxHP: 5,
+            type: 'NORMAL',
+            attackRange: 1,
+            damage: 1,
+            speed: 1,
+            visionRange: 3,
+            state: 'patrolling',
+            investigationTarget: null,
+            investigationTurns: 0,
+            poisonTimer: 0,
+            hearingRange: 6,
+            hasHeardSound: false,
+            soundLocation: null,
+            returnToPatrolPos: { x: 0, y: 0 },
+            lastSeenPlayer: null,
+            chaseTurns: 0,
+            chaseMemory: 5,
+            color: 'white',
+            tint: 'none',
+            isSleeping: false,
+            sleepTimer: 0,
+            ateRice: false,
+            riceDeathTimer: Math.floor(Math.random() * 5) + 1
+        });
+    }
+}
     
     player = { x: 1, y: 1, ax: 1, ay: 1, isHidden: false, dir: {x: 0, y: 0} };
     grid[mapDim-2][mapDim-2] = EXIT;
