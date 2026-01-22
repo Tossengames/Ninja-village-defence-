@@ -1,11 +1,11 @@
-// campaign.js - Complete Map Selection System (Fixed)
+// campaign.js - Complete Map Selection System
 // ============================================
 
 // Global variables
-window.campaignMaps = []; 
-window.selectedMap = null; 
-window.customMapData = null; 
-window.USE_CUSTOM_MAP = false; 
+window.campaignMaps = []; // Array of available maps
+window.selectedMap = null; // Currently selected map
+window.customMapData = null; // Custom map data to load
+window.USE_CUSTOM_MAP = false; // Flag to use custom map
 
 // Map manifest URL
 const MAP_MANIFEST_URL = 'campaign_maps.json';
@@ -22,7 +22,7 @@ function openMapSelection() {
     buildMapList();
 }
 
-// Go back to map selection from item screen
+// Go back to map selection
 function backToMapSelection() {
     console.log("Going back to map selection...");
     const startBtn = document.getElementById('startGameBtn');
@@ -34,64 +34,72 @@ function backToMapSelection() {
     document.getElementById('mapSelectionScreen')?.classList.remove('hidden');
 }
 
-// Load the map manifest from JSON file
+// Load map manifest
 function loadCampaignManifest() {
     console.log("Loading map manifest...");
     return fetch(MAP_MANIFEST_URL)
-        .then(res => res.ok ? res.json() : Promise.reject(res.status))
-        .then(maps => { window.campaignMaps = maps; console.log(`Loaded ${maps.length} maps`); return maps; })
-        .catch(error => {
-            console.error("Failed to load campaign manifest:", error);
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+            return res.json();
+        })
+        .then(maps => {
+            window.campaignMaps = maps;
+            console.log(`Loaded ${maps.length} maps`);
+            return maps;
+        })
+        .catch(err => {
+            console.error("Failed to load manifest:", err);
             window.campaignMaps = [{
                 id: 'default_random',
                 name: 'Random Map',
                 file: null,
-                description: 'The original randomly generated map',
+                description: 'Original randomly generated map',
                 width: 12,
                 height: 12
             }];
+            console.log("Using fallback map list");
             return window.campaignMaps;
         });
 }
 
-// Build the map selection UI
+// Build map selection UI
 function buildMapList() {
     const container = document.getElementById('mapListContainer');
-    if (!container) { console.error("Map list container not found!"); return; }
+    if (!container) {
+        console.error("Map list container not found!");
+        return;
+    }
+
     container.innerHTML = '';
-    if (!window.campaignMaps || !window.campaignMaps.length) {
-        container.innerHTML = `<div class="empty-preview">
-            <div style="margin-bottom:10px;">⚠️ No maps available</div>
-            <div style="font-size:12px;color:#888;">Check if campaign_maps.json exists</div>
-        </div>`;
+    if (!window.campaignMaps.length) {
+        container.innerHTML = `<div class="empty-preview">⚠️ No maps available</div>`;
         return;
     }
 
     window.campaignMaps.forEach(map => {
-        const mapButton = document.createElement('div');
-        mapButton.className = 'selected-item-preview';
-        mapButton.style.cursor = 'pointer';
-        mapButton.style.textAlign = 'center';
-        mapButton.style.padding = '15px';
-        mapButton.style.margin = '8px 0';
-        mapButton.onclick = () => selectMap(map);
-        const isRandomMap = !map.file;
-        const icon = isRandomMap ? '🎲' : '🗺️';
-        const borderColor = isRandomMap ? '#888' : '#ff3333';
-        mapButton.style.border = `2px solid ${borderColor}`;
-        mapButton.style.background = isRandomMap 
-            ? 'linear-gradient(145deg, #222, #1a1a1a)' 
-            : 'linear-gradient(145deg, #2a1a1a, #1a1a1a)';
-        mapButton.innerHTML = `
-            <div class="item-icon" style="font-size:28px;margin-bottom:8px;">${icon}</div>
-            <div class="item-name" style="color:#fff;font-weight:bold;font-size:14px;">${map.name}</div>
-            <div style="font-size:11px;color:#aaa;margin:5px 0;">${map.description || ''}</div>
-            <div style="font-size:10px;color:#666;">
-                ${isRandomMap ? 'Random Generation' : `${map.width || '?'}×${map.height || '?'}`}
-            </div>
+        const btn = document.createElement('div');
+        btn.className = 'selected-item-preview';
+        btn.style.cursor = 'pointer';
+        btn.style.textAlign = 'center';
+        btn.style.padding = '15px';
+        btn.style.margin = '8px 0';
+        btn.onclick = () => selectMap(map);
+
+        const isRandom = !map.file;
+        const icon = isRandom ? '🎲' : '🗺️';
+        const borderColor = isRandom ? '#888' : '#ff3333';
+        btn.style.border = `2px solid ${borderColor}`;
+        btn.style.background = isRandom ? 'linear-gradient(145deg, #222, #1a1a1a)' : 'linear-gradient(145deg, #2a1a1a, #1a1a1a)';
+
+        btn.innerHTML = `
+            <div class="item-icon" style="font-size:28px;margin-bottom:8px">${icon}</div>
+            <div class="item-name" style="color:#fff;font-weight:bold;font-size:14px">${map.name}</div>
+            <div style="font-size:11px;color:#aaa;margin:5px 0">${map.description || ''}</div>
+            <div style="font-size:10px;color:#666">${isRandom ? 'Random Generation' : `${map.width}×${map.height}`}</div>
         `;
-        container.appendChild(mapButton);
+        container.appendChild(btn);
     });
+
     console.log(`Built UI for ${window.campaignMaps.length} maps`);
 }
 
@@ -99,6 +107,7 @@ function buildMapList() {
 function selectMap(mapData) {
     console.log("Selected map:", mapData.name);
     window.selectedMap = mapData;
+
     document.getElementById('mapSelectionScreen')?.classList.add('hidden');
     document.getElementById('itemSelection')?.classList.remove('hidden');
 
@@ -110,7 +119,7 @@ function selectMap(mapData) {
     }
 }
 
-// Start a specific campaign map
+// Start the selected map
 function startCampaignMap(mapData) {
     console.log("Starting campaign map:", mapData.name);
     document.getElementById('itemSelection')?.classList.add('hidden');
@@ -125,19 +134,17 @@ function startCampaignMap(mapData) {
         return;
     }
 
-    // Fetch custom map JSON
     fetch(mapData.file)
         .then(res => res.ok ? res.json() : Promise.reject(res.status))
         .then(mapConfig => {
             console.log("Map loaded successfully:", mapConfig.name);
             window.customMapData = mapConfig;
             window.USE_CUSTOM_MAP = true;
-
-            if (typeof window.initGame === 'function') window.initGame();
-            else alert("initGame function not found!");
+            if (typeof window.startGame === 'function') window.startGame();
+            else alert("startGame function not found!");
         })
-        .catch(error => {
-            console.error("Failed to load map file:", error);
+        .catch(err => {
+            console.error("Failed to load map file:", err);
             alert(`Error loading map "${mapData.name}"`);
             const startBtn = document.getElementById('startGameBtn');
             if (startBtn && startBtn._originalOnClick) {
@@ -152,87 +159,88 @@ function startCampaignMap(mapData) {
 // ============================================
 function validateMapData(mapData) {
     if (!mapData) return false;
-    const requiredFields = ['name','width','height','grid'];
-    for (const field of requiredFields) if (!mapData[field]) return false;
+    const required = ['name','width','height','grid'];
+    for (let f of required) if (!(f in mapData)) return false;
     if (mapData.grid.length !== mapData.height) return false;
-    for (let i=0;i<mapData.grid.length;i++) if (mapData.grid[i].length !== mapData.width) return false;
+    for (let row of mapData.grid) if (row.length !== mapData.width) return false;
     return true;
 }
 
 // ============================================
-// CUSTOM MAP SUPPORT
+// CUSTOM MAP INTEGRATION
 // ============================================
 function installCustomMapSupport() {
-    console.log("Installing custom map support...");
-    if (typeof window.generateLevel === 'function') {
-        const original = window.generateLevel;
-        window.generateLevel = function(guardCount) {
-            if (window.USE_CUSTOM_MAP && window.customMapData) {
-                console.log("=== LOADING CUSTOM MAP ===");
-                const mapData = window.customMapData;
+    if (typeof window.generateLevel !== 'function') {
+        console.error("generateLevel not found! Custom maps won't work.");
+        return;
+    }
 
-                if (!validateMapData(mapData)) {
-                    console.warn("Invalid map data, using random generation");
-                    window.USE_CUSTOM_MAP = false;
-                    window.customMapData = null;
-                    return original.call(this, guardCount);
-                }
+    window._originalGenerateLevel = window.generateLevel;
 
-                // Safe deep copy of grid
-                grid = mapData.grid.map(row => [...row]);
-                mapDim = mapData.width;
+    window.generateLevel = function(guardCount) {
+        if (window.USE_CUSTOM_MAP && window.customMapData) {
+            console.log("Using custom map:", window.customMapData.name);
+
+            const map = window.customMapData;
+            try {
+                mapDim = map.width;
+                grid = map.grid.map(r => [...r]);
 
                 // Player
-                const px = Math.max(0, Math.min(mapDim-1, mapData.player?.x||1));
-                const py = Math.max(0, Math.min(mapDim-1, mapData.player?.y||1));
+                const px = Math.max(0, Math.min(mapDim - 1, map.player?.x ?? 1));
+                const py = Math.max(0, Math.min(mapDim - 1, map.player?.y ?? 1));
                 player.x = player.ax = px;
                 player.y = player.ay = py;
                 player.dir = {x:0,y:0};
                 player.isHidden = (grid[py][px] === HIDE);
 
                 // Exit
-                if (mapData.exit) {
-                    const ex = Math.max(0, Math.min(mapDim-1, mapData.exit.x));
-                    const ey = Math.max(0, Math.min(mapDim-1, mapData.exit.y));
+                if (map.exit) {
+                    const ex = Math.max(0, Math.min(mapDim-1,map.exit.x));
+                    const ey = Math.max(0, Math.min(mapDim-1,map.exit.y));
                     grid[ey][ex] = EXIT;
-                } else {
-                    grid[mapDim-2][mapDim-2] = EXIT;
-                }
+                } else grid[mapDim-2][mapDim-2] = EXIT;
 
                 // Enemies
                 enemies = [];
-                if (Array.isArray(mapData.enemies)) {
-                    mapData.enemies.forEach((e,i)=>{
-                        if (typeof e.x==='number' && typeof e.y==='number') {
-                            const type = e.type||'NORMAL';
-                            const stats = ENEMY_TYPES[type]||ENEMY_TYPES.NORMAL;
+                if (Array.isArray(map.enemies)) {
+                    map.enemies.forEach((e,i) => {
+                        if (typeof e.x === 'number' && typeof e.y === 'number') {
+                            const type = e.type || 'NORMAL';
+                            const stats = ENEMY_TYPES[type] || ENEMY_TYPES.NORMAL;
                             enemies.push({
-                                x:e.x, y:e.y, ax:e.x, ay:e.y,
+                                x:e.x,y:e.y,ax:e.x,ay:e.y,
                                 dir:e.direction||{x:1,y:0},
-                                alive:true, hp:stats.hp, maxHP:stats.hp,
-                                type:type, attackRange:stats.range, damage:stats.damage, speed:stats.speed,
-                                visionRange:3, state:'patrolling', investigationTarget:null, investigationTurns:0,
-                                poisonTimer:0, hearingRange:6, hasHeardSound:false, soundLocation:null,
-                                returnToPatrolPos:{x:e.x,y:e.y}, lastSeenPlayer:null, chaseTurns:0, chaseMemory:5,
-                                color:stats.color, tint:stats.tint, isSleeping:false, sleepTimer:0, ateRice:false,
-                                riceDeathTimer:Math.floor(Math.random()*5)+1
+                                alive:true,hp:stats.hp,maxHP:stats.hp,
+                                type:type,attackRange:stats.range,damage:stats.damage,speed:stats.speed,
+                                visionRange:3,state:'patrolling',investigationTarget:null,investigationTurns:0,
+                                poisonTimer:0,hearingRange:6,hasHeardSound:false,soundLocation:null,
+                                returnToPatrolPos:{x:e.x,y:e.y},lastSeenPlayer:null,chaseTurns:0,chaseMemory:5,
+                                color:stats.color,tint:stats.tint,isSleeping:false,sleepTimer:0,
+                                ateRice:false,riceDeathTimer:Math.floor(Math.random()*5)+1
                             });
                         }
                     });
                 }
 
-                // Done loading custom map
-                console.log("Custom map loaded successfully");
+                // Reset flags
                 window.USE_CUSTOM_MAP = false;
                 window.customMapData = null;
+
+                console.log("Custom map loaded successfully");
                 return;
+            } catch (err) {
+                console.error("Error in custom map:", err);
+                window.USE_CUSTOM_MAP = false;
+                window.customMapData = null;
             }
-            return original.call(this, guardCount);
-        };
-        console.log("Custom map support installed");
-    } else {
-        console.error("generateLevel not found, cannot install custom maps");
-    }
+        }
+
+        // Original random generation
+        return window._originalGenerateLevel.call(this, guardCount);
+    };
+
+    console.log("Custom map support installed");
 }
 
 // ============================================
@@ -240,22 +248,22 @@ function installCustomMapSupport() {
 // ============================================
 function initCampaignSystem() {
     console.log("Initializing campaign system...");
-    loadCampaignManifest().then(()=>{
+    loadCampaignManifest().then(() => {
         installCustomMapSupport();
-        console.log("Campaign system initialized with maps:", window.campaignMaps.length);
+        if (!document.getElementById('mapListContainer')) console.warn("Map list container missing");
+        console.log("Campaign system initialized with", window.campaignMaps.length,"maps");
     });
 }
 
-// ============================================
-// PAGE LOAD SETUP
-// ============================================
-window.addEventListener('load',()=>{
-    setTimeout(()=>{
+// Setup on page load
+window.addEventListener('load', function() {
+    setTimeout(() => {
         console.log("Setting up campaign system...");
         initCampaignSystem();
-        if(typeof window.openMapSelection!=='function') window.openMapSelection = openMapSelection;
-        if(typeof window.backToMapSelection!=='function') window.backToMapSelection = backToMapSelection;
-    },1000);
+        if (!window.openMapSelection) window.openMapSelection = openMapSelection;
+        if (!window.backToMapSelection) window.backToMapSelection = backToMapSelection;
+        console.log("Campaign system setup complete");
+    }, 1000);
 });
 
 // ============================================
@@ -265,5 +273,15 @@ window.openMapSelection = openMapSelection;
 window.backToMapSelection = backToMapSelection;
 window.selectMap = selectMap;
 window.startCampaignMap = startCampaignMap;
+
+window.debugCampaignSystem = function() {
+    console.log("=== CAMPAIGN DEBUG ===");
+    console.log("campaignMaps:", window.campaignMaps);
+    console.log("selectedMap:", window.selectedMap);
+    console.log("customMapData:", window.customMapData);
+    console.log("USE_CUSTOM_MAP:", window.USE_CUSTOM_MAP);
+    console.log("generateLevel overridden:", !!window._originalGenerateLevel);
+    console.log("=====================");
+};
 
 console.log("campaign.js loaded successfully");
