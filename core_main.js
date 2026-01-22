@@ -422,28 +422,152 @@ function initGame() {
     requestAnimationFrame(gameLoop);
 }
 
+// ============================================
+// REPLACE THE generateLevel FUNCTION with this:
+// ============================================
+
 function generateLevel(guardCount) {
     canvas.width = window.innerWidth; 
     canvas.height = window.innerHeight;
     
+    // Check if we have level data from JSON loader
+    if (window.selectedLevelData) {
+        loadLevelFromJson(window.selectedLevelData, guardCount);
+    } else {
+        // Fallback to original random generation
+        generateRandomLevel(guardCount);
+    }
+}
+
+function loadLevelFromJson(jsonData, guardCount) {
+    console.log("Loading level from JSON:", jsonData.name);
+    
+    // Get converted data from game.js
+    let levelData;
+    if (typeof window.getLevelData === 'function') {
+        levelData = window.getLevelData();
+    } else {
+        // Fallback conversion
+        levelData = convertJsonForCore(jsonData);
+    }
+    
+    if (!levelData) {
+        console.error("Failed to load level data, using random generation");
+        generateRandomLevel(guardCount);
+        return;
+    }
+    
+    // Set map dimensions
+    mapDim = levelData.rows || 12;
+    
+    // Use the converted grid
+    grid = levelData.grid;
+    
+    // Set player position
+    player = { 
+        x: levelData.playerStart.x, 
+        y: levelData.playerStart.y, 
+        ax: levelData.playerStart.x, 
+        ay: levelData.playerStart.y, 
+        isHidden: false, 
+        dir: {x: 0, y: 0} 
+    };
+    
+    // Create enemies from JSON data
+    enemies = [];
+    const enemyPositions = levelData.enemies || [];
+    
+    // Limit enemies by guardCount if needed
+    const maxEnemies = Math.min(guardCount || 5, enemyPositions.length);
+    
+    for(let i = 0; i < maxEnemies; i++) {
+        const pos = enemyPositions[i];
+        if (!pos) continue;
+        
+        const visionRange = 3;
+        const typeRoll = Math.random();
+        let enemyType, enemyStats;
+        
+        if(typeRoll < 0.6) {
+            enemyType = 'NORMAL';
+            enemyStats = ENEMY_TYPES.NORMAL;
+        } else if(typeRoll < 0.85) {
+            enemyType = 'SPEAR';
+            enemyStats = ENEMY_TYPES.SPEAR;
+        } else {
+            enemyType = 'ARCHER';
+            enemyStats = ENEMY_TYPES.ARCHER;
+        }
+        
+        enemies.push({
+            x: pos.x, 
+            y: pos.y, 
+            ax: pos.x, 
+            ay: pos.y, 
+            dir: {x: 1, y: 0}, 
+            alive: true,
+            hp: enemyStats.hp,
+            maxHP: enemyStats.hp,
+            type: enemyType,
+            attackRange: enemyStats.range,
+            damage: enemyStats.damage,
+            speed: enemyStats.speed,
+            visionRange: visionRange,
+            state: 'patrolling',
+            investigationTarget: null,
+            investigationTurns: 0,
+            poisonTimer: 0,
+            hearingRange: 6,
+            hasHeardSound: false,
+            soundLocation: null,
+            returnToPatrolPos: {x: pos.x, y: pos.y},
+            lastSeenPlayer: null,
+            chaseTurns: 0,
+            chaseMemory: 5,
+            color: enemyStats.color,
+            tint: enemyStats.tint,
+            isSleeping: false,
+            sleepTimer: 0,
+            ateRice: false,
+            riceDeathTimer: Math.floor(Math.random() * 5) + 1
+        });
+    }
+    
+    // Add coins randomly (you can add specific positions to JSON later)
+    for(let i = 0; i < 3; i++) {
+        let cx, cy;
+        do {
+            cx = rand(mapDim);
+            cy = rand(mapDim);
+        } while(grid[cy][cx] !== 0 || Math.hypot(cx-player.x, cy-player.y) < 3);
+        grid[cy][cx] = 5; // COIN
+    }
+    
+    // Exit should already be in grid from conversion
+    console.log("JSON level loaded successfully");
+}
+
+function generateRandomLevel(guardCount) {
+    // COPY YOUR ORIGINAL generateLevel FUNCTION HERE
+    // This is your existing random generation code
     grid = Array.from({length: mapDim}, (_, y) => 
         Array.from({length: mapDim}, (_, x) => 
-            (x==0 || y==0 || x==mapDim-1 || y==mapDim-1) ? WALL : 
-            Math.random() < 0.18 ? WALL : 
-            Math.random() < 0.08 ? HIDE : FLOOR
+            (x==0 || y==0 || x==mapDim-1 || y==mapDim-1) ? 1 : 
+            Math.random() < 0.18 ? 1 : 
+            Math.random() < 0.08 ? 2 : 0
         )
     );
     
     player = { x: 1, y: 1, ax: 1, ay: 1, isHidden: false, dir: {x: 0, y: 0} };
-    grid[mapDim-2][mapDim-2] = EXIT;
+    grid[mapDim-2][mapDim-2] = 3;
     
     for(let i = 0; i < 3; i++) {
         let cx, cy;
         do {
             cx = rand(mapDim);
             cy = rand(mapDim);
-        } while(grid[cy][cx] !== FLOOR || Math.hypot(cx-player.x, cy-player.y) < 3);
-        grid[cy][cx] = COIN;
+        } while(grid[cy][cx] !== 0 || Math.hypot(cx-player.x, cy-player.y) < 3);
+        grid[cy][cx] = 5;
     }
     
     const gc = Math.min(15, Math.max(1, guardCount));
@@ -453,7 +577,7 @@ function generateLevel(guardCount) {
         do { 
             ex = rand(mapDim); 
             ey = rand(mapDim); 
-        } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
+        } while(grid[ey][ex] !== 0 || Math.hypot(ex-player.x, ey-player.y) < 4);
         
         const visionRange = 3;
         
@@ -502,6 +626,69 @@ function generateLevel(guardCount) {
         });
     }
 }
+
+// Helper function for conversion
+function convertJsonForCore(jsonData) {
+    const { rows, cols, grid } = jsonData;
+    
+    const gameGrid = [];
+    for (let y = 0; y < rows; y++) {
+        gameGrid[y] = [];
+        for (let x = 0; x < cols; x++) {
+            const tileIndex = y * cols + x;
+            const tileID = grid[tileIndex];
+            
+            switch(tileID) {
+                case 0: // Floor
+                    gameGrid[y][x] = 0; // FLOOR
+                    break;
+                case 1: // Wall
+                    gameGrid[y][x] = 1; // WALL
+                    break;
+                case 2: // Player start
+                    gameGrid[y][x] = 0; // Floor
+                    break;
+                case 3: // Enemy
+                    gameGrid[y][x] = 0; // Floor
+                    break;
+                case 4: // Exit
+                    gameGrid[y][x] = 3; // EXIT
+                    break;
+                default:
+                    gameGrid[y][x] = 0;
+            }
+        }
+    }
+    
+    // Extract positions
+    const playerStart = { x: 1, y: 1 };
+    const enemies = [];
+    
+    for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+            const tileIndex = y * cols + x;
+            const tileID = grid[tileIndex];
+            
+            if (tileID === 2) {
+                playerStart.x = x;
+                playerStart.y = y;
+            } else if (tileID === 3) {
+                enemies.push({ x, y });
+            }
+        }
+    }
+    
+    return {
+        rows: rows,
+        cols: cols,
+        grid: gameGrid,
+        playerStart: playerStart,
+        enemies: enemies,
+        name: jsonData.name || "Unnamed Level"
+    };
+}
+
+function rand(m) { return Math.floor(Math.random()*(m-2))+1; }
 
 function rand(m) { return Math.floor(Math.random()*(m-2))+1; }
 
