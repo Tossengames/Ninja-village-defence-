@@ -1,4 +1,73 @@
 // ============================================
+// CORE MAIN - STEALTH GAME ENGINE
+// ============================================
+
+const TILE = 60;
+const FLOOR = 0, WALL = 1, HIDE = 2, EXIT = 3, COIN = 5, TRAP = 6, RICE = 7, BOMB = 8, GAS = 9;
+
+// Global game state
+let grid, player, enemies = [], activeBombs = [], activeGas = [], turnCount = 1;
+let selectMode = 'move', gameOver = false, playerTurn = true, shake = 0, mapDim = 12;
+let stats = { kills: 0, coins: 0, itemsUsed: 0, timesSpotted: 0, stealthKills: 0, timeBonus: 0 };
+let inv = { trap: 0, rice: 0, bomb: 0, gas: 0, health: 0, coin: 0, sight: 0, mark: 0 };
+let camX = 0, camY = 0, zoom = 1.0;
+let showMinimap = false;
+let showHighlights = true;
+let showLog = false;
+let highlightedTiles = [];
+let hasReachedExit = false;
+let currentEnemyTurn = null;
+let combatSequence = false;
+let startTime = 0;
+let currentTurnEntity = null;
+let playerHasMovedThisTurn = false;
+let playerUsedActionThisTurn = false;
+let cameraFocusEnabled = true;
+let isUserDragging = false;
+let dragStartX = 0, dragStartY = 0;
+
+// Player stats
+let playerHP = 10;
+let playerMaxHP = 10;
+
+// VFX Systems
+let particles = [];
+let bloodStains = [];
+let coinPickupEffects = [];
+let hideEffects = [];
+let explosionEffects = [];
+let footstepEffects = [];
+let damageEffects = [];
+let speechBubbles = [];
+let gasEffects = [];
+
+// Canvas and rendering
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const sprites = {};
+
+// Audio context for programmatic SFX
+let audioContext;
+let gainNode;
+
+// Mode colors for highlighting
+const modeColors = {
+    'move': { fill: 'rgba(0, 210, 255, 0.15)', border: 'rgba(0, 210, 255, 0.7)', glow: 'rgba(0, 210, 255, 0.3)' },
+    'trap': { fill: 'rgba(255, 100, 100, 0.15)', border: 'rgba(255, 100, 100, 0.7)', glow: 'rgba(255, 100, 100, 0.3)' },
+    'rice': { fill: 'rgba(255, 255, 100, 0.15)', border: 'rgba(255, 255, 100, 0.7)', glow: 'rgba(255, 255, 100, 0.3)' },
+    'bomb': { fill: 'rgba(255, 50, 150, 0.15)', border: 'rgba(255, 50, 150, 0.7)', glow: 'rgba(255, 50, 150, 0.3)' },
+    'gas': { fill: 'rgba(153, 50, 204, 0.15)', border: 'rgba(153, 50, 204, 0.7)', glow: 'rgba(153, 50, 204, 0.3)' },
+    'attack': { fill: 'rgba(255, 0, 0, 0.3)', border: 'rgba(255, 0, 0, 0.8)', glow: 'rgba(255, 0, 0, 0.5)' }
+};
+
+// Enemy types with distinct colors
+const ENEMY_TYPES = {
+    NORMAL: { range: 1, hp: 10, speed: 0.08, damage: 2, color: '#ff3333', tint: 'rgba(255, 50, 50, 0.3)' },
+    ARCHER: { range: 3, hp: 8, speed: 0.06, damage: 1, color: '#33cc33', tint: 'rgba(50, 255, 50, 0.3)' },
+    SPEAR: { range: 2, hp: 12, speed: 0.07, damage: 3, color: '#3366ff', tint: 'rgba(50, 100, 255, 0.3)' }
+};
+
+// ============================================
 // MENU SYSTEM - MUST BE AT TOP
 // ============================================
 
@@ -9,6 +78,7 @@ let selectedItems = {
 };
 let mapSize = 12;
 let guardCount = 5;
+let selectedLevelFile = "random"; // Store selected level
 
 // Initialize menu
 function initMenu() {
@@ -86,6 +156,15 @@ function changeGuardCount(delta) {
     
     // Store in global variable for game
     window.guardCount = guardCount;
+}
+
+// Get selected level from dropdown
+function getSelectedLevel() {
+    const select = document.getElementById('levelSelect');
+    if (select) {
+        selectedLevelFile = select.value;
+    }
+    return selectedLevelFile;
 }
 
 // Item selection logic
@@ -273,9 +352,9 @@ function getItemInfo(itemType) {
 }
 
 // Start game
-function startGame() {
+async function startGame() {
     console.log("Starting game...");
-    console.log("Map size:", mapSize);
+    console.log("Selected level:", getSelectedLevel());
     console.log("Guard count:", guardCount);
     console.log("Selected items:", selectedItems);
     
@@ -289,89 +368,206 @@ function startGame() {
     document.getElementById('itemSelection').classList.add('hidden');
     document.getElementById('tutorialScreen').classList.add('hidden');
     
-    // Initialize game
-    if (typeof initGame === 'function') {
-        initGame();
-    } else {
-        console.error("initGame function not found!");
-        alert("Game initialization error!");
-    }
+    // Initialize game with selected level
+    await initGame();
 }
 
 // ============================================
-// CORE MAIN - ENGINE SETUP & GAME LOOP
+// JSON LEVEL LOADING
 // ============================================
 
-const TILE = 60;
-const FLOOR = 0, WALL = 1, HIDE = 2, EXIT = 3, COIN = 5, TRAP = 6, RICE = 7, BOMB = 8, GAS = 9;
+// Load JSON level file
+async function loadJsonLevel(fileName) {
+    try {
+        console.log("Loading JSON:", fileName);
+        const response = await fetch(fileName);
+        if (!response.ok) throw new Error("Could not find " + fileName);
+        
+        const jsonData = await response.json();
+        console.log("JSON loaded:", jsonData.name);
+        return jsonData;
+    } catch (err) {
+        console.error("Error loading JSON:", err);
+        return null;
+    }
+}
 
-// Global game state
-let grid, player, enemies = [], activeBombs = [], activeGas = [], turnCount = 1;
-let selectMode = 'move', gameOver = false, playerTurn = true, shake = 0, mapDim = 12;
-let stats = { kills: 0, coins: 0, itemsUsed: 0, timesSpotted: 0, stealthKills: 0, timeBonus: 0 };
-let inv = { trap: 0, rice: 0, bomb: 0, gas: 0, health: 0, coin: 0, sight: 0, mark: 0 };
-let camX = 0, camY = 0, zoom = 1.0;
-let showMinimap = false;
-let showHighlights = true;
-let showLog = false;
-let highlightedTiles = [];
-let hasReachedExit = false;
-let currentEnemyTurn = null;
-let combatSequence = false;
-let startTime = 0;
-let currentTurnEntity = null;
-let playerHasMovedThisTurn = false;
-let playerUsedActionThisTurn = false;
-let cameraFocusEnabled = true;
-let isUserDragging = false;
-let dragStartX = 0, dragStartY = 0;
+// Generate level from JSON data
+function generateLevelFromJson(jsonData, guardCount) {
+    console.log("Generating level from JSON");
+    
+    const { rows, cols, grid: jsonGrid } = jsonData;
+    mapDim = rows;
+    
+    // Create empty grid
+    grid = [];
+    let playerStart = { x: 1, y: 1 };
+    const enemyPositions = [];
+    
+    // Convert flat JSON grid to 2D array
+    for (let y = 0; y < rows; y++) {
+        grid[y] = [];
+        for (let x = 0; x < cols; x++) {
+            const tileIndex = y * cols + x;
+            const tileID = jsonGrid[tileIndex];
+            
+            // Map JSON tiles to game tiles (SAME AS YOUR game.js)
+            switch(tileID) {
+                case 0: // Floor
+                    grid[y][x] = FLOOR;
+                    break;
+                case 1: // Wall
+                    grid[y][x] = WALL;
+                    break;
+                case 2: // Player start
+                    grid[y][x] = FLOOR;
+                    playerStart = { x, y };
+                    break;
+                case 3: // Enemy (red)
+                    grid[y][x] = FLOOR;
+                    enemyPositions.push({ x, y });
+                    break;
+                case 4: // Exit (gold)
+                    grid[y][x] = EXIT;
+                    break;
+                default:
+                    grid[y][x] = FLOOR;
+            }
+        }
+    }
+    
+    // Set player position
+    player = { 
+        x: playerStart.x, 
+        y: playerStart.y, 
+        ax: playerStart.x, 
+        ay: playerStart.y, 
+        isHidden: false, 
+        dir: {x: 0, y: 0} 
+    };
+    
+    // Create enemies
+    enemies = [];
+    const maxEnemies = Math.min(guardCount || 5, enemyPositions.length);
+    
+    for (let i = 0; i < maxEnemies; i++) {
+        const pos = enemyPositions[i];
+        if (pos) {
+            createEnemyAt(pos.x, pos.y);
+        }
+    }
+    
+    // Add coins randomly
+    for(let i = 0; i < 3; i++) {
+        let cx, cy;
+        do {
+            cx = rand(mapDim);
+            cy = rand(mapDim);
+        } while(grid[cy][cx] !== FLOOR || Math.hypot(cx-player.x, cy-player.y) < 3);
+        grid[cy][cx] = COIN;
+    }
+    
+    console.log("JSON level generated with", enemies.length, "enemies");
+}
 
-// Player stats
-let playerHP = 10;
-let playerMaxHP = 10;
+// Create enemy at position
+function createEnemyAt(x, y) {
+    const visionRange = 3;
+    const typeRoll = Math.random();
+    let enemyType, enemyStats;
+    
+    if(typeRoll < 0.6) {
+        enemyType = 'NORMAL';
+        enemyStats = ENEMY_TYPES.NORMAL;
+    } else if(typeRoll < 0.85) {
+        enemyType = 'SPEAR';
+        enemyStats = ENEMY_TYPES.SPEAR;
+    } else {
+        enemyType = 'ARCHER';
+        enemyStats = ENEMY_TYPES.ARCHER;
+    }
+    
+    enemies.push({
+        x: x, 
+        y: y, 
+        ax: x, 
+        ay: y, 
+        dir: {x: 1, y: 0}, 
+        alive: true,
+        hp: enemyStats.hp,
+        maxHP: enemyStats.hp,
+        type: enemyType,
+        attackRange: enemyStats.range,
+        damage: enemyStats.damage,
+        speed: enemyStats.speed,
+        visionRange: visionRange,
+        state: 'patrolling',
+        investigationTarget: null,
+        investigationTurns: 0,
+        poisonTimer: 0,
+        hearingRange: 6,
+        hasHeardSound: false,
+        soundLocation: null,
+        returnToPatrolPos: {x: x, y: y},
+        lastSeenPlayer: null,
+        chaseTurns: 0,
+        chaseMemory: 5,
+        color: enemyStats.color,
+        tint: enemyStats.tint,
+        isSleeping: false,
+        sleepTimer: 0,
+        ateRice: false,
+        riceDeathTimer: Math.floor(Math.random() * 5) + 1
+    });
+}
 
-// VFX Systems
-let particles = [];
-let bloodStains = [];
-let coinPickupEffects = [];
-let hideEffects = [];
-let explosionEffects = [];
-let footstepEffects = [];
-let damageEffects = [];
-let speechBubbles = [];
-let gasEffects = [];
+// ============================================
+// RANDOM LEVEL GENERATION (FALLBACK)
+// ============================================
 
-// Canvas and rendering
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const sprites = {};
+function generateRandomLevel(guardCount) {
+    console.log("Generating random level");
+    
+    grid = Array.from({length: mapDim}, (_, y) => 
+        Array.from({length: mapDim}, (_, x) => 
+            (x==0 || y==0 || x==mapDim-1 || y==mapDim-1) ? WALL : 
+            Math.random() < 0.18 ? WALL : 
+            Math.random() < 0.08 ? HIDE : FLOOR
+        )
+    );
+    
+    player = { x: 1, y: 1, ax: 1, ay: 1, isHidden: false, dir: {x: 0, y: 0} };
+    grid[mapDim-2][mapDim-2] = EXIT;
+    
+    for(let i = 0; i < 3; i++) {
+        let cx, cy;
+        do {
+            cx = rand(mapDim);
+            cy = rand(mapDim);
+        } while(grid[cy][cx] !== FLOOR || Math.hypot(cx-player.x, cy-player.y) < 3);
+        grid[cy][cx] = COIN;
+    }
+    
+    const gc = Math.min(15, Math.max(1, guardCount));
+    enemies = [];
+    for(let i=0; i<gc; i++){
+        let ex, ey; 
+        do { 
+            ex = rand(mapDim); 
+            ey = rand(mapDim); 
+        } while(grid[ey][ex] !== FLOOR || Math.hypot(ex-player.x, ey-player.y) < 4);
+        
+        createEnemyAt(ex, ey);
+    }
+}
 
-// Audio context for programmatic SFX
-let audioContext;
-let gainNode;
-
-// Mode colors for highlighting
-const modeColors = {
-    'move': { fill: 'rgba(0, 210, 255, 0.15)', border: 'rgba(0, 210, 255, 0.7)', glow: 'rgba(0, 210, 255, 0.3)' },
-    'trap': { fill: 'rgba(255, 100, 100, 0.15)', border: 'rgba(255, 100, 100, 0.7)', glow: 'rgba(255, 100, 100, 0.3)' },
-    'rice': { fill: 'rgba(255, 255, 100, 0.15)', border: 'rgba(255, 255, 100, 0.7)', glow: 'rgba(255, 255, 100, 0.3)' },
-    'bomb': { fill: 'rgba(255, 50, 150, 0.15)', border: 'rgba(255, 50, 150, 0.7)', glow: 'rgba(255, 50, 150, 0.3)' },
-    'gas': { fill: 'rgba(153, 50, 204, 0.15)', border: 'rgba(153, 50, 204, 0.7)', glow: 'rgba(153, 50, 204, 0.3)' },
-    'attack': { fill: 'rgba(255, 0, 0, 0.3)', border: 'rgba(255, 0, 0, 0.8)', glow: 'rgba(255, 0, 0, 0.5)' }
-};
-
-// Enemy types with distinct colors
-const ENEMY_TYPES = {
-    NORMAL: { range: 1, hp: 10, speed: 0.08, damage: 2, color: '#ff3333', tint: 'rgba(255, 50, 50, 0.3)' },
-    ARCHER: { range: 3, hp: 8, speed: 0.06, damage: 1, color: '#33cc33', tint: 'rgba(50, 255, 50, 0.3)' },
-    SPEAR: { range: 2, hp: 12, speed: 0.07, damage: 3, color: '#3366ff', tint: 'rgba(50, 100, 255, 0.3)' }
-};
+function rand(m) { return Math.floor(Math.random()*(m-2))+1; }
 
 // ============================================
 // INITIALIZATION
 // ============================================
 
-function initGame() {
+async function initGame() {
     // Get values from menu system
     mapDim = window.mapDim || 12;
     const guardCount = window.guardCount || 5;
@@ -415,282 +611,26 @@ function initGame() {
     document.getElementById('resultScreen').classList.add('hidden');
     document.getElementById('gameOverScreen').classList.add('hidden');
     
-    generateLevel(guardCount);
+    // Generate level based on selection
+    const selectedLevel = getSelectedLevel();
+    
+    if (selectedLevel === "random") {
+        generateRandomLevel(guardCount);
+    } else {
+        const jsonData = await loadJsonLevel(selectedLevel);
+        if (jsonData) {
+            generateLevelFromJson(jsonData, guardCount);
+        } else {
+            console.log("Failed to load JSON, using random generation");
+            generateRandomLevel(guardCount);
+        }
+    }
+    
     centerCamera();
     updateToolCounts();
     
     requestAnimationFrame(gameLoop);
 }
-
-// ============================================
-// REPLACE THE generateLevel FUNCTION with this:
-// ============================================
-
-function generateLevel(guardCount) {
-    canvas.width = window.innerWidth; 
-    canvas.height = window.innerHeight;
-    
-    // Check if we have level data from JSON loader
-    if (window.selectedLevelData) {
-        loadLevelFromJson(window.selectedLevelData, guardCount);
-    } else {
-        // Fallback to original random generation
-        generateRandomLevel(guardCount);
-    }
-}
-
-function loadLevelFromJson(jsonData, guardCount) {
-    console.log("Loading level from JSON:", jsonData.name);
-    
-    // Get converted data from game.js
-    let levelData;
-    if (typeof window.getLevelData === 'function') {
-        levelData = window.getLevelData();
-    } else {
-        // Fallback conversion
-        levelData = convertJsonForCore(jsonData);
-    }
-    
-    if (!levelData) {
-        console.error("Failed to load level data, using random generation");
-        generateRandomLevel(guardCount);
-        return;
-    }
-    
-    // Set map dimensions
-    mapDim = levelData.rows || 12;
-    
-    // Use the converted grid
-    grid = levelData.grid;
-    
-    // Set player position
-    player = { 
-        x: levelData.playerStart.x, 
-        y: levelData.playerStart.y, 
-        ax: levelData.playerStart.x, 
-        ay: levelData.playerStart.y, 
-        isHidden: false, 
-        dir: {x: 0, y: 0} 
-    };
-    
-    // Create enemies from JSON data
-    enemies = [];
-    const enemyPositions = levelData.enemies || [];
-    
-    // Limit enemies by guardCount if needed
-    const maxEnemies = Math.min(guardCount || 5, enemyPositions.length);
-    
-    for(let i = 0; i < maxEnemies; i++) {
-        const pos = enemyPositions[i];
-        if (!pos) continue;
-        
-        const visionRange = 3;
-        const typeRoll = Math.random();
-        let enemyType, enemyStats;
-        
-        if(typeRoll < 0.6) {
-            enemyType = 'NORMAL';
-            enemyStats = ENEMY_TYPES.NORMAL;
-        } else if(typeRoll < 0.85) {
-            enemyType = 'SPEAR';
-            enemyStats = ENEMY_TYPES.SPEAR;
-        } else {
-            enemyType = 'ARCHER';
-            enemyStats = ENEMY_TYPES.ARCHER;
-        }
-        
-        enemies.push({
-            x: pos.x, 
-            y: pos.y, 
-            ax: pos.x, 
-            ay: pos.y, 
-            dir: {x: 1, y: 0}, 
-            alive: true,
-            hp: enemyStats.hp,
-            maxHP: enemyStats.hp,
-            type: enemyType,
-            attackRange: enemyStats.range,
-            damage: enemyStats.damage,
-            speed: enemyStats.speed,
-            visionRange: visionRange,
-            state: 'patrolling',
-            investigationTarget: null,
-            investigationTurns: 0,
-            poisonTimer: 0,
-            hearingRange: 6,
-            hasHeardSound: false,
-            soundLocation: null,
-            returnToPatrolPos: {x: pos.x, y: pos.y},
-            lastSeenPlayer: null,
-            chaseTurns: 0,
-            chaseMemory: 5,
-            color: enemyStats.color,
-            tint: enemyStats.tint,
-            isSleeping: false,
-            sleepTimer: 0,
-            ateRice: false,
-            riceDeathTimer: Math.floor(Math.random() * 5) + 1
-        });
-    }
-    
-    // Add coins randomly (you can add specific positions to JSON later)
-    for(let i = 0; i < 3; i++) {
-        let cx, cy;
-        do {
-            cx = rand(mapDim);
-            cy = rand(mapDim);
-        } while(grid[cy][cx] !== 0 || Math.hypot(cx-player.x, cy-player.y) < 3);
-        grid[cy][cx] = 5; // COIN
-    }
-    
-    // Exit should already be in grid from conversion
-    console.log("JSON level loaded successfully");
-}
-
-function generateRandomLevel(guardCount) {
-    // COPY YOUR ORIGINAL generateLevel FUNCTION HERE
-    // This is your existing random generation code
-    grid = Array.from({length: mapDim}, (_, y) => 
-        Array.from({length: mapDim}, (_, x) => 
-            (x==0 || y==0 || x==mapDim-1 || y==mapDim-1) ? 1 : 
-            Math.random() < 0.18 ? 1 : 
-            Math.random() < 0.08 ? 2 : 0
-        )
-    );
-    
-    player = { x: 1, y: 1, ax: 1, ay: 1, isHidden: false, dir: {x: 0, y: 0} };
-    grid[mapDim-2][mapDim-2] = 3;
-    
-    for(let i = 0; i < 3; i++) {
-        let cx, cy;
-        do {
-            cx = rand(mapDim);
-            cy = rand(mapDim);
-        } while(grid[cy][cx] !== 0 || Math.hypot(cx-player.x, cy-player.y) < 3);
-        grid[cy][cx] = 5;
-    }
-    
-    const gc = Math.min(15, Math.max(1, guardCount));
-    enemies = [];
-    for(let i=0; i<gc; i++){
-        let ex, ey; 
-        do { 
-            ex = rand(mapDim); 
-            ey = rand(mapDim); 
-        } while(grid[ey][ex] !== 0 || Math.hypot(ex-player.x, ey-player.y) < 4);
-        
-        const visionRange = 3;
-        
-        const typeRoll = Math.random();
-        let enemyType, enemyStats;
-        if(typeRoll < 0.6) {
-            enemyType = 'NORMAL';
-            enemyStats = ENEMY_TYPES.NORMAL;
-        } else if(typeRoll < 0.85) {
-            enemyType = 'SPEAR';
-            enemyStats = ENEMY_TYPES.SPEAR;
-        } else {
-            enemyType = 'ARCHER';
-            enemyStats = ENEMY_TYPES.ARCHER;
-        }
-        
-        enemies.push({
-            x: ex, y: ey, 
-            ax: ex, ay: ey, 
-            dir: {x: 1, y: 0}, 
-            alive: true,
-            hp: enemyStats.hp,
-            maxHP: enemyStats.hp,
-            type: enemyType,
-            attackRange: enemyStats.range,
-            damage: enemyStats.damage,
-            speed: enemyStats.speed,
-            visionRange: visionRange,
-            state: 'patrolling',
-            investigationTarget: null,
-            investigationTurns: 0,
-            poisonTimer: 0,
-            hearingRange: 6,
-            hasHeardSound: false,
-            soundLocation: null,
-            returnToPatrolPos: {x: ex, y: ey},
-            lastSeenPlayer: null,
-            chaseTurns: 0,
-            chaseMemory: 5,
-            color: enemyStats.color,
-            tint: enemyStats.tint,
-            isSleeping: false,
-            sleepTimer: 0,
-            ateRice: false,
-            riceDeathTimer: Math.floor(Math.random() * 5) + 1
-        });
-    }
-}
-
-// Helper function for conversion
-function convertJsonForCore(jsonData) {
-    const { rows, cols, grid } = jsonData;
-    
-    const gameGrid = [];
-    for (let y = 0; y < rows; y++) {
-        gameGrid[y] = [];
-        for (let x = 0; x < cols; x++) {
-            const tileIndex = y * cols + x;
-            const tileID = grid[tileIndex];
-            
-            switch(tileID) {
-                case 0: // Floor
-                    gameGrid[y][x] = 0; // FLOOR
-                    break;
-                case 1: // Wall
-                    gameGrid[y][x] = 1; // WALL
-                    break;
-                case 2: // Player start
-                    gameGrid[y][x] = 0; // Floor
-                    break;
-                case 3: // Enemy
-                    gameGrid[y][x] = 0; // Floor
-                    break;
-                case 4: // Exit
-                    gameGrid[y][x] = 3; // EXIT
-                    break;
-                default:
-                    gameGrid[y][x] = 0;
-            }
-        }
-    }
-    
-    // Extract positions
-    const playerStart = { x: 1, y: 1 };
-    const enemies = [];
-    
-    for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-            const tileIndex = y * cols + x;
-            const tileID = grid[tileIndex];
-            
-            if (tileID === 2) {
-                playerStart.x = x;
-                playerStart.y = y;
-            } else if (tileID === 3) {
-                enemies.push({ x, y });
-            }
-        }
-    }
-    
-    return {
-        rows: rows,
-        cols: cols,
-        grid: gameGrid,
-        playerStart: playerStart,
-        enemies: enemies,
-        name: jsonData.name || "Unnamed Level"
-    };
-}
-
-function rand(m) { return Math.floor(Math.random()*(m-2))+1; }
-
-function rand(m) { return Math.floor(Math.random()*(m-2))+1; }
 
 // ============================================
 // SPRITE LOADING
@@ -1571,7 +1511,7 @@ function wait(ms) {
 }
 
 // ============================================
-// TENCHU-STYLE VICTORY STATS (UPDATED)
+// TENCHU-STYLE VICTORY STATS
 // ============================================
 
 function showTenchuStyleVictoryStats() {
@@ -1581,38 +1521,37 @@ function showTenchuStyleVictoryStats() {
     const minutes = Math.floor(missionTime / 60);
     const seconds = missionTime % 60;
     
-    // Calculate score based on Tenchu-style scoring (BALANCED)
-    let score = 1000; // Base score - ensures never zero
+    // Calculate score based on Tenchu-style scoring
+    let score = 1000; // Base score
     
-    // Time bonus (faster = more points, but not too punishing)
+    // Time bonus
     const maxTimeBonus = 5000;
-    const timePenaltyPerSecond = 5; // Reduced from 20
+    const timePenaltyPerSecond = 5;
     const timeBonus = Math.max(0, maxTimeBonus - (missionTime * timePenaltyPerSecond));
     stats.timeBonus = Math.floor(timeBonus);
     score += stats.timeBonus;
     
-    // Kills (normal kills are good)
-    const killPoints = stats.kills * 300; // Increased from 200
+    // Kills
+    const killPoints = stats.kills * 300;
     score += killPoints;
     
-    // Stealth kills bonus (BETTER than normal kills)
-    const stealthBonus = stats.stealthKills * 800; // Increased from 500
+    // Stealth kills bonus
+    const stealthBonus = stats.stealthKills * 800;
     score += stealthBonus;
     
     // Coins
-    const coinPoints = stats.coins * 150; // Increased from 100
+    const coinPoints = stats.coins * 150;
     score += coinPoints;
     
-    // SMALL PENALTY for being spotted (not too harsh)
-    const spottedPenalty = stats.timesSpotted * 200; // Reduced from 1000
-    score = Math.max(500, score - spottedPenalty); // Minimum 500
+    // Penalty for being spotted
+    const spottedPenalty = stats.timesSpotted * 200;
+    score = Math.max(500, score - spottedPenalty);
     
-    // NO PENALTY for items used - items are tactical tools!
-    // BONUS for not using items (stealthy approach)
-    const itemBonus = (10 - Math.min(stats.itemsUsed, 10)) * 100; // Bonus for using fewer items
+    // Bonus for not using items
+    const itemBonus = (10 - Math.min(stats.itemsUsed, 10)) * 100;
     score += itemBonus;
     
-    // Tenchu-style rankings (like Tenchu: Stealth Assassins)
+    // Tenchu-style rankings
     let rank = "THUG";
     let rankDescription = "";
     let rankColor = "#888";
@@ -1660,7 +1599,7 @@ function showTenchuStyleVictoryStats() {
     rankLabel.style.color = rankColor;
     rankLabel.style.textShadow = `0 0 10px ${rankColor}`;
     
-    // Show detailed stats in Tenchu style
+    // Show detailed stats
     statsTable.innerHTML = `
         <div class="stat-row">
             <span class="stat-label">MISSION TIME</span>
