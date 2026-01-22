@@ -5,60 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Stealth Game</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        /* Level Selection Specific Styles */
-        .level-scroll-box {
-            max-height: 300px;
-            overflow-y: auto;
-            background: #222;
-            border-radius: 8px;
-            margin: 15px 0;
-            border: 1px solid #444;
-            padding: 5px;
-        }
-
-        .level-item {
-            padding: 15px;
-            border-bottom: 1px solid #333;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-weight: bold;
-            background: #2a2a2a;
-            margin: 5px;
-            border-radius: 5px;
-        }
-
-        .level-item:hover {
-            background: #444;
-            color: #ffcc00;
-            transform: translateX(5px);
-        }
-
-        .level-item:active {
-            transform: scale(0.98);
-        }
-
-        .story-text {
-            font-style: italic;
-            color: #bbb;
-            margin-bottom: 20px;
-            line-height: 1.5;
-        }
-
-        .rules-box {
-            background: #222;
-            padding: 15px;
-            border-left: 4px solid #ffcc00;
-            text-align: left;
-            margin-bottom: 20px;
-            border-radius: 5px;
-        }
-
-        .menu-box {
-            max-height: 85vh;
-            overflow-y: auto;
-        }
-    </style>
 </head>
 <body>
     <canvas id="game"></canvas>
@@ -111,15 +57,20 @@
         <div class="menu-box">
             <h1>STEALTH GAME</h1>
             
-            <!-- New Level Selection Button -->
+            <!-- Level Selection -->
             <div class="menu-item">
-                <button class="menu-action-btn" onclick="showLevelSelection()" style="width: 100%; margin-bottom: 20px;">
-                    SELECT LEVEL
-                </button>
+                <label>Select Level:</label>
+                <div class="level-selector">
+                    <select id="levelSelect" class="level-dropdown">
+                        <option value="random">Random Level</option>
+                        <option value="level1.json">Level 1: X-Dungeon</option>
+                        <option value="level2.json">Level 2: Prison Yard</option>
+                    </select>
+                </div>
             </div>
             
             <div class="menu-item">
-                <label>Map Size:</label>
+                <label>Map Size (for random):</label>
                 <div class="number-selector">
                     <button class="num-btn" onclick="changeMapSize(-1)">◀</button>
                     <span id="mapSizeValue" class="num-value">12</span>
@@ -263,33 +214,6 @@
         </div>
     </div>
     
-    <!-- SCREEN 4: LEVEL SELECTION -->
-    <div id="levelSelection" class="overlay-screen hidden">
-        <div class="menu-box">
-            <h1>SELECT MISSION</h1>
-            <div id="level-list" class="level-scroll-box"></div>
-            <div class="menu-actions">
-                <button class="menu-action-btn" onclick="backToMainMenu()">← BACK</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- SCREEN 5: LEVEL INFO -->
-    <div id="levelInfo" class="overlay-screen hidden">
-        <div class="menu-box">
-            <h2 id="info-name">Level Name</h2>
-            <p id="info-story" class="story-text"></p>
-            <div class="rules-box">
-                <strong>Objectives:</strong>
-                <p id="info-rules" style="margin: 5px 0 0 0;"></p>
-            </div>
-            <div class="menu-actions">
-                <button class="start-btn" onclick="startLevel()">START LEVEL</button>
-                <button class="menu-action-btn" onclick="backToLevelSelection()">← BACK</button>
-            </div>
-        </div>
-    </div>
-    
     <!-- Victory Screen -->
     <div id="resultScreen" class="overlay-screen hidden">
         <div class="result-scroll">
@@ -325,73 +249,31 @@
         </div>
     </div>
     
-    <!-- Scripts -->
-    <script src="game.js"></script>
+    <!-- Main Game Script -->
     <script src="core_main.js"></script>
-    <script src="core_vfx.js"></script>
-    <script src="core_highlight.js"></script>
-    <script src="player.js"></script>
-    <script src="enemy.js"></script>
     
-    <!-- Inline script to connect everything -->
-    <script>
-        // Global level data storage
-        window.selectedLevelData = null;
-        
-        // Menu navigation functions
-        function showLevelSelection() {
-            if (typeof initMenu === 'function') {
-                initMenu();
-            }
-            hideAllScreens();
-            document.getElementById('levelSelection').classList.remove('hidden');
+    <!-- Add CSS for level dropdown -->
+    <style>
+        .level-selector {
+            margin: 15px 0;
         }
         
-        function backToMainMenu() {
-            hideAllScreens();
-            document.getElementById('mainMenu').classList.remove('hidden');
+        .level-dropdown {
+            width: 100%;
+            padding: 12px;
+            background: #222;
+            color: white;
+            border: 2px solid #444;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: bold;
         }
         
-        function backToLevelSelection() {
-            hideAllScreens();
-            document.getElementById('levelSelection').classList.remove('hidden');
+        .level-dropdown option {
+            background: #222;
+            color: white;
+            padding: 10px;
         }
-        
-        function startLevel() {
-            // Go to item selection after choosing level
-            hideAllScreens();
-            document.getElementById('itemSelection').classList.remove('hidden');
-        }
-        
-        function hideAllScreens() {
-            document.querySelectorAll('.overlay-screen').forEach(screen => {
-                screen.classList.add('hidden');
-            });
-        }
-        
-        // Override the original startGame to handle JSON data
-        const originalStartGame = window.startGame;
-        window.startGame = function() {
-            // Store level data before starting game
-            if (window.currentMapData) {
-                window.selectedLevelData = window.currentMapData;
-            }
-            
-            // Call original startGame
-            if (originalStartGame) {
-                originalStartGame();
-            }
-        };
-        
-        // Initialize on load
-        window.addEventListener('load', function() {
-            if (typeof initMenu === 'function') {
-                initMenu();
-            }
-            // Show main menu
-            hideAllScreens();
-            document.getElementById('mainMenu').classList.remove('hidden');
-        });
-    </script>
+    </style>
 </body>
 </html>
