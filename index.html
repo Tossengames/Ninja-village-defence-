@@ -3,74 +3,590 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Stealth Game</title>
-    <link rel="stylesheet" href="style.css">
+    <title>SHADOW STRIKE</title>
+    <style>
+        /* ========== BASIC LAYOUT ========== */
+        body, html { 
+            margin: 0; 
+            padding: 0; 
+            background: #000; 
+            overflow: hidden; 
+            color: #fff; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #gameCanvas { 
+            display: block; 
+            background: #111; 
+        }
+        .hidden { 
+            display: none !important; 
+        }
+
+        /* ========== MENU OVERLAY ========== */
+        .menu-overlay {
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%;
+            background: rgba(0,0,0,0.95); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            z-index: 1000;
+        }
+        .menu-content { 
+            text-align: center; 
+            max-width: 800px; 
+            width: 90%;
+            padding: 20px;
+        }
+        h1 { 
+            color: #00ffcc; 
+            letter-spacing: 4px; 
+            font-size: 3rem;
+            text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+            margin-bottom: 10px;
+        }
+
+        /* ========== LEVEL BROWSER ========== */
+        .level-browser {
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px;
+            max-height: 400px; 
+            overflow-y: auto; 
+            margin: 20px auto;
+            padding: 15px; 
+            border: 2px solid #00ffcc;
+            background: rgba(26, 26, 26, 0.8);
+            border-radius: 10px;
+            width: 80%;
+        }
+        .level-btn {
+            padding: 18px; 
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            color: #00ffcc;
+            border: 2px solid #00ffcc; 
+            cursor: pointer; 
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 1px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-size: 1.1rem;
+        }
+        .level-btn:hover { 
+            background: linear-gradient(145deg, #00ffcc, #00cc99);
+            color: #000;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 255, 204, 0.3);
+        }
+
+        /* ========== HUD ========== */
+        #gameUI { 
+            position: absolute; 
+            top: 10px; 
+            left: 10px; 
+            pointer-events: none; 
+            z-index: 10; 
+        }
+        .bar-bg { 
+            width: 200px; 
+            height: 12px; 
+            background: #333; 
+            margin-top: 5px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #444;
+        }
+        #hpBar { 
+            width: 100%; 
+            height: 100%; 
+            background: linear-gradient(90deg, #ff4444, #ff8888);
+            transition: width 0.3s; 
+        }
+        .stats-group { 
+            margin-bottom: 15px; 
+            font-weight: bold; 
+            color: #00ffcc;
+            text-shadow: 0 0 5px rgba(0, 255, 204, 0.5);
+            font-size: 1.1rem;
+        }
+
+        /* ========== STATUS CIRCLE ========== */
+        .status-circle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        .status-circle.stealth {
+            background: rgba(0, 255, 204, 0.1);
+            border: 3px solid #00ffcc;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+        }
+        .status-circle.detected {
+            background: rgba(255, 68, 68, 0.1);
+            border: 3px solid #ff4444;
+            box-shadow: 0 0 20px rgba(255, 68, 68, 0.5);
+        }
+        .status-circle.combat {
+            background: rgba(255, 153, 0, 0.1);
+            border: 3px solid #ff9900;
+            box-shadow: 0 0 20px rgba(255, 153, 0, 0.5);
+        }
+        .status-emoji {
+            font-size: 2.5rem;
+            filter: drop-shadow(0 0 5px currentColor);
+        }
+        .status-circle.stealth .status-emoji {
+            color: #00ffcc;
+        }
+        .status-circle.detected .status-emoji {
+            color: #ff4444;
+            animation: pulse 1s infinite;
+        }
+        .status-circle.combat .status-emoji {
+            color: #ff9900;
+            animation: pulse 0.5s infinite;
+        }
+        .status-glow {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            opacity: 0.5;
+            animation: glow 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 20px currentColor; }
+            50% { box-shadow: 0 0 40px currentColor; }
+        }
+
+        /* ========== TOOLBAR ========== */
+        #toolbar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+            background: rgba(26, 26, 26, 0.9);
+            border: 2px solid #00ffcc;
+            border-radius: 15px;
+            z-index: 20;
+            backdrop-filter: blur(10px);
+        }
+        .tool-btn {
+            padding: 12px 20px;
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            color: #00ffcc;
+            border: 2px solid #00ffcc;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            min-width: 100px;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .tool-btn:hover {
+            background: linear-gradient(145deg, #00ffcc, #00cc99);
+            color: #000;
+            transform: translateY(-3px);
+        }
+        .tool-btn.active {
+            background: linear-gradient(145deg, #00ffcc, #00cc99);
+            color: #000;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.5);
+        }
+        .tool-count {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #ff4444;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            font-weight: bold;
+            border: 2px solid #000;
+        }
+
+        /* ========== MISSION LOG ========== */
+        #missionLog {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            max-width: 300px;
+            background: rgba(26, 26, 26, 0.9);
+            border: 2px solid #00ffcc;
+            border-radius: 10px;
+            padding: 15px;
+            color: #00ffcc;
+            font-family: monospace;
+            z-index: 20;
+            backdrop-filter: blur(10px);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 5px;
+            border-left: 3px solid #00ffcc;
+            padding-left: 10px;
+            animation: fadeIn 0.5s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* ========== UI CONTROLS ========== */
+        #ui-controls {
+            position: fixed;
+            top: 20px;
+            right: 120px;
+            z-index: 20;
+        }
+        #mapToggle {
+            padding: 10px 20px;
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            color: #00ffcc;
+            border: 2px solid #00ffcc;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        #mapToggle:hover {
+            background: linear-gradient(145deg, #00ffcc, #00cc99);
+            color: #000;
+        }
+
+        /* ========== ITEM SELECTION SCREEN ========== */
+        #itemSelection {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .menu-box {
+            background: rgba(26, 26, 26, 0.95);
+            border: 3px solid #00ffcc;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 800px;
+            width: 90%;
+            color: white;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        .selection-stats {
+            margin: 20px 0;
+            font-size: 1.2rem;
+            color: #00ffcc;
+        }
+        .selected-preview {
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px dashed #00ffcc;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            min-height: 100px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+        }
+        .item-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 30px 0;
+        }
+        .item-btn {
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            border: 2px solid #00ffcc;
+            border-radius: 10px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            position: relative;
+        }
+        .item-btn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 255, 204, 0.3);
+            background: linear-gradient(145deg, #00ffcc, #00cc99);
+        }
+        .item-btn.selected {
+            background: linear-gradient(145deg, #00ffcc, #00cc99);
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.5);
+        }
+        .item-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        .item-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .item-count {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #00ffcc;
+            color: #000;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .menu-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+        .start-btn {
+            padding: 15px 40px;
+            background: linear-gradient(145deg, #00ffcc, #00cc99);
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .start-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.5);
+        }
+        .menu-action-btn {
+            padding: 15px 30px;
+            background: transparent;
+            color: #00ffcc;
+            border: 2px solid #00ffcc;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .menu-action-btn:hover {
+            background: #00ffcc;
+            color: #000;
+        }
+
+        /* ========== TUTORIAL SCREEN ========== */
+        #tutorialScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.98);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        .tutorial-box {
+            background: rgba(26, 26, 26, 0.95);
+            border: 3px solid #00ffcc;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 800px;
+            width: 90%;
+            color: white;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .tutorial-section {
+            margin: 25px 0;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            border-left: 5px solid #00ffcc;
+        }
+        .tutorial-section h2 {
+            color: #00ffcc;
+            margin-top: 0;
+        }
+        .back-btn {
+            padding: 15px 40px;
+            background: #00ffcc;
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        /* ========== RESULT SCREENS ========== */
+        #resultScreen, #gameOverScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .result-scroll {
+            background: rgba(26, 26, 26, 0.95);
+            border: 3px solid #00ffcc;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            color: white;
+            text-align: center;
+        }
+        .rank-text {
+            font-size: 3rem;
+            color: #00ffcc;
+            font-weight: bold;
+            margin: 20px 0;
+            text-shadow: 0 0 20px rgba(0, 255, 204, 0.5);
+        }
+        .fail-text {
+            font-size: 1.5rem;
+            color: #ff4444;
+            margin: 30px 0;
+        }
+        .reload-btn {
+            padding: 15px 40px;
+            background: linear-gradient(145deg, #00ffcc, #00cc99);
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        /* ========== SCROLLBAR STYLING ========== */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(26, 26, 26, 0.5);
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #00ffcc;
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00cc99;
+        }
+
+        /* ========== NUMBER SELECTOR ========== */
+        .number-selector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin: 10px 0;
+        }
+        .num-btn {
+            background: #00ffcc;
+            color: #000;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .num-btn:hover {
+            background: #00cc99;
+            transform: scale(1.1);
+        }
+        .num-value {
+            font-size: 1.8rem;
+            color: #00ffcc;
+            font-weight: bold;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        /* ========== MENU ITEM STYLING ========== */
+        .menu-item {
+            margin: 25px 0;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            border: 2px solid #333;
+        }
+        .menu-item label {
+            display: block;
+            margin-bottom: 10px;
+            color: #00ffcc;
+            font-size: 1.2rem;
+        }
+
+        /* ========== EMPTY PREVIEW ========== */
+        .empty-preview {
+            color: #666;
+            font-style: italic;
+        }
+    </style>
 </head>
 <body>
-    <canvas id="game"></canvas>
-    
-    <!-- Mission Log (Top Left) -->
-    <div id="missionLog" class="hidden"></div>
-    
-    <!-- UI Controls (Top Right) -->
-    <div id="ui-controls" class="hidden">
-        <button id="mapToggle" onclick="toggleMinimap()">Toggle Map</button>
-    </div>
-    
-    <!-- Status Circle -->
-    <div id="playerStatus" class="status-circle stealth hidden">
-        <div class="status-emoji">🥷</div>
-        <div class="status-glow"></div>
-    </div>
-    
-    <!-- Toolbar -->
-    <div id="toolbar" class="hidden">
-        <div class="tool-btn" id="btnMove" onclick="setMode('move')">
-            <span>👣</span> Move
-        </div>
-        <div class="tool-btn" id="btnAttack" onclick="setMode('attack')">
-            <span>⚔️</span> Attack
-        </div>
-        <div class="tool-btn" id="btnTrap" onclick="setMode('trap')">
-            <span>⚠️</span> Trap
-            <div class="tool-count" id="trapCount">0</div>
-        </div>
-        <div class="tool-btn" id="btnRice" onclick="setMode('rice')">
-            <span>🍚</span> Rice
-            <div class="tool-count" id="riceCount">0</div>
-        </div>
-        <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')">
-            <span>💣</span> Bomb
-            <div class="tool-count" id="bombCount">0</div>
-        </div>
-        <div class="tool-btn" id="btnGas" onclick="setMode('gas')">
-            <span>💨</span> Gas
-            <div class="tool-count" id="gasCount">0</div>
-        </div>
-        <div class="tool-btn" onclick="playerWait()">
-            <span>⏳</span> Wait
-        </div>
-    </div>
-    
-    <!-- SCREEN 1: MAIN MENU -->
-    <div id="mainMenu" class="overlay-screen">
-        <div class="menu-box">
-            <h1>STEALTH GAME</h1>
-            
-            <!-- Level Selection -->
-            <div class="menu-item">
-                <label>Select Level:</label>
-                <div class="level-selector">
-                    <select id="levelSelect" class="level-dropdown">
-                        <option value="random">Random Level</option>
-                        <option value="level1.json">Level 1: X-Dungeon</option>
-                        <option value="level2.json">Level 2: Prison Yard</option>
-                    </select>
-                </div>
-            </div>
+
+    <!-- Main Menu with Level Browser -->
+    <div id="mainMenu" class="menu-overlay">
+        <div class="menu-content">
+            <h1>SHADOW STRIKE</h1>
+            <p style="color: #00ffcc; margin-bottom: 20px;">SELECT MISSION</p>
             
             <div class="menu-item">
-                <label>Map Size (for random):</label>
+                <label>Map Size:</label>
                 <div class="number-selector">
                     <button class="num-btn" onclick="changeMapSize(-1)">◀</button>
                     <span id="mapSizeValue" class="num-value">12</span>
@@ -87,15 +603,19 @@
                 </div>
             </div>
             
+            <div class="level-browser" id="levelList">
+                <p>Scanning data...</p>
+            </div>
+            
             <div class="menu-actions">
                 <button class="menu-action-btn" onclick="showTutorial()">HOW TO PLAY</button>
-                <button class="start-btn" onclick="showItemSelection()">NEXT →</button>
+                <button class="start-btn" onclick="showItemSelection()">CUSTOM MISSION →</button>
             </div>
         </div>
     </div>
-    
-    <!-- SCREEN 2: ITEM SELECTION -->
-    <div id="itemSelection" class="overlay-screen hidden">
+
+    <!-- Item Selection Screen -->
+    <div id="itemSelection" class="hidden">
         <div class="menu-box">
             <h1>SELECT YOUR ITEMS</h1>
             <div class="selection-stats">
@@ -156,14 +676,14 @@
             </div>
             
             <div class="menu-actions">
-                <button class="start-btn" onclick="startGame()" id="startGameBtn">START MISSION</button>
+                <button class="start-btn" onclick="startCustomGame()" id="startGameBtn">START MISSION</button>
                 <button class="menu-action-btn" onclick="backToMainMenu()">← BACK</button>
             </div>
         </div>
     </div>
-    
-    <!-- SCREEN 3: TUTORIAL -->
-    <div id="tutorialScreen" class="overlay-screen hidden">
+
+    <!-- Tutorial Screen -->
+    <div id="tutorialScreen" class="hidden">
         <div class="tutorial-box">
             <h1>HOW TO PLAY</h1>
             
@@ -213,9 +733,62 @@
             <button class="back-btn" onclick="hideTutorial()">BACK TO MENU</button>
         </div>
     </div>
+
+    <!-- Game UI Elements -->
+    <div id="gameUI" class="hidden">
+        <div class="stats-group">
+            HP <div class="bar-bg"><div id="hpBar"></div></div>
+        </div>
+        <div class="stats-group">
+            COINS: <span id="coinCount">0</span>
+        </div>
+    </div>
+
+    <!-- Mission Log -->
+    <div id="missionLog" class="hidden"></div>
     
-    <!-- Victory Screen -->
-    <div id="resultScreen" class="overlay-screen hidden">
+    <!-- UI Controls -->
+    <div id="ui-controls" class="hidden">
+        <button id="mapToggle" onclick="toggleMinimap()">Toggle Map</button>
+    </div>
+    
+    <!-- Status Circle -->
+    <div id="playerStatus" class="status-circle stealth hidden">
+        <div class="status-emoji">🥷</div>
+        <div class="status-glow"></div>
+    </div>
+    
+    <!-- Toolbar -->
+    <div id="toolbar" class="hidden">
+        <div class="tool-btn" id="btnMove" onclick="setMode('move')">
+            <span>👣</span> Move
+        </div>
+        <div class="tool-btn" id="btnAttack" onclick="setMode('attack')">
+            <span>⚔️</span> Attack
+        </div>
+        <div class="tool-btn" id="btnTrap" onclick="setMode('trap')">
+            <span>⚠️</span> Trap
+            <div class="tool-count" id="trapCount">0</div>
+        </div>
+        <div class="tool-btn" id="btnRice" onclick="setMode('rice')">
+            <span>🍚</span> Rice
+            <div class="tool-count" id="riceCount">0</div>
+        </div>
+        <div class="tool-btn" id="btnBomb" onclick="setMode('bomb')">
+            <span>💣</span> Bomb
+            <div class="tool-count" id="bombCount">0</div>
+        </div>
+        <div class="tool-btn" id="btnGas" onclick="setMode('gas')">
+            <span>💨</span> Gas
+            <div class="tool-count" id="gasCount">0</div>
+        </div>
+        <div class="tool-btn" onclick="playerWait()">
+            <span>⏳</span> Wait
+        </div>
+    </div>
+
+    <!-- Result Screens -->
+    <div id="resultScreen" class="hidden">
         <div class="result-scroll">
             <h1>MISSION COMPLETE</h1>
             <div class="rank-text" id="rankLabel">RANK</div>
@@ -224,56 +797,316 @@
         </div>
     </div>
     
-    <!-- Game Over Screen -->
-    <div id="gameOverScreen" class="overlay-screen hidden">
+    <div id="gameOverScreen" class="hidden">
         <div class="result-scroll">
             <h1>MISSION FAILED</h1>
             <div class="fail-text">You have been defeated.<br>Better luck next time!</div>
             <button class="reload-btn" onclick="window.location.reload()">TRY AGAIN</button>
         </div>
     </div>
-    
-    <!-- OLD MENU (Hidden - for backward compatibility) -->
-    <div id="menu" class="overlay-screen hidden">
-        <div class="menu-box">
-            <h1>STEALTH GAME</h1>
-            <div class="menu-item">
-                <label>Map Size:</label>
-                <input type="number" id="mapSize" min="8" max="20" value="12">
-            </div>
-            <div class="menu-item">
-                <label>Guard Count:</label>
-                <input type="number" id="guardCount" min="1" max="15" value="5">
-            </div>
-            <button class="start-btn" onclick="initGame()">START MISSION</button>
-        </div>
-    </div>
-    
-    <!-- Main Game Script -->
+
+    <!-- Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- JavaScript Files -->
+    <script src="enemy_ai.js"></script>
     <script src="core_main.js"></script>
-    
-    <!-- Add CSS for level dropdown -->
-    <style>
-        .level-selector {
-            margin: 15px 0;
+    <script src="core_vfx.js"></script>
+    <script src="core_highlight.js"></script>
+    <script src="player.js"></script>
+    <script src="enemy.js"></script>
+
+    <!-- Menu and UI Script -->
+    <script>
+        // Global variables for custom mission
+        let customMapSize = 12;
+        let customGuardCount = 5;
+        let selectedItems = {
+            trap: 0,
+            rice: 0,
+            bomb: 0,
+            gas: 0,
+            health: 0,
+            coin: 0,
+            sight: 0,
+            mark: 0
+        };
+        
+        // Level manifest loading
+        async function loadMenu() {
+            const list = document.getElementById('levelList');
+            try {
+                const response = await fetch('manifest.json');
+                const data = await response.json();
+                list.innerHTML = '';
+                
+                // Add level buttons
+                data.levels.forEach(lvl => {
+                    const btn = document.createElement('button');
+                    btn.className = 'level-btn';
+                    btn.innerText = lvl.name;
+                    btn.onclick = () => initGame(lvl.file);
+                    list.appendChild(btn);
+                });
+                
+                // Add "Random Mission" button
+                const randomBtn = document.createElement('button');
+                randomBtn.className = 'level-btn';
+                randomBtn.innerText = '🎲 RANDOM MISSION';
+                randomBtn.onclick = () => initRandomMission();
+                list.appendChild(randomBtn);
+                
+            } catch (e) {
+                list.innerHTML = '<p style="color:red">Error loading manifest.json</p>';
+                console.error(e);
+            }
         }
         
-        .level-dropdown {
-            width: 100%;
-            padding: 12px;
-            background: #222;
-            color: white;
-            border: 2px solid #444;
-            border-radius: 5px;
-            font-size: 1rem;
-            font-weight: bold;
+        // Menu functions
+        function changeMapSize(delta) {
+            customMapSize = Math.max(8, Math.min(20, customMapSize + delta));
+            document.getElementById('mapSizeValue').textContent = customMapSize;
         }
         
-        .level-dropdown option {
-            background: #222;
-            color: white;
-            padding: 10px;
+        function changeGuardCount(delta) {
+            customGuardCount = Math.max(1, Math.min(15, customGuardCount + delta));
+            document.getElementById('guardCountValue').textContent = customGuardCount;
         }
-    </style>
+        
+        function showTutorial() {
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('tutorialScreen').classList.remove('hidden');
+        }
+        
+        function hideTutorial() {
+            document.getElementById('tutorialScreen').classList.add('hidden');
+            document.getElementById('mainMenu').classList.remove('hidden');
+        }
+        
+        function showItemSelection() {
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('itemSelection').classList.remove('hidden');
+            updateSelectionStats();
+        }
+        
+        function backToMainMenu() {
+            document.getElementById('itemSelection').classList.add('hidden');
+            document.getElementById('mainMenu').classList.remove('hidden');
+        }
+        
+        // Item selection functions
+        function toggleItem(type) {
+            const btn = document.querySelector(`.item-btn[data-type="${type}"]`);
+            const countElement = document.getElementById(type + 'SelCount');
+            
+            if (selectedItems[type] > 0) {
+                // Remove item
+                selectedItems[type] = 0;
+                btn.classList.remove('selected');
+                countElement.textContent = '0';
+            } else {
+                // Check if we can add more items
+                const totalItems = getTotalSelectedItems();
+                const totalTypes = getTotalSelectedTypes();
+                
+                if (totalItems >= 5) {
+                    addLogEntry("Maximum 5 items total allowed!", "warning");
+                    return;
+                }
+                if (totalTypes >= 3 && !selectedItems[type]) {
+                    addLogEntry("Maximum 3 different item types allowed!", "warning");
+                    return;
+                }
+                
+                // Add item
+                selectedItems[type] = 1;
+                btn.classList.add('selected');
+                countElement.textContent = '1';
+            }
+            
+            updateSelectionStats();
+            updateSelectedPreview();
+        }
+        
+        function getTotalSelectedItems() {
+            return Object.values(selectedItems).reduce((a, b) => a + b, 0);
+        }
+        
+        function getTotalSelectedTypes() {
+            return Object.values(selectedItems).filter(count => count > 0).length;
+        }
+        
+        function updateSelectionStats() {
+            document.getElementById('totalItems').textContent = getTotalSelectedItems();
+            document.getElementById('totalTypes').textContent = getTotalSelectedTypes();
+            
+            const startBtn = document.getElementById('startGameBtn');
+            if (getTotalSelectedItems() > 0) {
+                startBtn.disabled = false;
+                startBtn.style.opacity = '1';
+            } else {
+                startBtn.disabled = true;
+                startBtn.style.opacity = '0.5';
+            }
+        }
+        
+        function updateSelectedPreview() {
+            const preview = document.getElementById('selectedPreview');
+            const items = Object.entries(selectedItems)
+                .filter(([type, count]) => count > 0)
+                .map(([type, count]) => {
+                    const icons = {
+                        trap: '⚠️', rice: '🍚', bomb: '💣', gas: '💨',
+                        health: '❤️', coin: '💰', sight: '👁️', mark: '🎯'
+                    };
+                    return `<div class="preview-item">${icons[type]} ${type}</div>`;
+                });
+            
+            if (items.length === 0) {
+                preview.innerHTML = '<div class="empty-preview">Click items below to add them to your inventory</div>';
+            } else {
+                preview.innerHTML = items.join('');
+            }
+        }
+        
+        // Start custom game
+        function startCustomGame() {
+            if (getTotalSelectedItems() === 0) {
+                addLogEntry("Please select at least one item!", "warning");
+                return;
+            }
+            
+            // Hide menu and show game UI
+            document.getElementById('itemSelection').classList.add('hidden');
+            
+            // Initialize game with custom parameters
+            initCustomGame({
+                mapSize: customMapSize,
+                guardCount: customGuardCount,
+                items: selectedItems
+            });
+        }
+        
+        // Initialize random mission
+        function initRandomMission() {
+            // Generate random parameters
+            const randomMapSize = Math.floor(Math.random() * (20 - 8 + 1)) + 8;
+            const randomGuardCount = Math.floor(Math.random() * (15 - 3 + 1)) + 3;
+            
+            // Random items
+            const itemTypes = ['trap', 'rice', 'bomb', 'gas', 'health', 'coin', 'sight', 'mark'];
+            const randomItems = {};
+            itemTypes.forEach(type => randomItems[type] = 0);
+            
+            const numItems = Math.floor(Math.random() * 5) + 1;
+            const selectedTypes = [];
+            
+            for (let i = 0; i < numItems; i++) {
+                const randomType = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+                if (!selectedTypes.includes(randomType) && selectedTypes.length < 3) {
+                    selectedTypes.push(randomType);
+                    randomItems[randomType] = 1;
+                }
+            }
+            
+            // Start game
+            document.getElementById('mainMenu').classList.add('hidden');
+            initCustomGame({
+                mapSize: randomMapSize,
+                guardCount: randomGuardCount,
+                items: randomItems
+            });
+        }
+        
+        // Add log entry (for game messages)
+        function addLogEntry(message, type = "info") {
+            const log = document.getElementById('missionLog');
+            if (!log) return;
+            
+            log.classList.remove('hidden');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = message;
+            
+            // Color based on type
+            if (type === "warning") entry.style.color = "#ff9900";
+            else if (type === "danger") entry.style.color = "#ff4444";
+            else if (type === "success") entry.style.color = "#00ffcc";
+            
+            log.appendChild(entry);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (entry.parentNode === log) {
+                    log.removeChild(entry);
+                }
+                if (log.children.length === 0) {
+                    log.classList.add('hidden');
+                }
+            }, 5000);
+            
+            // Scroll to bottom
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        // Placeholder functions (to be implemented in core_main.js)
+        function initGame(levelFile) {
+            console.log("Starting level:", levelFile);
+            // Hide menu
+            document.getElementById('mainMenu').classList.add('hidden');
+            // Show game UI
+            document.getElementById('gameUI').classList.remove('hidden');
+            document.getElementById('toolbar').classList.remove('hidden');
+            document.getElementById('playerStatus').classList.remove('hidden');
+            document.getElementById('ui-controls').classList.remove('hidden');
+            
+            addLogEntry("Mission started. Good luck, ninja!", "success");
+        }
+        
+        function initCustomGame(params) {
+            console.log("Starting custom game:", params);
+            // Hide menu
+            document.getElementById('mainMenu').classList.add('hidden');
+            // Show game UI
+            document.getElementById('gameUI').classList.remove('hidden');
+            document.getElementById('toolbar').classList.remove('hidden');
+            document.getElementById('playerStatus').classList.remove('hidden');
+            document.getElementById('ui-controls').classList.remove('hidden');
+            
+            addLogEntry(`Custom mission: ${params.mapSize}x${params.mapSize} map, ${params.guardCount} guards`, "success");
+        }
+        
+        // Game functions (placeholders)
+        function setMode(mode) {
+            console.log("Setting mode:", mode);
+            // Remove active class from all buttons
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            // Add active class to clicked button
+            document.getElementById(`btn${mode.charAt(0).toUpperCase() + mode.slice(1)}`).classList.add('active');
+            
+            addLogEntry(`Mode: ${mode}`, "info");
+        }
+        
+        function playerWait() {
+            console.log("Player waits");
+            addLogEntry("You wait for a moment...", "info");
+        }
+        
+        function toggleMinimap() {
+            console.log("Toggling minimap");
+            addLogEntry("Minimap toggled", "info");
+        }
+        
+        // Initialize on load
+        window.onload = function() {
+            console.log("Shadow Strike loaded");
+            loadMenu();
+            
+            // Check for required functions
+            if (typeof initMenu === 'function') {
+                initMenu();
+            }
+        };
+    </script>
 </body>
 </html>
